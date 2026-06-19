@@ -120,6 +120,52 @@ def gh(*args, **kwargs):
 def slugify(text):
     return re.sub(r'[^a-z0-9-]', '', text.lower().replace(" ", "-"))[:40]
 
+def extract_pr_sections(spec_text: str) -> str:
+    """Extract key sections from the strategist's spec for the PR body.
+    Returns markdown string with Position, Impact, and Tasks."""
+    sections = []
+
+    # 1. Extract Position statement (the strategist's summary of what was built and why)
+    pos_m = re.search(
+        r'Position:\s*(.+?)(?=\n\s*\n\s*(?:DECISION|IMPACT|CONFIDENCE|### Task|Task \d|\Z))',
+        spec_text, re.DOTALL | re.IGNORECASE
+    )
+    if pos_m:
+        pos = pos_m.group(1).strip()
+        # Clean up: remove leading/trailing whitespace per line, collapse multi-line
+        pos = re.sub(r'\s+', ' ', pos)
+        sections.append(f"## Summary\n\n{pos}")
+
+    # 2. Extract Impact Assessment
+    imp_m = re.search(
+        r'IMPACT\s*ASSESSMENT\s*\n(.*?)(?=\n\s*\n\s*(?:CONFIDENCE|### Task|Task \d|\Z))',
+        spec_text, re.DOTALL | re.IGNORECASE
+    )
+    if imp_m:
+        imp = imp_m.group(1).strip()
+        # Parse individual impact items: "Area: ... Change: ..."
+        items = re.findall(r'(?:Area|Dimension):\s*(.+?)\n\s*(?:Change|Detail):\s*(.+?)(?=\n\s*(?:Area|Dimension|Lines|CONFIDENCE|### Task|Task \d|\Z))',
+                          imp, re.DOTALL)
+        lines_est = re.search(r'Lines Est\.:?\s*(.+)', imp)
+        if items or lines_est:
+            sections.append("## Impact")
+            for area, change in items:
+                sections.append(f"- **{area.strip()}:** {change.strip()}")
+            if lines_est:
+                sections.append(f"- **Lines:** {lines_est.group(1).strip()}")
+
+    # 3. Extract task list (handles both "### Task N:" and "Task N:" formats)
+    tasks = re.findall(r'(?:###\s*)?Task\s*(\d+):\s*(.+)', spec_text, re.IGNORECASE)
+    if tasks:
+        sections.append("## Tasks")
+        for tid, desc in tasks[:15]:  # cap at 15 tasks
+            sections.append(f"- Task {tid}: {desc.strip()}")
+        if len(tasks) > 15:
+            sections.append(f"- ... and {len(tasks) - 15} more tasks")
+
+    return "\n\n".join(sections) if sections else ""
+
+
 def extract_agent_messages(session_output: str) -> str:
     """Extract agent messages from hermes session transcript, stripping noise
     (prompt echo, tool output, init markers). Keeps ALL agent reasoning."""
@@ -930,6 +976,10 @@ CRITICAL: You are a DESIGNER, not a coder. Output goes to a frontend coder who m
         f.write(f"# {feature}\n\n{spec}")
     print(f"\n✓ Spec saved: {spec_path}", flush=True)
 
+    # Extract PR body sections from the spec (Position + Impact + Tasks)
+    pr_sections = extract_pr_sections(spec)
+    print(f"  PR sections extracted: {len(pr_sections)} chars", flush=True)
+
     # Generate task-extract for coders (avoids re-reading full spec)
     tasks_extract_path = os.path.join(spec_dir, f"{spec_name}-tasks.md")
     try:
@@ -1060,8 +1110,8 @@ CRITICAL: You are a DESIGNER, not a coder. Output goes to a frontend coder who m
             # If depth=coder and all tasks completed, create PR directly
             if not coder_failed and depth == "coder":
                 print("\n── Creating PR (depth=coder) ──", flush=True)
-                # Construct PR body with Why section from spec
-                pr_body = f"## Why\n{feature}\n\n## Spec\n{spec_path}\n\n## Tasks\n" + \
+                # Construct PR body with spec sections
+                pr_body = f"## Why\n{feature}\n\n{pr_sections}\n\n## Spec\n{spec_path}\n\n## Tasks\n" + \
                           "\n".join(f"- Task {t.id}: {t.status}" for t in dag.tasks.values())
                 stdout, _, rc = gh("pr", "create", "--repo", REPO,
                                    "--base", "master", "--head", branch,
@@ -1338,8 +1388,8 @@ Report: what was broken, what you fixed, commit hash."""
             print("  ⏳ Creating PR...", flush=True)
             pr_body = (
                 f"## Why\n{feature}\n\n"
+                f"{pr_sections}\n\n"
                 f"## Spec\n{spec_path}\n\n"
-                f"## Changes\nSee commits on this branch.\n\n"
                 f"## Validation\n"
                 f"- [x] Tests pass ({tests_passed} passed)\n"
                 f"- [x] Build passes\n"
