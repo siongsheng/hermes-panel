@@ -487,7 +487,7 @@ TDD — TWO SEPARATE COMMITS on this branch:
 RED: Write tests → {TEST_CMD} must FAIL → git add <test files only> && git commit -m "test: {task.description[:60]}"
 GREEN: Write minimum code → {TEST_CMD} must PASS → {BUILD_CMD} must succeed → git add <impl files only> && git commit -m "feat: {task.description[:60]}"
 CRITICAL: Two distinct commits, RED before GREEN. No task numbers in commit messages. Do NOT modify files outside task scope.
-BEFORE PUSHING: Run lint ({LINT_CMD}) + FULL test suite ({TEST_CMD}). If either fails, fix and retry. Only push when clean.
+BEFORE PUSHING: Check if the spec requires a README update. If yes, update README.md and commit as "docs: update README". Run lint ({LINT_CMD}) + FULL test suite ({TEST_CMD}). If either fails, fix and retry. Only push when clean.
 Report: both commit hashes, files changed, test results, lint status, branch name.
 """
 
@@ -865,7 +865,12 @@ SECOND — interview the user when confidence is NOT High:
 
 5. SECURITY CONSIDERATIONS: Auth, injection, rate limiting, data exposure.
 
-6. TASK BREAKDOWN — DAG FORMAT MANDATORY. Each task = one 5-15min RED→GREEN TDD cycle. Use EXACTLY:
+6. DOCUMENTATION IMPACT (REQUIRED): State whether README.md needs updating.
+   - If YES: what section and what should be added/changed.
+   - If NO: write "README: No change needed."
+   The README lives at {PROJECT_DIR}/README.md. Read it to determine impact.
+
+7. TASK BREAKDOWN — DAG FORMAT MANDATORY. Each task = one 5-15min RED→GREEN TDD cycle. Use EXACTLY:
 
 ### Task N: Brief description
 **Files:** path/to/file1, path/to/file2
@@ -1214,7 +1219,7 @@ For each task, TDD with TWO SEPARATE COMMITS:
 RED: Write tests → {TEST_CMD} must FAIL → git add <test files only> && git commit -m "test: <summary>"
 GREEN: Write minimum code → {TEST_CMD} must PASS → {BUILD_CMD} must succeed → git add <impl files only> && git commit -m "feat: <summary>"
 CRITICAL: Two distinct commits, RED before GREEN, different timestamps. NEVER bundle. No task numbers in commit messages.
-BEFORE PUSHING: After ALL tasks done, run lint ({LINT_CMD}) + FULL test suite ({TEST_CMD}). If either fails, fix and retry. Only git push when clean.
+BEFORE PUSHING: After ALL tasks done, check if the spec requires a README update. If yes, update README.md and commit as \"docs: update README for <feature>\". Then run lint ({LINT_CMD}) + FULL test suite ({TEST_CMD}). If either fails, fix and retry. Only git push when clean.
 Report: both commit hashes, files changed, test results, lint status, branch name.
 """
 
@@ -1488,16 +1493,17 @@ THEN — review the pull request{' at ' + pr_url if pr_url else ' for branch ' +
 5. Read changed files — understand what was built
 
 THREE DIMENSIONS (every finding: severity + dimension + file:line + rule violated):
-1. SPEC COMPLIANCE: Approach matches decision table? API/interface matches? ALL tasks done? Scope creep?
+1. SPEC COMPLIANCE: Approach matches decision table? API/interface matches? ALL tasks done? README updated if spec required it? Scope creep?
 2. ARCHITECTURAL IMPACT: New deps/coupling? Breaking changes? DB schema impact? Deployment impact?
 3. CODE QUALITY: TDD, correctness, security, error handling, performance.
 
-SEVERITY: BLOCKER (spec violation, architecture violation, TDD violation, missing guards, uncaught exceptions, security, missing tests) | SHOULD FIX (conventions, naming, AGENTS.md, redundant code) | NIT (formatting, comments, style)
+SEVERITY: BLOCKER (spec violation, architecture violation, TDD violation, missing guards, uncaught exceptions, security, missing tests, missing README update when spec required it) | SHOULD FIX (conventions, naming, AGENTS.md, redundant code) | NIT (formatting, comments, style)
 
 FINAL: export $(grep -v '^#' .env | xargs) 2>/dev/null && gh pr review --repo {REPO} PR_NUMBER --comment --body "Tech Lead Review: <verdict>. <summary>"
 Do NOT --approve (self-approval blocked). User merges manually.
 
-End with: VERDICT (APPROVED/CHANGES REQUESTED/BLOCKED) + RISK (LOW/MEDIUM/HIGH)."""
+End with: VERDICT (APPROVED/CHANGES REQUESTED/BLOCKED) + RISK (LOW/MEDIUM/HIGH) + RELEASE (YES/NO + level if yes).
+RELEASE determination: Check if this feature introduces new functionality, API changes, or breaking changes visible to users. YES → recommend semver level (patch/minor/major). NO → no release needed.
             tl_output = spawn_agent("tech-lead", ["adversarial-review-lite"],
                                     tl_prompt, timeout=600, cwd=PROJECT_DIR)
             print(f"\n✓ Tech Lead finished ({len(tl_output)} chars)", flush=True)

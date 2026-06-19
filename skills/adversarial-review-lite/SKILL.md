@@ -24,6 +24,7 @@ git log master..BRANCH --format="%H %ai %s"
 - API/interface matches proposal?
 - ALL tasks completed?
 - Scope creep? (code not in spec)
+- README updated if spec required it?
 
 ### 2. Architectural Impact
 - New dependencies or coupling?
@@ -40,7 +41,7 @@ git log master..BRANCH --format="%H %ai %s"
 
 | Level | When | Action |
 |-------|------|--------|
-| **BLOCKER** | Spec violation, architecture break, TDD violation, missing guards, security, uncaught exceptions | Fix before merge |
+| **BLOCKER** | Spec violation, architecture break, TDD violation, missing guards, security, uncaught exceptions, missing README update when spec required it | Fix before merge |
 | **SHOULD FIX** | Conventions, naming, AGENTS.md, redundant code, pre-existing pattern debt | File GitHub Issue |
 | **NIT** | Formatting, comments, style | Optional |
 
@@ -70,4 +71,7 @@ Pre-existing issues matching surrounding codebase pattern → SHOULD FIX (don't 
 ### Verdict
 VERDICT: APPROVED / CHANGES REQUESTED / BLOCKED
 RISK: LOW / MEDIUM / HIGH
+RELEASE: YES (patch/minor/major) / NO
+- YES if: new functionality, API changes, or breaking changes visible to users
+- level: patch=bugfix, minor=new feature, major=breaking change
 ```
