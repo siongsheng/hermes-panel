@@ -51,11 +51,13 @@ hermes-panel --answers /tmp/hermes-panel-interview.json "Add API key auth" ~/pro
 
 **Depth gating** auto-selects phases based on confidence × impact:
 
-| Confidence → / Impact ↓ | HIGH | MEDIUM | LOW |
+| Impact ↓ / Confidence → | HIGH | MEDIUM | LOW |
 |---|---|---|---|
-| **LOW** (tests/docs) | 1+2 | 1+2+3 | 1+2+3+4 |
+| **LOW** (tests/docs) | 1+2 | 1+2+3+4 | 1+2+3+4 |
 | **MEDIUM** (API/DB/UI) | 1+2+3 | 1+2+3+4 | 1+2+3+4 |
 | **HIGH** (auth/payments) | 1+2+3+4 | 1+2+3+4 | 1+2+3+4 |
+
+Only HIGH confidence gets the fast path. Everything else gets adversarial review.
 
 `PANEL_FORCE_FULL=1` overrides → all 4 phases.
 

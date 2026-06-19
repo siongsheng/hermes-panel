@@ -48,9 +48,11 @@ Reads confidence × impact from the strategist's spec and decides pipeline depth
 
 | Confidence → / Impact ↓ | HIGH | MEDIUM | LOW |
 |---|---|---|---|
-| **LOW** (tests/docs) | 1+2 | 1+2+3 | 1+2+3+4 |
+| **LOW** (tests/docs) | 1+2 | 1+2+3+4 | 1+2+3+4 |
 | **MEDIUM** (API/DB/UI) | 1+2+3 | 1+2+3+4 | 1+2+3+4 |
 | **HIGH** (auth/payments) | 1+2+3+4 | 1+2+3+4 | 1+2+3+4 |
+
+Only HIGH confidence gets the fast path. Everything else gets adversarial review.
 
 **Mode:** High confidence = PASSIVE (auto-pilot). Medium/Low = ACTIVE (orchestrator reviews each phase, may loop back).
 
