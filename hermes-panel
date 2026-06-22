@@ -1169,7 +1169,7 @@ Keep ALL existing content — only add what's needed to close the gaps."""
     # Depth matrix: rows=confidence, cols=impact
     depth_matrix = {
         ("High", "LOW"):    "coder",
-        ("High", "MEDIUM"): "coder+nm",
+        ("High", "MEDIUM"): "vet+nm",
         ("High", "HIGH"):   "full",
         ("Medium", "LOW"):  "full",
         ("Medium", "MEDIUM"): "full",
@@ -1179,10 +1179,10 @@ Keep ALL existing content — only add what's needed to close the gaps."""
         ("Low", "HIGH"):    "full",
     }
     depth = depth_matrix.get((confidence, impact), "full")
-    # PANEL_FORCE_FULL=1 env override for testing — forces all 4 phases
+    # PANEL_FORCE_FULL=1 env override for testing — forces all 5 phases
     if os.environ.get("PANEL_FORCE_FULL") == "1":
         depth = "full"
-        print("  ⚠ PANEL_FORCE_FULL=1 — forcing full pipeline (all 4 phases)", flush=True)
+        print("  ⚠ PANEL_FORCE_FULL=1 — forcing full pipeline (all 5 phases)", flush=True)
 
     mode = "passive" if confidence == "High" else "active"
     print(f"  Confidence: {confidence}, Impact: {impact} → Depth: {depth.upper()}", flush=True)
@@ -1197,7 +1197,7 @@ Keep ALL existing content — only add what's needed to close the gaps."""
 
     # ── PARALLEL EXECUTION GATE ──
     parallel_enabled = os.environ.get("PANEL_PARALLEL", "1") == "1"
-    if parallel_enabled and depth in ("coder", "coder+nm", "full"):
+    if parallel_enabled and depth in ("coder", "vet+nm", "full"):
         print("\n── Parallel Coders (PANEL_PARALLEL=1) ──", flush=True)
         coder_failed = False
         coder_output = ""  # will be set from task outputs
@@ -1257,7 +1257,7 @@ Keep ALL existing content — only add what's needed to close the gaps."""
             )
 
             # If depth=coder and all tasks completed, create PR directly
-            if not coder_failed and depth == "coder":
+            if not coder_failed and depth == "vet":
                 print("\n── Creating PR (depth=coder) ──", flush=True)
                 # Construct PR body matching old panel format
                 pr_body = f"{pr_sections}\n\n## Validation\n- Build passes\n"
@@ -1272,9 +1272,9 @@ Keep ALL existing content — only add what's needed to close the gaps."""
                     print(f"  ⚠ PR creation failed: {stderr[:200] if 'stderr' in dir() else 'unknown'}", flush=True)
 
             # Skip to report if depth=coder and no coder failure
-            if depth == "coder" and not coder_failed:
-                print("\n── Phase 3: nm — SKIPPED (depth=coder, parallel) ──", flush=True)
-                print("── Phase 4: Tech Lead — SKIPPED (depth=coder) ──", flush=True)
+            if depth == "vet" and not coder_failed:
+                print("\n── Phase 3: vet — SKIPPED (depth=vet, parallel) ──", flush=True)
+                print("── Phase 4+5: nm+TL — SKIPPED (depth=vet) ──", flush=True)
                 nm_output = ""
                 tl_output = ""
                 verdict = "APPROVED" if not coder_failed else "CODER_FAILED"
@@ -1321,7 +1321,7 @@ BEFORE PUSHING: After ALL tasks done, check if the spec requires a README update
 Report: both commit hashes, files changed, test results, lint status, branch name.
 """
 
-        if depth == "coder":
+        if depth == "vet":
             coder_prompt += (
                 f'\nAfter the report, create a PR for this branch:\n'
                 f'  Read {spec_path} — extract the problem statement (WHY this was built, what it solves).\n'
@@ -1425,13 +1425,13 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
         verdict = "CODER_FAILED"
         nm_output = ""
         tl_output = ""
-        print("\n── Phase 3: nm — SKIPPED (coder failed) ──", flush=True)
-        print("── Phase 4: Tech Lead — SKIPPED (coder failed) ──", flush=True)
+        print("\n── Phase 3: vet — SKIPPED (coder failed) ──", flush=True)
+        print("── Phase 4+5: nm+TL — SKIPPED (coder failed) ──", flush=True)
 
     # Extract PR URL from coder output when depth=coder (coder creates own PR)
     if not coder_failed:
         pr_url = None
-        if depth == "coder":
+        if depth == "vet":
             pr_pattern = f"github.com/{REPO}/pull/"
             for line in coder_output.split("\n"):
                 if pr_pattern in line:
@@ -1449,15 +1449,15 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
     # ── PHASE 3: nm (direct shell — no AI tokens) ──
     if not coder_failed:
         nm_output = ""
-        if depth in ("coder+nm", "full"):
-            print("\n── Phase 3: Verification (coder claimed clean — let's check) ──", flush=True)
+        if depth in ("vet+nm", "full"):
+            print("\n── Phase 3: vet (coder claimed clean — let's check) ──", flush=True)
 
             # 1. Verify branch
             print("  ⏳ Checking out branch...", flush=True)
             co_out, co_err, co_rc = git("checkout", branch)
             if co_rc != 0:
                 print(f"  ❌ Checkout failed: {co_err}", flush=True)
-                halt_and_revert(f"nm: cannot checkout {branch}", "PHASE 3 (nm)", branch)
+                halt_and_revert(f"nm: cannot checkout {branch}", "PHASE 3 (vet)", branch)
 
             # ── Verification loop: fail → coder fixes → re-verify ──
             MAX_VERIFY_RETRIES = 2
@@ -1572,13 +1572,51 @@ Report: what was broken, what you fixed, commit hash."""
             print(f"✓ Verification passed ({len(nm_output)} chars)", flush=True)
 
         else:
-            print(f"\n── Phase 3: nm — SKIPPED (depth={depth}) ──", flush=True)
-    # ── PHASE 4: TECH LEAD (review PR) ──
+            print(f"\n── Phase 3: vet — SKIPPED (depth={depth}) ──", flush=True)
+    
+    # ── PHASE 4: nm (adversarial review — fresh session, different model) ──
+    if not coder_failed:
+        if depth in ("vet+nm", "full"):
+            print("\n── Phase 4: nm (adversarial review) ──", flush=True)
+            print("  ⏳ Spawning fresh Hermes session with different model family...", flush=True)
+            import shlex
+            nm_cmd = f"cd {shlex.quote(PROJECT_DIR)} && ~/bin/nm --skip-tests"
+            nm_result = subprocess.run(
+                ["bash", "-c", nm_cmd],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                universal_newlines=True, timeout=600, cwd=PROJECT_DIR)
+            nm_stdout = nm_result.stdout or ""
+            print(f"  ✓ nm finished ({len(nm_stdout)} chars)", flush=True)
+            
+            # Extract PR URL from nm output
+            pr_match = re.search(r'(https://github\.com/[^/]+/[^/]+/pull/\d+)', nm_stdout)
+            if pr_match:
+                pr_url = pr_match.group(1)
+                print(f"  PR: {pr_url}", flush=True)
+            else:
+                stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", branch,
+                                   "--json", "url", "--jq", ".[0].url")
+                if rc == 0 and stdout:
+                    pr_url = stdout
+                    print(f"  Found existing PR: {pr_url}", flush=True)
+                else:
+                    print("  ⚠ No PR found in nm output", flush=True)
+            
+            # Extract risk from nm output
+            risk_match = re.search(r'RISK:\s*(LOW|MEDIUM|HIGH)', nm_stdout, re.IGNORECASE)
+            risk = risk_match.group(1).upper() if risk_match else impact
+            print(f"  Risk: {risk}", flush=True)
+        else:
+            print(f"\n── Phase 4: nm — SKIPPED (depth={depth}) ──", flush=True)
+    else:
+        print("\n── Phase 4: nm — SKIPPED (coder failed) ──", flush=True)
+
+# ── PHASE 5: TECH LEAD (review PR) ──
     tl_output = ""
     if not coder_failed:
         verdict = "SKIPPED"
         if depth == "full":
-            print("\n── Phase 4: Tech Lead (PR review) ──", flush=True)
+            print("\n── Phase 5: Tech Lead (PR review) ──", flush=True)
             tl_prompt = f"""You are the Tech Lead — your job is a THREE-PART adversarial review against the spec at {spec_path}.
 
 FIRST — read the spec: the chosen approach, API/interface proposal, and task breakdown.
@@ -1678,9 +1716,9 @@ RELEASE determination: Check if this feature introduces new functionality, API c
                     else:
                         print(f"  Failed: {stderr}", flush=True)
         else:
-            print(f"\n── Phase 4: Tech Lead — SKIPPED (depth={depth}) ──", flush=True)
+            print(f"\n── Phase 5: Tech Lead — SKIPPED (depth={depth}) ──", flush=True)
     else:
-        print("\n── Phase 4: Tech Lead — SKIPPED (coder failed) ──", flush=True)
+        print("\n── Phase 5: Tech Lead — SKIPPED (coder failed) ──", flush=True)
 
     # ── REPORT ──
     print("\n" + "═" * 55)
