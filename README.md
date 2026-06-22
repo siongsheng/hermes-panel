@@ -81,7 +81,6 @@ Only HIGH confidence gets the fast path. Everything else gets adversarial review
 | Spec noise extraction | 45-58% smaller strategist output |
 | Task-extract | Coder reads ~800 chars of tasks, not the full 12K spec |
 | Lite skills | 2.2K vs 13.8K system tokens for coder + TL |
-| Prompt cache (30m TTL) | Cuts repeat-read costs |
 
 Cost distribution by phase:
 

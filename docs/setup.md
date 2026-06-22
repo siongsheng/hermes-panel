@@ -435,7 +435,6 @@ When the strategist can't proceed with high confidence, it enters interview mode
 | Coder v4-flash model | 3.1× cheaper than v4-pro |
 | Phase 3 pure shell | Zero AI tokens (was ~3K tokens) |
 | `adversarial-review-lite` skill | 2.2K vs 13.8K for full skill |
-| Cache TTL 30m | Cuts repeat-read costs |
 
 **Result:** ~$0.014/full run → 46% cheaper than unoptimized.
 

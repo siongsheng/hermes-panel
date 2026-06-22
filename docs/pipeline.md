@@ -137,7 +137,6 @@ The panel has been systematically optimized to reduce cost while preserving qual
 | Coder flash model | `deepseek-v4-flash` instead of v4-pro for implementation | 3.1× cheaper |
 | Phase 3 pure shell | No AI agent — `git checkout`, `npm test`, `npm run build`, `gh pr create` | Zero AI tokens |
 | `adversarial-review-lite` | 2.2K vs 13.8K for full `adversarial-review` + `ai-coding-best-practices` | ~11.5K system tokens saved |
-| Cache TTL 30m | Extended prompt cache on coder + tech-lead profiles | Cuts repeat-read costs |
 
 **54% cheaper than an unoptimized pipeline.**
 
