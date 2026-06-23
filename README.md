@@ -48,15 +48,15 @@ The panel doesn't invent methodology. It integrates proven open-source ideas int
                      └─  "47-line wrapper → 1 stdlib call" = SHOULD FIX.
 ```
 
-| Project | Stars | What we took | Stage |
-|---------|-------|-------------|-------|
-| [Spec Kit](https://github.com/github/spec-kit) | 51K | Structured spec methodology — constitution, roadmap, conventions before a single line of code | Strategist |
-| [ponytail](https://github.com/nickc1/ponytail) | — | Laziness ladder — skip if unnecessary, reuse, stdlib before dependency | Strategist, Tech Lead |
-| [Test-Driven Development](https://en.wikipedia.org/wiki/Test-driven_development) (Kent Beck) | — | RED → GREEN discipline, test-first enforcement, bundled commit detection | Coder |
-| [AI Coding Best Practices](https://github.com/nickc1/ai-coding-best-practices) | — | Spec-before-code, task granularity, no scope creep, TDD gates | Coder |
-| [no-mistakes](https://github.com/nickc1/no-mistakes) | — | Adversarial review pipeline — clean context, different model, risk-gated PR | nm |
-| Unix Philosophy | — | Mechanical verification — build + test via shell, zero AI, no hallucinations | vet |
-| GitHub PR Review | — | Multi-dimensional review with severity tagging, spec compliance scoring | Tech Lead |
+| Project | What we took | Stage |
+|---------|-------------|-------|
+| [Spec Kit](https://github.com/github/spec-kit) | Structured spec methodology — constitution, roadmap, conventions before a single line of code | Strategist |
+| [ponytail](https://github.com/DietrichGebert/ponytail) | Laziness ladder — skip if unnecessary, reuse, stdlib before dependency | Strategist, Tech Lead |
+| [Test-Driven Development](https://en.wikipedia.org/wiki/Test-driven_development) (Kent Beck) | RED → GREEN discipline, test-first enforcement, bundled commit detection | Coder |
+| AI Coding Best Practices | Spec-before-code, task granularity, no scope creep, TDD gates | Coder |
+| [no-mistakes](https://github.com/kunchenguid/no-mistakes) | Adversarial review pipeline — clean context, different model, risk-gated PR | nm |
+| Unix Philosophy | Mechanical verification — build + test via shell, zero AI, no hallucinations | vet |
+| GitHub PR Review | Multi-dimensional review with severity tagging, spec compliance scoring | Tech Lead |
 
 **Bottom line:** Every stage in the panel has prior art. We didn't guess — we wired together proven patterns.
 
