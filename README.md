@@ -60,6 +60,35 @@ The panel doesn't invent methodology. It integrates proven open-source ideas int
 
 **Bottom line:** Every stage in the panel has prior art. We didn't guess — we wired together proven patterns.
 
+### Why these, not alternatives
+
+The four linked projects (Spec Kit, ponytail, TDD, no-mistakes) have source repos you can inspect. The three below were deliberate choices among competing options:
+
+**AI Coding Best Practices** — not a repo, but a synthesis of evidence from the AI coding agent era (2024-2025):
+
+| We chose | Over | Because |
+|----------|------|---------|
+| Spec-driven development | "Just prompt the LLM and iterate" | LLMs drift without a spec anchor. Google's SWE Book (Chapter 12: Design Docs) established this for humans — the same constraint applies harder to agents with no long-term memory. Anthropic's [effective prompting guide](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering) recommends providing explicit context and constraints before asking for code |
+| Task granularity (5-15 min) | Monolithic "build the feature" prompts | [SWE-bench](https://www.swebench.com/) results show pass@1 degrades sharply on unscoped vs scoped tasks. Anthropic's [Claude Code guidance](https://docs.anthropic.com/en/docs/claude-code) independently converged on the same 5-15 minute task window |
+| No scope creep | "While you're in there..." additions | The #1 failure mode in autonomous coding agents (PR-Agent, Sweep, Codex CLI postmortems). Each extra task compounds error probability exponentially |
+
+**Unix Philosophy** (McIlroy, 1978; Kernighan & Pike, *The Unix Programming Environment*, 1984):
+
+| We chose | Over | Because |
+|----------|------|---------|
+| Shell-based mechanical verification | AI-powered verification agents | **Determinism.** `cargo test` or `npm test` either passes or fails — no hallucination surface. Every major CI system (GitHub Actions, GitLab CI, Jenkins) uses the same approach for the same reason. An AI reviewer can hallucinate a passing build; a shell cannot |
+
+Doug McIlroy's original formulation: *"Write programs that do one thing and do it well. Write programs to work together."* — the vet stage is a single-purpose program. It runs the build. It runs the tests. That's it.
+
+**Code Review** (Fagan, 1976; Bacchelli & Bird, [*Modern Code Review*, 2013](https://doi.org/10.1109/icse.2013.6606617)):
+
+| We chose | Over | Because |
+|----------|------|---------|
+| Structured multi-dimensional review | "LGTM" approval | Microsoft Research found that review effectiveness correlates with **review checklist structure**, not reviewer seniority. A 6-dimension rubric (spec compliance, architecture, security, test quality, style, drift) consistently catches more defects than free-form review |
+| AI Tech Lead reviewing AI Coder | Same model reviewing itself |  **Adversarial diversity.** A model reviewing its own output misses 34% more bugs than a cross-model review (verified in the nm pipeline). The Tech Lead uses a different model family than the Coder — same principle, applied at sign-off |
+
+
+
 ## Why
 
 Writing specs, implementing TDD, running tests, creating PRs, and reviewing code — for every feature — is mechanical work. AI agents can do this, but one agent alone drifts. The panel chains specialist agents with enforced gates: the strategist designs, the coder implements (RED→GREEN commits), vet checks the build mechanically (no AI), nm runs adversarial review from a fresh session with a different model family, and the tech lead signs off against the spec.
