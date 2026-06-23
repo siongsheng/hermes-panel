@@ -11,6 +11,55 @@
                                               └──────────┘
 ```
 
+## Standing on Shoulders
+
+The panel doesn't invent methodology. It integrates proven open-source ideas into a pipeline where every stage reinforces the next.
+
+```
+  STAGE          WHAT WE USE                    WHY
+  ─────────────────────────────────────────────────────────────────
+                     ┌─ GitHub Spec Kit (51K ★)
+  STRATEGIST ───────┤  Structured spec format: mission, tech-stack,
+                     │  roadmap, conventions. Constitution before code.
+                     └─ ponytail laziness ladder
+                        "Does this exist? Can stdlib do it?
+                         Is there a one-liner?" — before writing spec.
+
+                     ┌─ Kent Beck TDD (Test-Driven Development)
+  CODER ─────────────┤  RED → GREEN → REFACTOR. Tests fail first,
+                     │  then implementation, then cleanup.
+                     └─ AI Coding Best Practices
+                        Task granularity (5-15 min), no scope creep,
+                        bundled commits = BLOCKER.
+
+                     ┌─ Unix philosophy
+  vet ───────────────┤  Do one thing well. Shell script runs build
+                     │  + test commands. Zero AI tokens. If it fails
+                     └─  you know it's real, not a hallucination.
+
+                     ┌─ no-mistakes pipeline
+  nm ────────────────┤  Fresh session, different model family,
+                     │  zero context of coding process. Catches
+                     └─  bias-blind spots the coder's model missed.
+
+                     ┌─ GitHub PR review workflow
+  TECH LEAD ─────────┤  Spec compliance check, architecture review,
+                     │  code quality. ponytail laziness lens:
+                     └─  "47-line wrapper → 1 stdlib call" = SHOULD FIX.
+```
+
+| Project | Stars | What we took | Stage |
+|---------|-------|-------------|-------|
+| [Spec Kit](https://github.com/github/spec-kit) | 51K | Structured spec methodology — constitution, roadmap, conventions before a single line of code | Strategist |
+| [ponytail](https://github.com/nickc1/ponytail) | — | Laziness ladder — skip if unnecessary, reuse, stdlib before dependency | Strategist, Tech Lead |
+| [Test-Driven Development](https://en.wikipedia.org/wiki/Test-driven_development) (Kent Beck) | — | RED → GREEN discipline, test-first enforcement, bundled commit detection | Coder |
+| [AI Coding Best Practices](https://github.com/nickc1/ai-coding-best-practices) | — | Spec-before-code, task granularity, no scope creep, TDD gates | Coder |
+| [no-mistakes](https://github.com/nickc1/no-mistakes) | — | Adversarial review pipeline — clean context, different model, risk-gated PR | nm |
+| Unix Philosophy | — | Mechanical verification — build + test via shell, zero AI, no hallucinations | vet |
+| GitHub PR Review | — | Multi-dimensional review with severity tagging, spec compliance scoring | Tech Lead |
+
+**Bottom line:** Every stage in the panel has prior art. We didn't guess — we wired together proven patterns.
+
 ## Why
 
 Writing specs, implementing TDD, running tests, creating PRs, and reviewing code — for every feature — is mechanical work. AI agents can do this, but one agent alone drifts. The panel chains specialist agents with enforced gates: the strategist designs, the coder implements (RED→GREEN commits), vet checks the build mechanically (no AI), nm runs adversarial review from a fresh session with a different model family, and the tech lead signs off against the spec.
