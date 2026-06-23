@@ -1195,6 +1195,73 @@ Keep ALL existing content — only add what's needed to close the gaps."""
     branch = f"feat/{slugify(feature)}"
     print(f"  Branch: {branch}", flush=True)
 
+    # ── HUMAN GATE: Review spec before code gets written ──
+    # The #1 pipeline failure mode is building the wrong thing from a bad spec.
+    # Pause here so the human can catch misinterpretations before the coder spends tokens.
+    if sys.stdin.isatty() and not os.environ.get("PANEL_SKIP_HUMAN_GATE"):
+        print(f"\n{'─' * 55}", flush=True)
+        print(f"  HUMAN GATE — Spec ready for review", flush=True)
+        print(f"{'─' * 55}", flush=True)
+        print(f"  Feature:  {feature}", flush=True)
+        print(f"  Depth:    {depth.upper()} ({confidence} confidence, {impact} impact)", flush=True)
+        print(f"  Branch:   {branch}", flush=True)
+        print(f"  Spec:     {spec_path}", flush=True)
+        print(f"  Tasks:    {tasks_extract_path if tasks_extract_path else 'N/A'}", flush=True)
+        print(f"\\n  Options:", flush=True)
+        print(f"    [y] Review the spec now (opens in less)", flush=True)
+        print(f"    [e] Edit the spec (opens in vim)", flush=True)
+        print(f"    [Enter] Proceed — spec looks good", flush=True)
+        print(f"    [q] Quit — spec needs major changes", flush=True)
+        print(f"{'─' * 55}", flush=True)
+        try:
+            choice = input("  > ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            choice = "q"
+
+        if choice == "y":
+            os.system(f"less {spec_path}")
+            # After reviewing, re-ask
+            try:
+                confirm = input("\\n  Proceed with this spec? [Enter=yes / q=quit]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                confirm = "q"
+            if confirm == "q":
+                print("\\n  ✋ Pipeline halted by human. Spec saved — revise and re-run.", flush=True)
+                sys.exit(0)
+        elif choice == "e":
+            os.system(f"vim {spec_path}")
+            # Re-read the edited spec for downstream processing
+            try:
+                with open(spec_path) as f:
+                    spec = f.read()
+                # Re-extract PR sections from edited spec
+                pr_sections = extract_pr_sections(spec, feature)
+                # Re-parse tasks
+                dag_pre = TaskDAG()
+                dag_pre.parse(spec, slugify(feature))
+                if dag_pre.tasks:
+                    tasks_extract = []
+                    for t in sorted(dag_pre.tasks.values(), key=lambda x: int(x.id)):
+                        tasks_extract.append(f"### Task {t.id}: {t.description}\\n"
+                            f"**Files:** {', '.join(t.files) if t.files else 'from spec'}\\n"
+                            f"**Dependencies:** {', '.join(t.deps) if t.deps else '[none]'}\\n"
+                            f"**Description:** {t.description}\\n")
+                    with open(tasks_extract_path, "w") as tf:
+                        tf.write(f"# Task Breakdown: {feature}\\n\\n" + "\\n".join(tasks_extract))
+                    print(f"  Task extract regenerated: {tasks_extract_path} ({len(dag_pre.tasks)} tasks)", flush=True)
+                print("  ✓ Spec edited — proceeding with updated spec.", flush=True)
+            except Exception as e:
+                print(f"  ⚠ Failed to re-read spec: {e} — proceeding with original.", flush=True)
+        elif choice == "q":
+            print("\\n  ✋ Pipeline halted by human. Spec saved — revise and re-run.", flush=True)
+            sys.exit(0)
+        # else: Enter or any other key → proceed
+        print("  ✓ Human gate passed — proceeding to implementation.\\n", flush=True)
+    elif os.environ.get("PANEL_SKIP_HUMAN_GATE"):
+        print("\\n  ⚠ Human gate skipped (PANEL_SKIP_HUMAN_GATE=1)", flush=True)
+    else:
+        print("\\n  ⚠ Human gate skipped (non-interactive — Telegram/cron mode)", flush=True)
+
     # ── PARALLEL EXECUTION GATE ──
     parallel_enabled = os.environ.get("PANEL_PARALLEL", "1") == "1"
     if parallel_enabled and depth in ("coder", "vet+nm", "full"):
