@@ -264,6 +264,8 @@ For long-lived projects, every Strategist run shouldn't rediscover the same deci
 
 ADRs, conventions, and known constraints belong in the repo: `AGENTS.md`, `docs/adr/`, `specs/conventions.md`. The Strategist reads AGENTS.md and explores the codebase before writing any spec — stronger repo docs directly improve spec quality. The panel doesn't create these docs; you do, once. Every run benefits.
 
+**Recommendation:** If you use the panel on a long-lived project, maintain ADRs (`docs/adr/`). Each ADR captures a decision, the alternatives considered, and why the choice was made. The Strategist reads them during codebase exploration (no more "should this use Redis?" every run). TL checks PRs against them (no more silent architecture drift). A 5-line ADR pays back every panel run that follows.
+
 ### Dynamic Memory → git + issues (not pipeline)
 
 Recent bugs, changed APIs, and recurring patterns are already in `git log` and the issue tracker. The panel reads git history during codebase exploration. It doesn't need a separate memory layer — the signals exist. The agents need to *read them*, not store them.
