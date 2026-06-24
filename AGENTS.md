@@ -10,19 +10,22 @@ This repo IS the panel — you don't run the panel on itself.
 - GitHub CLI for PR/issue management
 
 ## Commands
+- Test: `python3 -m pytest tests/ -q`
 - Syntax check: `python3 -c "compile(open('hermes-panel').read(), 'hermes-panel', 'exec')"`
 - Verify nm script: `bash -n ~/bin/nm`
 - Verify vet script: `bash -n ~/bin/vet`
 
 ## Testing
-This repo has no automated test suite (the panel orchestrates TDD but has none itself).
-To verify the panel works:
+177 tests (pytest). Coverage: core functions + control panel + edge cases.
 ```bash
-# Syntax check the main script
-python3 -c "compile(open('hermes-panel').read(), 'hermes-panel', 'exec')"
+# Full suite (excludes slow integration tests)
+python3 -m pytest tests/ -q --ignore=tests/test_main_integration.py
 
-# Run a smoke test on a real project
-PANEL_FORCE_FULL=1 hermes-panel "add a comment" ~/huat
+# All tests including integration (may be slow)
+python3 -m pytest tests/ -q
+
+# Single file
+python3 -m pytest tests/test_slugify.py -v
 ```
 
 ## Conventions
