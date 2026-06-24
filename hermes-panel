@@ -841,6 +841,8 @@ def pick_next_feature(features: list) -> object:
 
 def update_roadmap_status(roadmap_path: str, feature_id: str, new_status: str):
     """Update feature status in roadmap.md inline."""
+    if not os.path.exists(roadmap_path):
+        return
     marker_map = {
         "pending":     "[ ] Pending",
         "in_progress": "[~] In Progress",
@@ -972,8 +974,7 @@ def _make_status_entry(feature_id: str, title: str, status: str, timestamp: str 
     if status == "in_progress":
         branch_part = f", branch `{branch}`" if branch else ""
         return f"- **{feature_id}: {title}** — in progress since {ts}{branch_part} [{source}]"
-    else:
-        # done
+    elif status == "done":
         if pr_url:
             pr_match = re.search(r'/pull/(\d+)', pr_url)
             pr_num = pr_match.group(1) if pr_match else "?"
@@ -981,6 +982,10 @@ def _make_status_entry(feature_id: str, title: str, status: str, timestamp: str 
         else:
             pr_part = ""
         return f"- **{feature_id}: {title}** — done {ts}{pr_part} [{source}]"
+    else:
+        # pending or other
+        branch_part = f", branch `{branch}`" if branch else ""
+        return f"- **{feature_id}: {title}** — {status} {ts}{branch_part} [{source}]"
 
 
 def update_status_md(status_path: str, feature_id: str, title: str, status: str,
