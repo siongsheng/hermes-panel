@@ -4,11 +4,15 @@
 
 ## Why
 
-You ask an AI to add a feature. It writes code. It works. You merge. Three weeks later, prod is down because there were no tests, the build was never run, nobody reviewed the architecture, and the AI hallucinated an entire auth system you didn't ask for.
+You asked an AI to add a dark mode toggle.
 
-Hermes Panel is five agents in a trenchcoat, each checking the last one's work so you don't have to. The strategist writes the spec (because "just code it" is how you get 47 files for a button). The coder does TDD — RED commit, then GREEN commit, or it doesn't ship. vet runs the actual build and tests with zero AI tokens (shell scripts don't hallucinate). nm reviews the code from a fresh session with a different model — no model should grade its own homework. The Tech Lead signs off against the spec.
+It installed Tailwind. Refactored your CSS. Wrote 14 components, a theme context, a provider, three hooks, and a README explaining its design philosophy. The toggle doesn't work. The tests pass — it wrote those too.
 
-**What comes out:** passing tests, passing build, a PR with risk assessment, two independent reviews, all automated. **What doesn't:** an auth system you didn't ask for.
+One agent, zero accountability, unlimited ambition. Give it a button and it builds you a space elevator.
+
+Hermes Panel puts five agents in a room and makes them distrust each other. The strategist writes the spec — because "just code it" is the fastest route to 47 files for a button. The coder tests first (RED commit, GREEN commit, or it didn't happen). vet runs the build with zero AI tokens — shell scripts don't hallucinate, and they certainly don't install Tailwind. nm reviews from a fresh session with a different model, because nobody grades their own homework. The Tech Lead checks the spec, checks the code, and checks for space elevators.
+
+**What comes out:** passing tests, passing build, a PR with two independent reviews, all automated. **What doesn't:** a CSS framework you didn't ask for.
 
 ## Quick Start
 
