@@ -40,6 +40,21 @@ def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None):
     return "Mock agent output"
 
 
+def _patch_and_run(panel):
+    """Run panel.main() with all standard patches applied."""
+    with patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+         patch.object(panel, "_set_gh_token"), \
+         patch.object(panel, "git", return_value=("", "", 0)), \
+         patch.object(panel, "gh", return_value=("", "", 0)), \
+         patch.object(panel, "load_key", return_value="fk"), \
+         patch.object(panel, "load_github_token", return_value="ft"), \
+         patch.object(panel, "detect_repo", return_value="t/t"):
+        try:
+            panel.main()
+        except SystemExit:
+            pass
+
+
 class TestMainEarlyExits:
 
     def test_help_flag(self):
@@ -96,20 +111,7 @@ class TestPipelineExecution:
             _spawn_calls.clear()
             sys.argv = ["hermes-panel", "--next", project_dir]
             panel.spawn_agent = _mock_spawn
-            # Speed up tests — no coder retry loops
-            os.environ["PANEL_MAX_RETRIES"] = "0"
-            try:
-                with patch.object(panel, "call_agent", return_value={"content":"M","tokens":1}):
-                with patch.object(panel, "_set_gh_token"):
-                    with patch.object(panel, "git", return_value=("","",0)):
-                        with patch.object(panel, "gh", return_value=("","",0)):
-                            with patch.object(panel, "load_key", return_value="fk"):
-                                with patch.object(panel, "load_github_token", return_value="ft"):
-                                    with patch.object(panel, "detect_repo", return_value="t/t"):
-                                        try:
-                                            panel.main()
-                                        except SystemExit:
-                                            pass
+            _patch_and_run(panel)
             assert len(_spawn_calls) >= 2, f"Expected >=2 calls, got {_spawn_calls}"
             assert _spawn_calls[0] == "strategist", f"First: {_spawn_calls}"
             assert "coder" in _spawn_calls, f"Got: {_spawn_calls}"
@@ -128,20 +130,7 @@ class TestPipelineExecution:
             _spawn_calls.clear()
             sys.argv = ["hermes-panel", "--next", project_dir]
             panel.spawn_agent = _mock_spawn
-            # Speed up tests — no coder retry loops
-            os.environ["PANEL_MAX_RETRIES"] = "0"
-            try:
-                with patch.object(panel, "call_agent", return_value={"content":"M","tokens":1}):
-                with patch.object(panel, "_set_gh_token"):
-                    with patch.object(panel, "git", return_value=("","",0)):
-                        with patch.object(panel, "gh", return_value=("","",0)):
-                            with patch.object(panel, "load_key", return_value="fk"):
-                                with patch.object(panel, "load_github_token", return_value="ft"):
-                                    with patch.object(panel, "detect_repo", return_value="t/t"):
-                                        try:
-                                            panel.main()
-                                        except SystemExit:
-                                            pass
+            _patch_and_run(panel)
             # Stop file should be consumed
             assert not os.path.exists(sp), "Stop file not removed"
             # No agents should have been called
@@ -162,17 +151,7 @@ class TestPipelineExecution:
         try:
             sys.argv = ["hermes-panel", "--next", project_dir]
             panel.spawn_agent = check_lock
-            with patch.object(panel, "call_agent", return_value={"content":"M","tokens":1}):
-                with patch.object(panel, "_set_gh_token"):
-                    with patch.object(panel, "git", return_value=("","",0)):
-                        with patch.object(panel, "gh", return_value=("","",0)):
-                            with patch.object(panel, "load_key", return_value="fk"):
-                                with patch.object(panel, "load_github_token", return_value="ft"):
-                                    with patch.object(panel, "detect_repo", return_value="t/t"):
-                                        try:
-                                            panel.main()
-                                        except SystemExit:
-                                            pass
+            _patch_and_run(panel)
             assert any(lock_seen), f"Lock never seen. Calls: {lock_seen}"
             assert not os.path.exists(lock_path), f"Lock still at {lock_path}"
         finally:
@@ -190,17 +169,7 @@ class TestPipelineExecution:
         try:
             sys.argv = ["hermes-panel", "--next", project_dir]
             panel.spawn_agent = fail_coder
-            with patch.object(panel, "call_agent", return_value={"content":"M","tokens":1}):
-                with patch.object(panel, "_set_gh_token"):
-                    with patch.object(panel, "git", return_value=("","",0)):
-                        with patch.object(panel, "gh", return_value=("","",0)):
-                            with patch.object(panel, "load_key", return_value="fk"):
-                                with patch.object(panel, "load_github_token", return_value="ft"):
-                                    with patch.object(panel, "detect_repo", return_value="t/t"):
-                                        try:
-                                            panel.main()
-                                        except SystemExit:
-                                            pass
+            _patch_and_run(panel)
             roadmap_path = os.path.join(project_dir, "specs", "roadmap.md")
             if os.path.exists(roadmap_path):
                 with open(roadmap_path) as f:
