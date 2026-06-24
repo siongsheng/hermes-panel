@@ -1825,6 +1825,236 @@ CRITICAL RULES:
     print(f"    or develop manually using the roadmap as your guide.")
 
 
+# ── extracted phase functions ─────────────────────
+
+def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, verdict, impact, branch, spec_path, strat_output, mode):
+    """Post-pipeline: report, roadmap update, auto-merge. Returns (continue_loop, should_stop)."""
+    global PANEL_FEATURE, PROJECT_DIR, REPO, OUTPUT_LOG
+    print("\n" + "═" * 55)
+    print("  PANEL REPORT")
+    print("═" * 55)
+    print(f"Feature:    {feature}")
+    print(f"Project:    {PROJECT_DIR}")
+    print(f"Repo:       {REPO}")
+    print(f"Branch:     {branch}")
+    print(f"PR:         {pr_url or 'N/A'}")
+    print(f"Spec:       {spec_path}")
+    print(f"Strategist: {len(strat_output)} chars output")
+    print(f"Mode:       {mode.upper()}")
+    print(f"Verdict:    {verdict}")
+    print(f"Full log:   {OUTPUT_LOG}")
+    print("✓ Pipeline complete.")
+
+    if is_next:
+        roadmap_path = os.path.join(PROJECT_DIR, "specs", "roadmap.md")
+        fid_match = re.match(r'(F\d{3})', PANEL_FEATURE) if PANEL_FEATURE else None
+        fid = fid_match.group(1) if fid_match else ""
+        title = PANEL_FEATURE.split(": ", 1)[1] if fid and ": " in PANEL_FEATURE else PANEL_FEATURE
+
+        if verdict in ("CODER_FAILED", "TIMED_OUT", "UNKNOWN"):
+            continue_loop = False
+            if fid and os.path.exists(roadmap_path):
+                update_roadmap_status(roadmap_path, fid, "pending")
+                commit_roadmap_update(roadmap_path, fid, "revert")
+                print(f"  {fid} reverted to [ ] Pending — will retry on next run")
+
+        elif is_continuous:
+            continue_loop = False
+            if pr_url and verdict == "APPROVED":
+                if impact in ("LOW", "MEDIUM"):
+                    merge_result = try_auto_merge(pr_url)
+                    if merge_result == "merged":
+                        continue_loop = True
+                    elif merge_result == "queued":
+                        print("\n── Continuous: auto-merge queued (CI waiting)")
+                    elif merge_result == "failed":
+                        print("\n── Continuous: auto-merge failed")
+                else:
+                    print(f"\n── Continuous: risk HIGH — human review required for {fid}")
+            else:
+                continue_loop = True
+
+            if continue_loop:
+                if fid and os.path.exists(roadmap_path):
+                    update_roadmap_status(roadmap_path, fid, "done")
+                    commit_roadmap_update(roadmap_path, fid, "done")
+                    status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
+                    update_status_md(status_path, fid, title, "done",
+                                     pr_url=pr_url or "", source="panel")
+        else:
+            # --next (non-continuous): mark done immediately
+            if fid and os.path.exists(roadmap_path):
+                update_roadmap_status(roadmap_path, fid, "done")
+                commit_roadmap_update(roadmap_path, fid, "done")
+                status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
+                update_status_md(status_path, fid, title, "done",
+                                 pr_url=pr_url or "", source="panel")
+
+    should_stop = False
+    if not is_continuous:
+        should_stop = True
+    if not continue_loop:
+        print("\n── Continuous: stopping loop")
+        should_stop = True
+    return continue_loop, should_stop
+
+
+def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, branch, depth, mode, is_next):
+    """Phase 2: Coder — spawn coder, retry loop, TDD verification. Returns dict."""
+    global PROJECT_DIR, REPO, DEFAULT_BRANCH, TEST_CMD, BUILD_CMD, LINT_CMD
+    max_retries = 2
+    coder_failed = False
+    coder_output = ""
+    pr_url = None
+    verdict = None
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            print(f"\n── Phase 2 (Retry {attempt}): Coder ──", flush=True)
+        else:
+            print("\n── Phase 2: Coder (feature branch) ──", flush=True)
+
+        coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_path} for context).
+FIRST: Create and switch to branch '{branch}':
+  git checkout -b {branch} 2>/dev/null || git checkout {branch}
+  git push -u origin {branch}
+
+Implement ALL tasks from the spec, ONE AT A TIME. Before each: check if another task remains. Do not stop until ALL tasks done — including trivial ones (docs, imports, config).
+
+For each task, TDD with TWO SEPARATE COMMITS:
+RED: Write tests → {TEST_CMD} must FAIL → git add <test files only> && git commit -m "test: <summary>"
+GREEN: Write minimum code → {TEST_CMD} must PASS → {BUILD_CMD} must succeed → git add <impl files only> && git commit -m "feat: <summary>"
+CRITICAL: Two distinct commits, RED before GREEN, different timestamps. NEVER bundle. No task numbers in commit messages.
+BEFORE PUSHING: After ALL tasks done, check if the spec requires a README update. If yes, update README.md and commit as \"docs: update README for <feature>\". Then run lint ({LINT_CMD}) + FULL test suite ({TEST_CMD}). If either fails, fix and retry. Only git push when clean.
+Report: both commit hashes, files changed, test results, lint status, branch name.
+"""
+
+        if depth == "vet":
+            coder_prompt += (
+                f'\nAfter the report, create a PR for this branch:\n'
+                f'  Read {spec_path} — extract the problem statement (WHY this was built, what it solves).\n'
+                f'  Source .env for gh auth: export $(grep -v "^#" .env | xargs) 2>/dev/null\n'
+                f'  Write the PR body to /tmp/pr-body.md with sections:\n'
+                f'    ## Why — the problem statement from the spec (what problem does this solve?)\n'
+                f'    ## Changes — summary of what was implemented\n'
+                f'    ## Spec — {spec_path}\n'
+                f'  gh pr create --repo {REPO} --base master --head {branch} --title "{feature}" --body-file /tmp/pr-body.md\n'
+                f'Report the PR URL.\n'
+            )
+
+        coder_output = spawn_agent("coder", ["ai-coding-best-practices-lite"], coder_prompt, timeout=600, cwd=PROJECT_DIR)
+        print(f"\n✓ Coder finished ({len(coder_output)} chars)", flush=True)
+
+        # ── Coder clarification gate ──
+        coder_clarify = re.findall(r'(?:⚠\s*)?CLARIFICATION\s*NEEDED\s*[：:]\s*(.+)', coder_output)
+        if coder_clarify:
+            print(f"\n── Coder has {len(coder_clarify)} clarification(s) ──", flush=True)
+            for i, q in enumerate(coder_clarify, 1):
+                print(f"  {i}. {q.strip()}", flush=True)
+
+            user_answers = []
+            try:
+                import select
+                for i in range(len(coder_clarify)):
+                    print(f"\n  A{i+1}: ", end="", flush=True)
+                    ready, _, _ = select.select([sys.stdin], [], [], 60.0)
+                    if not ready:
+                        print("(timed out — using default assumption)", flush=True)
+                        break
+                    answer = sys.stdin.readline().strip()
+                    if not answer:
+                        break
+                    user_answers.append(answer)
+            except (EOFError, KeyboardInterrupt):
+                print("\n  ⚠ No input available — proceeding with assumptions", flush=True)
+
+            if user_answers:
+                ans_block = "\n".join(
+                    f"Clarification: {q}\nUser's answer: {a}"
+                    for q, a in zip(coder_clarify, user_answers) if a
+                )
+                coder_prompt_refine = (
+                    f"{coder_prompt}\n\n"
+                    f"── USER CLARIFICATIONS (from the user, treat as authoritative) ──\n"
+                    f"{ans_block}\n\n"
+                    f"Continue from where you left off. Do NOT restart from scratch."
+                )
+                print(f"\n  ↻ Re-running coder with {len([a for a in user_answers if a])} answer(s)...", flush=True)
+                coder_output = spawn_agent("coder", ["ai-coding-best-practices-lite"],
+                                           coder_prompt_refine, timeout=600, cwd=PROJECT_DIR)
+                print(f"  ✓ Coder re-run finished ({len(coder_output)} chars)", flush=True)
+            else:
+                print("  → No answers provided — proceeding with original output", flush=True)
+
+        # Coder contingency: check if branch + commits exist despite timeout
+        if "[TIMEOUT:" in coder_output:
+            branch_out, _, branch_rc = git("rev-parse", "--verify", branch)
+            if branch_rc != 0:
+                print("  ❌ Coder timed out with no branch — skipping remaining phases")
+                coder_failed = True
+                break
+            print("  ⚠ Coder timed out but branch exists — continuing with partial output")
+
+        # Post-coder gate (active mode only)
+        coder_ok = True
+        if mode == "active":
+            print("\n── Orchestrator: Reviewing Coder Output ──", flush=True)
+            has_red = bool(re.search(r'\bRED\b', coder_output)) or bool(re.search(r'^test:', coder_output, re.MULTILINE))
+            has_green = bool(re.search(r'\bGREEN\b', coder_output)) or bool(re.search(r'^feat:', coder_output, re.MULTILINE))
+            build_ok = "build" in coder_output.lower() and any(w in coder_output.lower() for w in ["pass", "clean", "succeed", "0 error"])
+            tests_ok = "pass" in coder_output.lower() and "0 fail" not in coder_output.lower()
+
+            issues = []
+            if not has_red: issues.append("No RED commit found")
+            if not has_green: issues.append("No GREEN commit found")
+            if not build_ok: issues.append("Build status unclear")
+            if not tests_ok: issues.append("Test results unclear or failing")
+
+            if issues:
+                print(f"  ❌ Issues: {', '.join(issues)}", flush=True)
+                if attempt < max_retries:
+                    print(f"  ↻ Looping back to coder (attempt {attempt+1}/{max_retries})...", flush=True)
+                    continue
+                else:
+                    print("  ⚠ Max retries reached — proceeding anyway", flush=True)
+                    coder_ok = False
+            else:
+                print("  ✅ RED/GREEN commits, build, tests — all OK", flush=True)
+        break  # exit retry loop if we get here
+
+    if not coder_ok and mode == "active":
+        print("\n⚠ Coder phase had unresolved issues. Pipeline continues but results may be affected.", flush=True)
+
+    # On failure: revert all changes, report to orchestrator, stop
+    if coder_failed:
+        halt_and_revert("Coder timed out with no usable output", "PHASE 2 (Coder)", branch)
+        pr_url = None
+        verdict = "CODER_FAILED"
+        print("\n── Phase 3: vet — SKIPPED (coder failed) ──", flush=True)
+        print("── Phase 4+5: nm+TL — SKIPPED (coder failed) ──", flush=True)
+
+    # Extract PR URL from coder output when depth=coder (coder creates own PR)
+    if not coder_failed:
+        pr_url = None
+        if depth == "vet":
+            pr_urls = re.findall(r'https://github\.com/[\w.-]+/[\w.-]+/pull/\d+', coder_output)
+            if pr_urls:
+                pr_url = pr_urls[-1]
+                print(f"\n  PR (coder): {pr_url}", flush=True)
+            if not pr_url:
+                stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", branch,
+                                   "--json", "url", "--jq", ".[0].url")
+                if rc == 0 and stdout:
+                    pr_url = stdout
+                    print(f"\n  PR (coder, found): {pr_url}", flush=True)
+
+    return {
+        "coder_output": coder_output,
+        "pr_url": pr_url,
+        "coder_failed": coder_failed,
+        "verdict": verdict,
+    }
+
+
 # ── main ─────────────────────────────────────────
 
 def main():
