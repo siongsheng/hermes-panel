@@ -2907,7 +2907,7 @@ Output NOTHING ELSE."""
 
 def run_pipeline(feature, is_next, is_continuous, user_answers_prefill):
     """Run one full pipeline iteration for a single feature. Returns exit code."""
-    global PROJECT_DIR, REPO, _stdout, logf
+    global PROJECT_DIR, REPO
 
     strat_result = run_phase1_strategist(feature, user_answers_prefill)
     spec = strat_result["spec"]
@@ -2923,7 +2923,6 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill):
     parallel_enabled = strat_result["parallel_enabled"]
 
     coder_failed = False
-    coder_ok = False
     pr_url = None
     verdict = None
     nm_output = ""
@@ -3148,7 +3147,7 @@ def main():
         return
 
     # ── LOCK ACQUISITION ──
-    lock_held, lock_fd = acquire_lock()
+    _, lock_fd = acquire_lock()
     global _LOCK_FD
     _LOCK_FD = lock_fd
     signal.signal(signal.SIGINT, _signal_handler)
