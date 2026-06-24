@@ -57,13 +57,13 @@ Pauses after the strategist finishes, before any code gets written.
 **Why:** Without a spec, an AI coder drifts — adding features, refactoring unrelated code, installing unnecessary dependencies. The strategist bounds the coder's ambition with a concrete design.
 **Sees:** Codebase + AGENTS.md + brief. **Detects:** Unbounded ambition — overbuilding without design. **Does NOT detect:** Whether the spec is implementable.
 
-Explores the codebase, reads `AGENTS.md`, searches for relevant code, understands existing patterns. Produces a 13-section spec:
+Explores the codebase, reads `AGENTS.md`, searches for relevant code, understands existing patterns. Produces a 13-section spec including:
 
 - Decision table comparing ≥2 approaches
-- Impact assessment (files/tables/routes affected)
+- **Test plan** — concrete edge cases, failure modes, and contract invariants the coder must test (not generic strategy — specific cases)
+- Impact assessment grounded in `git diff --stat` where available
 - Confidence + Impact markers (for depth gating)
 - API/interface proposal
-- Security considerations
 - Numbered task list with `Parallelizable: yes/no` flags (5-15 min each, TDD-ready)
 
 **Model:** `deepseek-v4-pro` with `spec-strategist-lite` + `ponytail-guard` skills.
