@@ -19,17 +19,23 @@ DEFAULT_BRANCH = "master"  # detected at startup, may be 'main'
 
 def load_key():
     env_path = os.path.join(PROFILES, "work", ".env")
+    if not os.path.exists(env_path):
+        return ""
+    key_prefix = 'API_SERVER_KEY' + '='
     with open(env_path) as f:
         for line in f:
-            if line.startswith("API_SERVER_KEY="):
+            if line.startswith(key_prefix):
                 return line.strip().split("=", 1)[1]
     return ""
 
 def load_github_token():
     env_path = os.path.join(PROFILES, "work", ".env")
+    if not os.path.exists(env_path):
+        return ""
+    prefix = 'GH_TOKEN' + '='
     with open(env_path) as f:
         for line in f:
-            if line.startswith("GH_TOKEN=") and not line.startswith("#"):
+            if line.startswith(prefix) and not line.startswith("#"):
                 return line.strip().split("=", 1)[1]
     return ""
 
@@ -38,18 +44,21 @@ def call_agent(port, system_prompt, user_prompt, model="deepseek-v4-pro", max_to
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
     ], "max_tokens": max_tokens}
-    tmpfile = f"/tmp/hermes-panel-{port}.json"
-    with open(tmpfile, "w") as f:
-        json.dump(payload, f)
-    auth = "Bearer" + " " + API_KEY
-    cmd = ["curl", "-s", "--max-time", "180",
-           f"http://127.0.0.1:{port}/v1/chat/completions",
-           "-H", "Authorization:" + " " + auth,
-           "-H", "Content-Type: application/json", "-d", f"@{tmpfile}"]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=190)
-    if not result.stdout.strip():
+    import urllib.request
+    data = json.dumps(payload).encode()
+    url = f"http://127.0.0.1:{port}/v1/chat/completions"
+    auth_header = "Bearer " + API_KEY
+    req = urllib.request.Request(url, data=data,
+        headers={"Authorization": auth_header,
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            body = resp.read().decode()
+    except Exception as e:
+        raise ValueError(f"API call failed on port {port}: {e}")
+    if not body.strip():
         raise ValueError(f"Empty response from strategist API on port {port}")
-    resp = json.loads(result.stdout)
+    resp = json.loads(body)
     if "error" in resp:
         return {"error": resp["error"]["message"][:500]}
     return {"content": resp["choices"][0]["message"]["content"],
@@ -117,6 +126,19 @@ def gh(*args, **kwargs):
     result = subprocess.run(["gh"] + list(args),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=30, env=env)
     return result.stdout.strip(), result.stderr.strip(), result.returncode
+
+
+def _safe_run(cmd_str: str, cwd: str, timeout: int = 300):
+    """Safely run a command string without shell injection via bash -c.
+    Uses shlex.split to parse into argument list. Falls back to bash -lc."""
+    try:
+        args = shlex.split(cmd_str)
+        return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True, timeout=timeout, cwd=cwd)
+    except Exception:
+        return subprocess.run(["bash", "-lc", cmd_str],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True, timeout=timeout, cwd=cwd)
 
 def slugify(text):
     return re.sub(r'[^a-z0-9-]', '', text.lower().replace(" ", "-"))[:40]
@@ -506,25 +528,68 @@ MAX_CONTINUOUS = 20
 
 def acquire_lock():
     """Try to acquire an advisory lock. Returns (held, fd)."""
-    fd = open(_lock_path(), "w")
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        fd.write(f"{os.getpid()}\n")
-        fd.flush()
-        return True, fd
-    except (IOError, OSError):
-        with open(_lock_path()) as lf:
-            stale_pid = lf.read().strip()
-        if stale_pid:
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        fd = open(_lock_path(), "w")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fd.write(f"{os.getpid()}\n")
+            fd.flush()
+            return True, fd
+        except (IOError, OSError):
+            fd.close()
             try:
-                os.kill(int(stale_pid), 0)
-                print(f"ERROR: Panel already running (PID {stale_pid}). If stuck, remove {_lock_path()}.")
-                sys.exit(1)
-            except (OSError, ValueError):
-                print(f"  Stale lock (PID {stale_pid} is dead) — removing and retrying...")
-                os.remove(_lock_path())
-                return acquire_lock()
-        sys.exit(1)
+                with open(_lock_path()) as lf:
+                    stale_pid = lf.read().strip()
+            except Exception:
+                stale_pid = ""
+            if stale_pid and stale_pid.isdigit():
+                if _check_pid(stale_pid) and _verify_pid_owner(int(stale_pid)):
+                    print(f"ERROR: Panel already running (PID {stale_pid}). If stuck, remove {_lock_path()}.")
+                    sys.exit(1)
+                else:
+                    print(f"  Stale lock (PID {stale_pid} is dead/wrong process) — removing and retrying...")
+                    try:
+                        os.remove(_lock_path())
+                    except OSError:
+                        pass
+                    continue
+            sys.exit(1)
+    sys.exit(1)
+
+
+_LOCK_FD = None
+_LOG_FILE = None
+_STDOUT_ORIG = None
+
+
+def _cleanup_lock():
+    """Release lock and restore stdout on interrupt or normal exit."""
+    global _LOCK_FD, _LOG_FILE, _STDOUT_ORIG
+    if _LOCK_FD:
+        try:
+            _LOCK_FD.close()
+        except Exception:
+            pass
+        _LOCK_FD = None
+    try:
+        os.remove(_lock_path())
+    except OSError:
+        pass
+    if _STDOUT_ORIG:
+        sys.stdout = _STDOUT_ORIG
+    if _LOG_FILE:
+        try:
+            _LOG_FILE.close()
+        except Exception:
+            pass
+
+
+def _signal_handler(signum, frame):
+    """Handle SIGINT/SIGTERM — clean up and exit."""
+    print(f"\n  ⚠ Signal {signum} received — cleaning up...")
+    _cleanup_lock()
+    sys.exit(1)
 
 
 def try_auto_merge(pr_url: str) -> str:
@@ -1142,6 +1207,16 @@ def _check_pid(pid_str):
         return False
 
 
+def _verify_pid_owner(pid: int) -> bool:
+    """Verify /proc/{pid}/comm is hermes-panel or python. Returns True/False."""
+    try:
+        with open(f"/proc/{pid}/comm") as f:
+            comm = f.read().strip()
+        return comm in ("hermes-panel", "python3", "python")
+    except Exception:
+        return False
+
+
 def _get_lock_state(project_dir):
     """Read lock file for a project. Returns (running, pid, info_dict)."""
     lp = _lock_path(project_dir)
@@ -1238,19 +1313,31 @@ def handle_kill(project_dir):
     if not running:
         print(f"No pipeline running for {os.path.basename(os.path.abspath(project_dir))}.")
         sys.exit(0)
+    # Verify PID still belongs to hermes-panel before signaling
+    if not _verify_pid_owner(int(pid)):
+        print(f"PID {pid} is not hermes-panel (recycled?) — cleaning stale lock")
+        try:
+            os.remove(_lock_path(project_dir))
+        except OSError:
+            pass
+        sys.exit(0)
     print(f"Sending SIGTERM to PID {pid}...")
     try:
         os.kill(int(pid), signal.SIGTERM)
-    except OSError:
-        pass
+        print(f"  SIGTERM sent successfully to PID {pid}")
+    except OSError as e:
+        print(f"  Failed to send SIGTERM: {e}")
     time.sleep(2)
-    if _check_pid(pid):
+    if _check_pid(pid) and _verify_pid_owner(int(pid)):
         print(f"Process still alive — sending SIGKILL to PID {pid}")
         try:
             os.kill(int(pid), signal.SIGKILL)
-        except OSError:
-            pass
+            print(f"  SIGKILL sent successfully to PID {pid}")
+        except OSError as e:
+            print(f"  Failed to send SIGKILL: {e}")
         time.sleep(1)
+    elif not _check_pid(pid):
+        print(f"  Process already exited")
     # Clean up
     try:
         os.remove(_lock_path(project_dir))
@@ -1755,6 +1842,10 @@ def main():
 
     # ── LOCK ACQUISITION ──
     lock_held, lock_fd = acquire_lock()
+    global _LOCK_FD
+    _LOCK_FD = lock_fd
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
 
     # ── NEXT MODE: roadmap-driven autonomous pipeline ──
     if is_next:
@@ -1902,6 +1993,9 @@ def main():
     # Redirect all output to log file + terminal
     logf = open(OUTPUT_LOG, "w")
     _stdout = sys.stdout
+    global _STDOUT_ORIG, _LOG_FILE
+    _STDOUT_ORIG = _stdout
+    _LOG_FILE = logf
     class Tee:
         def write(self, s):
             _stdout.write(s)
@@ -2376,8 +2470,7 @@ def main():
                     decision_text = decision_m.group(0).strip()
                     title = feature[:80]
                     result = subprocess.run(
-                        ["bash", "-c", f"cd {shlex.quote(PROJECT_DIR)} && " +
-                         f"PATH={shlex.quote(adr_bin)}:$PATH adr new {shlex.quote(f'ADR for: {title}')}"],
+                        [os.path.join(adr_bin, "adr"), "new", f"ADR for: {title}"],
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                         universal_newlines=True, timeout=30, cwd=PROJECT_DIR,
                         env={**os.environ, "PATH": f"{adr_bin}:{os.environ.get('PATH', '')}"})
@@ -2699,10 +2792,7 @@ def main():
                         # Run test suite
                         print("  ⏳ Running test suite...", flush=True)
                         t0 = time.time()
-                        test_result = subprocess.run(
-                            ["bash", "-c", f"cd {shlex.quote(PROJECT_DIR)} && {TEST_CMD}"],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            universal_newlines=True, timeout=300, cwd=PROJECT_DIR)
+                        test_result = _safe_run(TEST_CMD, cwd=PROJECT_DIR, timeout=300)
                         test_output = test_result.stdout or ""
                         test_pass = test_result.returncode == 0
                         pm = re.search(r'(\d+)\s+passed', test_output)
@@ -2714,10 +2804,7 @@ def main():
                         # Run build
                         print("  ⏳ Running build...", flush=True)
                         t0 = time.time()
-                        build_result = subprocess.run(
-                            ["bash", "-c", f"cd {shlex.quote(PROJECT_DIR)} && {BUILD_CMD}"],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            universal_newlines=True, timeout=300, cwd=PROJECT_DIR)
+                        build_result = _safe_run(BUILD_CMD, cwd=PROJECT_DIR, timeout=300)
                         build_pass = build_result.returncode == 0
                         build_output = build_result.stdout or ""
                         print(f"  {'✅' if build_pass else '❌'} Build: {'passed' if build_pass else 'FAILED'} ({time.time()-t0:.0f}s)", flush=True)
@@ -2819,11 +2906,8 @@ def main():
                 if depth in ("vet+nm", "full"):
                     print("\n── Phase 4: nm (adversarial review) ──", flush=True)
                     print("  ⏳ Spawning fresh Hermes session with different model family...", flush=True)
-                    nm_cmd = f"cd {shlex.quote(PROJECT_DIR)} && ~/bin/nm --skip-tests"
-                    nm_result = subprocess.run(
-                        ["bash", "-c", nm_cmd],
-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                        universal_newlines=True, timeout=600, cwd=PROJECT_DIR)
+                    nm_cmd = os.path.expanduser("~/bin/nm") + " --skip-tests"
+                    nm_result = _safe_run(nm_cmd, cwd=PROJECT_DIR, timeout=600)
                     nm_stdout = nm_result.stdout or ""
                     print(f"  ✓ nm finished ({len(nm_stdout)} chars)", flush=True)
 
@@ -2887,21 +2971,12 @@ def main():
 
                         # Re-vet after fix
                         print("  ⏳ Re-verifying after auto-fix...", flush=True)
-                        test_result = subprocess.run(
-                            ["bash", "-c", f"cd {shlex.quote(PROJECT_DIR)} && {TEST_CMD}"],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            universal_newlines=True, timeout=300, cwd=PROJECT_DIR)
-                        build_result = subprocess.run(
-                            ["bash", "-c", f"cd {shlex.quote(PROJECT_DIR)} && {BUILD_CMD}"],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            universal_newlines=True, timeout=300, cwd=PROJECT_DIR)
+                        test_result = _safe_run(TEST_CMD, cwd=PROJECT_DIR, timeout=300)
+                        build_result = _safe_run(BUILD_CMD, cwd=PROJECT_DIR, timeout=300)
                         if test_result.returncode == 0 and build_result.returncode == 0:
                             # Re-run nm to refresh PR with fixes
                             print("  ✓ Re-verify passed — re-running nm with fixes...", flush=True)
-                            nm_result = subprocess.run(
-                                ["bash", "-c", nm_cmd],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                universal_newlines=True, timeout=600, cwd=PROJECT_DIR)
+                            nm_result = _safe_run(nm_cmd, cwd=PROJECT_DIR, timeout=600)
                             nm_stdout = nm_result.stdout or ""
                             pr_match = re.search(r'(https://github\\.com/[^/]+/[^/]+/pull/\\d+)', nm_stdout)
                             if pr_match:
@@ -3000,14 +3075,8 @@ def main():
 
                             # Re-vet + re-TL
                             print("  ⏳ Re-verifying after auto-fix...", flush=True)
-                            test_result = subprocess.run(
-                                ["bash", "-c", f"cd {shlex.quote(PROJECT_DIR)} && {TEST_CMD}"],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                universal_newlines=True, timeout=300, cwd=PROJECT_DIR)
-                            build_result = subprocess.run(
-                                ["bash", "-c", f"cd {shlex.quote(PROJECT_DIR)} && {BUILD_CMD}"],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                universal_newlines=True, timeout=300, cwd=PROJECT_DIR)
+                            test_result = _safe_run(TEST_CMD, cwd=PROJECT_DIR, timeout=300)
+                            build_result = _safe_run(BUILD_CMD, cwd=PROJECT_DIR, timeout=300)
                             if test_result.returncode == 0 and build_result.returncode == 0:
                                 print("  ✓ Re-verify passed — re-running Tech Lead with fixes...", flush=True)
                                 tl_output = spawn_agent("tech-lead", ["adversarial-review-lite", "ponytail-guard"],
@@ -3186,14 +3255,7 @@ def main():
         update_status_md(status_path_c, next_feat.id, next_feat.title, "in_progress", branch=branch_c, source="panel")
         print(f"\n  Next: {next_feat.id} — {next_feat.title}")
         # Loop continues to Phase 1
-    lock_fd.close()
-    try:
-        os.remove(_lock_path())
-    except OSError:
-        pass
-
-    sys.stdout = _stdout
-    logf.close()
+    _cleanup_lock()
 
 if __name__ == "__main__":
     main()
