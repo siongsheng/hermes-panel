@@ -5,7 +5,7 @@ Usage: hermes-panel "Feature description" [project_dir]
 Flow: Strategist → User Clarifications → Strategist Refine → TL Spec Pre-Review → Orchestrator Gate → Human Gate → Coder(branch) → vet(validate) → nm(adversarial+PR) → Tech Lead(spec review) → Report
 Output: Live to terminal + saved to /tmp/hermes-panel-output.txt
 """
-import sys, json, subprocess, os, pwd, time, shlex, re
+import sys, json, subprocess, os, pwd, time, shlex, re, fcntl
 
 REAL_HOME = pwd.getpwuid(os.getuid()).pw_dir
 HERMES = os.path.join(REAL_HOME, ".hermes")
@@ -391,6 +391,19 @@ class Task:
         self.output = ""
 
 
+class RoadmapFeature:
+    """A feature from specs/roadmap.md — parsed for --next."""
+    def __init__(self, fid: str, title: str, priority: str,
+                 dependencies: list[str], status: str, story: str, section: str = ""):
+        self.id = fid
+        self.title = title
+        self.priority = priority           # "P0", "P1", "P2"
+        self.dependencies = dependencies   # ["F001", "F002"]
+        self.status = status               # "pending", "in_progress", "done"
+        self.story = story                 # User Story text
+        self.section = section             # "P0 — Critical Path" etc.
+
+
 class TaskDAG:
     """Parses strategist output into a dependency graph, computes execution waves."""
     def __init__(self):
@@ -464,6 +477,230 @@ class TaskDAG:
                 return False
             seen[f_norm] = tid
         return True
+
+
+# ── roadmap parsing (for --next) ──────────────────
+
+LOCK_FILE = "/tmp/hermes-panel.lock"
+
+def acquire_lock():
+    """Try to acquire an advisory lock. Returns (held, fd)."""
+    fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fd.write(f"{os.getpid()}\n")
+        fd.flush()
+        return True, fd
+    except (IOError, OSError):
+        with open(LOCK_FILE) as lf:
+            stale_pid = lf.read().strip()
+        if stale_pid:
+            try:
+                os.kill(int(stale_pid), 0)
+                print(f"ERROR: Panel already running (PID {stale_pid}). If stuck, remove {LOCK_FILE}.")
+                sys.exit(1)
+            except (OSError, ValueError):
+                print(f"  Stale lock (PID {stale_pid} is dead) — removing and retrying...")
+                os.remove(LOCK_FILE)
+                return acquire_lock()
+        sys.exit(1)
+
+
+def parse_roadmap(roadmap_path: str) -> list:
+    """Parse specs/roadmap.md into a list of RoadmapFeature. Returns empty list if none found."""
+    if not os.path.exists(roadmap_path):
+        return []
+
+    with open(roadmap_path) as f:
+        content = f.read()
+
+    features = []
+    current_section = ""
+
+    # Track which sections features belong to
+    for line in content.split("\n"):
+        if line.startswith("## ") and not line.startswith("### "):
+            current_section = line.strip("# ").strip()
+
+    # Match ### F001: Title blocks
+    feature_pattern = re.compile(
+        r'^###\s+(F\d{3}):\s*(.+?)$\n'
+        r'(.*?)(?=^###\s+F\d{3}:|^##\s|\Z)',
+        re.MULTILINE | re.DOTALL
+    )
+
+    for m in feature_pattern.finditer(content):
+        fid = m.group(1)
+        title = m.group(2).strip()
+        body = m.group(3)
+
+        # Determine section
+        section = ""
+        body_start = m.start()
+        pre_text = content[:body_start]
+        for line in reversed(pre_text.split("\n")):
+            if line.startswith("## ") and not line.startswith("### "):
+                section = line.strip("# ").strip()
+                break
+
+        # Priority
+        prio_m = re.search(r'\*\*Priority:\*\*\s*(P[012])', body)
+        priority = prio_m.group(1) if prio_m else "P2"
+
+        # Dependencies
+        deps_m = re.search(r'\*\*Dependencies:\*\*\s*(.+?)$', body, re.MULTILINE)
+        if deps_m:
+            dep_text = deps_m.group(1).strip()
+            deps = re.findall(r'F\d{3}', dep_text) if dep_text.lower() not in ('none', '') else []
+        else:
+            deps = []
+
+        # Status
+        status_m = re.search(r'\*\*Status:\*\*\s*\[([ x~])\]\s*(\w+)', body)
+        if status_m:
+            marker = status_m.group(1)
+            status = {" ": "pending", "~": "in_progress", "x": "done"}.get(marker, "pending")
+        else:
+            status = "pending"
+
+        # User Story
+        story_m = re.search(r'\*\*User Story:\*\*\s*(.+?)$', body, re.MULTILINE)
+        story = story_m.group(1).strip() if story_m else ""
+
+        features.append(RoadmapFeature(
+            fid=fid, title=title, priority=priority,
+            dependencies=deps, status=status, story=story,
+            section=section
+        ))
+
+    return features
+
+
+def pick_next_feature(features: list) -> object:
+    """Topological sort + priority ordering. Returns RoadmapFeature or None."""
+    if not features:
+        return None
+
+    # 1. Detect circular deps (DFS cycle check)
+    dep_graph = {f.id: set(f.dependencies) for f in features}
+    for fid in dep_graph:
+        visited = set()
+        stack = [fid]
+        while stack:
+            node = stack.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            for dep in dep_graph.get(node, set()):
+                if dep == fid:
+                    print(f"ERROR: Circular dependency: {fid} depends on itself via chain. Fix roadmap.md.")
+                    sys.exit(1)
+                if dep in dep_graph:
+                    stack.append(dep)
+
+    # 2. Filter: only pending features
+    pending = [f for f in features if f.status == "pending"]
+    if not pending:
+        return None
+
+    # 3. Filter: all dependencies are done
+    done_ids = {f.id for f in features if f.status == "done"}
+
+    unblocked = []
+    for f in pending:
+        if all(dep in done_ids for dep in f.dependencies):
+            unblocked.append(f)
+        else:
+            missing = [dep for dep in f.dependencies if dep not in done_ids]
+            print(f"  {f.id} blocked — waiting on: {', '.join(missing)}")
+
+    if not unblocked:
+        print("All pending features are blocked by incomplete dependencies.")
+        return None
+
+    # 4. Sort: P0 first, then P1, then P2. Within same priority, file order (by ID).
+    priority_order = {"P0": 0, "P1": 1, "P2": 2}
+    unblocked.sort(key=lambda f: (priority_order.get(f.priority, 2), f.id))
+
+    return unblocked[0]
+
+
+def update_roadmap_status(roadmap_path: str, feature_id: str, new_status: str):
+    """Update feature status in roadmap.md inline."""
+    marker_map = {
+        "pending":     "[ ] Pending",
+        "in_progress": "[~] In Progress",
+        "done":        "[x] Done",
+    }
+    new_marker = marker_map.get(new_status, "[ ] Pending")
+
+    with open(roadmap_path) as f:
+        content = f.read()
+
+    # Find the feature block and replace its status
+    pattern = re.compile(
+        rf'(^###\s+{feature_id}:.+?\n\*\*Status:\*\*\s*)\[([ x~])\]\s*\w+',
+        re.MULTILINE | re.DOTALL
+    )
+
+    new_content = pattern.sub(rf'\g<1>{new_marker}', content)
+
+    if new_content == content:
+        print(f"  WARNING: Could not find status for {feature_id} in roadmap")
+        return
+
+    with open(roadmap_path, "w") as f:
+        f.write(new_content)
+
+
+def commit_roadmap_update(roadmap_path: str, feature_id: str, action: str):
+    """Commit a roadmap status change to the default branch."""
+    # Ensure we're on default branch
+    rel_path = os.path.relpath(roadmap_path, PROJECT_DIR)
+    git("checkout", DEFAULT_BRANCH)
+    git("pull", "origin", DEFAULT_BRANCH)
+    git("add", rel_path)
+    if action == "start":
+        msg = f"chore: mark {feature_id} as in progress [panel]"
+    else:
+        msg = f"chore: mark {feature_id} as done [panel]"
+    git("commit", "-m", msg)
+    git("push", "origin", DEFAULT_BRANCH)
+    print(f"  Roadmap updated: {feature_id} → {action}")
+
+
+def auto_repair_status(features: list, roadmap_path: str) -> int:
+    """Check for features not marked done that have merged PRs → auto-mark [x].
+       Returns count of repaired features."""
+    repaired = 0
+
+    for f in features:
+        if f.status == "done":
+            continue
+        # Check if a merged PR exists for this feature
+        branch_slug = slugify(f.title)[:40]
+        branch_patterns = [f"feat/{branch_slug}"]
+        # Also try with feature ID
+        branch_patterns.append(f"feat/{slugify(f'{f.id}-{f.title}')[:60]}")
+
+        for bp in branch_patterns:
+            stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", bp,
+                              "--state", "merged", "--json", "url", "--jq", ".[0].url")
+            if rc == 0 and stdout.strip():
+                update_roadmap_status(roadmap_path, f.id, "done")
+                print(f"  Auto-repair: {f.id} → [x] Done (merged PR: {stdout.strip()})")
+                repaired += 1
+                break
+
+    if repaired:
+        rel_path = os.path.relpath(roadmap_path, PROJECT_DIR)
+        git("checkout", DEFAULT_BRANCH)
+        git("pull", "origin", DEFAULT_BRANCH)
+        git("add", rel_path)
+        git("commit", "-m", f"chore: auto-repair {repaired} roadmap statuses [panel]")
+        git("push", "origin", DEFAULT_BRANCH)
+
+    return repaired
 
 
 # ── parallel execution ────────────────────────────
@@ -706,6 +943,66 @@ def run_parallel_coders(tasks: dict[str, Task], waves: list[list[str]],
     return all_completed
 
 
+# ── next ─────────────────────────────────────────
+
+def run_next_setup(interactive: bool = False) -> str | None:
+    """Parse roadmap, pick next feature, mark in-progress, return feature string.
+       Returns None if nothing to do. Caller falls through to pipeline after this."""
+    global REPO, DEFAULT_BRANCH
+
+    roadmap_path = os.path.join(PROJECT_DIR, "specs", "roadmap.md")
+
+    # 1. Parse
+    features = parse_roadmap(roadmap_path)
+    if not features:
+        print("ERROR: No features found in roadmap.md. Run `hermes-panel init` first.")
+        sys.exit(1)
+
+    print(f"  Roadmap: {len(features)} features")
+    done = sum(1 for f in features if f.status == "done")
+    pending = sum(1 for f in features if f.status == "pending")
+    in_prog = sum(1 for f in features if f.status == "in_progress")
+    print(f"  Status: {done} done, {pending} pending, {in_prog} in progress")
+
+    # 2. Auto-repair: features with merged PRs → mark [x]
+    repaired = auto_repair_status(features, roadmap_path)
+    if repaired:
+        features = parse_roadmap(roadmap_path)
+
+    # 3. Pick next
+    next_feat = pick_next_feature(features)
+    if not next_feat:
+        done_count = sum(1 for f in features if f.status == "done")
+        total = len(features)
+        if done_count == total:
+            print(f"All {total} features complete. Nothing to do.")
+        sys.exit(0)
+
+    print(f"\n── Next Feature: {next_feat.id} — {next_feat.title} ──")
+    print(f"  Priority: {next_feat.priority}")
+    print(f"  Dependencies: {', '.join(next_feat.dependencies) or 'none'}")
+
+    # 4. Mark in progress (on default branch)
+    update_roadmap_status(roadmap_path, next_feat.id, "in_progress")
+    commit_roadmap_update(roadmap_path, next_feat.id, "start")
+
+    # 5. Return feature string for the pipeline
+    feature = f"{next_feat.id}: {next_feat.title}"
+
+    # 6. Check for existing spec → set env for strategist
+    spec_slug = slugify(feature)
+    spec_path = os.path.join(PROJECT_DIR, "specs", f"{spec_slug}-spec.md")
+    if os.path.exists(spec_path):
+        os.environ["PANEL_EXISTING_SPEC"] = spec_path
+        print(f"  Existing spec found: {spec_slug}-spec.md (strategist will refine)")
+
+    # 7. Non-interactive by default
+    if not interactive:
+        os.environ["PANEL_SKIP_HUMAN_GATE"] = "1"
+
+    return feature
+
+
 # ── init ──────────────────────────────────────────
 
 def run_init(description, project_dir):
@@ -819,11 +1116,26 @@ Create {PROJECT_DIR}/specs/tech-stack.md:
 - EVERY choice must have a WHY. No cargo-culting.
 - For existing projects: document current stack + what should change
 
-Create {PROJECT_DIR}/specs/roadmap.md:
-- Features as user stories with acceptance criteria
-- Priority (P0/P1/P2) with rationale
-- Dependencies between features
-- Each feature must trace to a user need in mission.md
+Create {PROJECT_DIR}/specs/roadmap.md using EXACTLY this format for every feature:
+
+### F001: Short Feature Title
+**Priority:** P0
+**Dependencies:** None
+**Status:** [ ] Pending
+**User Story:** As a <role>, I want <goal> so that <benefit>.
+**Acceptance Criteria:**
+- Criterion 1
+- Criterion 2
+
+RULES:
+- Feature IDs: F001, F002, F003... sequential order.
+- Priority: P0 (critical path), P1 (important), P2 (nice to have).
+- Dependencies: comma-separated feature IDs that must be [x] Done first. Write "None" if no deps.
+- Status: ALWAYS start with "[ ] Pending". The panel auto-updates these.
+- User Story: standard "As a... I want... so that..." format.
+- Acceptance Criteria: concrete, testable bullets.
+- Group features under ## P0, ## P1, ## P2 headers.
+- Each feature must trace to a user need in mission.md.
 
 Create {PROJECT_DIR}/specs/conventions.md:
 - Code style, patterns, anti-patterns, boundaries
@@ -946,21 +1258,29 @@ CRITICAL RULES:
 # ── main ─────────────────────────────────────────
 
 def main():
-    global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE
+    global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE, DEFAULT_BRANCH, lock_fd
     import shutil
     if len(sys.argv) < 2:
-        print("Usage: hermes-panel [--answers <interview-json>] 'Feature description' [project_dir]")
-        print("  If project_dir is omitted, uses current working directory.")
+        print("Usage: hermes-panel [--next] [--interactive] [--answers <interview-json>] 'Feature description' [project_dir]")
+        print("  hermes-panel --next [--interactive] [project_dir]")
+        print("  hermes-panel init 'description' [project_dir]")
         sys.exit(1)
 
-    # ── RESUME SUPPORT: --answers <interview-json> ──
-    # Scan for --answers flag, remove it + its value from argv
+    # ── FLAG SCANNING: --next, --interactive, --answers ──
+    is_next = False
+    is_interactive = False
     user_answers_prefill = None
     filtered_argv = []
     skip_next = False
     for arg in sys.argv[1:]:
         if skip_next:
             skip_next = False
+            continue
+        if arg == "--next":
+            is_next = True
+            continue
+        if arg == "--interactive":
+            is_interactive = True
             continue
         if arg == "--answers":
             skip_next = True
@@ -984,54 +1304,115 @@ def main():
                 print(f"  ✓ Loaded {len(answers_list)} answer(s) from {answers_path}", flush=True)
             break
 
-    if len(filtered_argv) < 1:
-        print("ERROR: Feature description required")
-        sys.exit(1)
-
-    feature = filtered_argv[0]
-    PANEL_FEATURE = feature
-    PROJECT_DIR = os.path.abspath(filtered_argv[1]) if len(filtered_argv) >= 2 else os.getcwd()
+    # ── Determine PROJECT_DIR and feature ──
+    if is_next:
+        # --next: project_dir is optional positional, no feature string needed
+        if len(filtered_argv) >= 1:
+            PROJECT_DIR = os.path.abspath(filtered_argv[0])
+        else:
+            PROJECT_DIR = os.getcwd()
+    else:
+        if len(filtered_argv) < 1:
+            print("ERROR: Feature description required")
+            sys.exit(1)
+        feature = filtered_argv[0]
+        PANEL_FEATURE = feature
+        PROJECT_DIR = os.path.abspath(filtered_argv[1]) if len(filtered_argv) >= 2 else os.getcwd()
 
     # ── INIT MODE: discovery & constitution, no pipeline ──
-    if feature == "init":
+    if not is_next and feature == "init":
         # init <description> [project_dir]
         init_desc = filtered_argv[1] if len(filtered_argv) >= 2 else ""
         init_project_dir = os.path.abspath(filtered_argv[2]) if len(filtered_argv) >= 3 else PROJECT_DIR
         run_init(init_desc, init_project_dir)
         return
 
-    # Validate: AGENTS.md must exist
-    agents_path = os.path.join(PROJECT_DIR, "AGENTS.md")
-    if not os.path.exists(agents_path):
-        print(f"ERROR: No AGENTS.md found in {PROJECT_DIR}")
-        print("  The panel requires an AGENTS.md at the project root with at minimum:")
-        print("  project description, test command, build command, and conventions.")
-        print("  See ai-coding-best-practices for AGENTS.md guidelines.")
-        sys.exit(1)
+    # ── LOCK ACQUISITION ──
+    lock_held, lock_fd = acquire_lock()
 
-    API_KEY = load_key()
-    if not API_KEY:
-        print("ERROR: Could not read API_SERVER_KEY from .env")
-        sys.exit(1)
+    # ── NEXT MODE: roadmap-driven autonomous pipeline ──
+    if is_next:
+        # Validate project
+        agents_path = os.path.join(PROJECT_DIR, "AGENTS.md")
+        if not os.path.exists(agents_path):
+            print(f"ERROR: No AGENTS.md found in {PROJECT_DIR}")
+            print("  Run `hermes-panel init` first.")
+            sys.exit(1)
 
-    REPO = detect_repo()
-    if not REPO:
-        print("ERROR: Could not detect GitHub owner/repo from git remote origin.")
-        print("  The panel needs a GitHub remote to create PRs and issues.")
-        sys.exit(1)
+        API_KEY = load_key()
+        if not API_KEY:
+            print("ERROR: Could not read API_SERVER_KEY from .env")
+            sys.exit(1)
 
-    # Detect default branch (modern repos use 'main', older ones 'master')
-    global DEFAULT_BRANCH
-    try:
-        result = subprocess.run(
-            ["git", "-C", PROJECT_DIR, "symbolic-ref", "refs/remotes/origin/HEAD"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            universal_newlines=True, timeout=10)
-        if result.returncode == 0:
-            ref = result.stdout.strip()
-            DEFAULT_BRANCH = ref.split("/")[-1] if "/" in ref else DEFAULT_BRANCH
-    except Exception:
-        pass  # keep 'master'
+        REPO = detect_repo()
+        if not REPO:
+            print("ERROR: Could not detect GitHub owner/repo from git remote origin.")
+            sys.exit(1)
+
+        # Detect default branch
+        try:
+            result = subprocess.run(
+                ["git", "-C", PROJECT_DIR, "symbolic-ref", "refs/remotes/origin/HEAD"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                universal_newlines=True, timeout=10)
+            if result.returncode == 0:
+                ref = result.stdout.strip()
+                DEFAULT_BRANCH = ref.split("/")[-1] if "/" in ref else DEFAULT_BRANCH
+        except Exception:
+            pass
+
+        # Export GH_TOKEN for child processes
+        gh_token = load_github_token()
+        if gh_token:
+            os.environ["GH_TOKEN"] = gh_token
+
+        # Ensure on default branch
+        git("checkout", DEFAULT_BRANCH)
+        git("pull", "origin", DEFAULT_BRANCH)
+
+        # Parse roadmap, pick feature, mark in-progress
+        feature = run_next_setup(interactive=is_interactive)
+        if feature is None:
+            print("Nothing to do.")
+            lock_fd.close()
+            os.remove(LOCK_FILE)
+            return
+        PANEL_FEATURE = feature
+
+        # Fall through to regular pipeline below
+
+    # Validate: AGENTS.md must exist (skip if --next already validated)
+    if not is_next:
+        agents_path = os.path.join(PROJECT_DIR, "AGENTS.md")
+        if not os.path.exists(agents_path):
+            print(f"ERROR: No AGENTS.md found in {PROJECT_DIR}")
+            print("  The panel requires an AGENTS.md at the project root with at minimum:")
+            print("  project description, test command, build command, and conventions.")
+            print("  See ai-coding-best-practices for AGENTS.md guidelines.")
+            sys.exit(1)
+
+        API_KEY = load_key()
+        if not API_KEY:
+            print("ERROR: Could not read API_SERVER_KEY from .env")
+            sys.exit(1)
+
+        REPO = detect_repo()
+        if not REPO:
+            print("ERROR: Could not detect GitHub owner/repo from git remote origin.")
+            print("  The panel needs a GitHub remote to create PRs and issues.")
+            sys.exit(1)
+
+        # Detect default branch (modern repos use 'main', older ones 'master')
+        try:
+            result = subprocess.run(
+                ["git", "-C", PROJECT_DIR, "symbolic-ref", "refs/remotes/origin/HEAD"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                universal_newlines=True, timeout=10)
+            if result.returncode == 0:
+                ref = result.stdout.strip()
+                DEFAULT_BRANCH = ref.split("/")[-1] if "/" in ref else DEFAULT_BRANCH
+        except Exception:
+            pass  # keep 'master'
 
     # ── Auto-archive specs from merged PRs ──
     specs_dir = os.path.join(PROJECT_DIR, "specs")
@@ -1129,9 +1510,20 @@ def main():
             with open(_strat_config, "w") as f:
                 f.write(_new_yaml)
             print(f"  PANEL_REASONING={_strat_reasoning} (override, was {_orig_reasoning})", flush=True)
+
+    # ── Existing spec refinement (for --next mode) ──
+    _existing_spec = os.environ.get("PANEL_EXISTING_SPEC", "")
+    _refine_note = ""
+    if _existing_spec and os.path.exists(_existing_spec):
+        _refine_note = f"""NOTE: A spec already exists at {_existing_spec}. This feature was previously designed.
+Read the existing spec FIRST. REFINE — do not start from scratch. Identify gaps vs the current
+codebase state, address them, improve the design. Keep what's good. The existing spec is
+authoritative context — you are enhancing it, not replacing it.
+
+"""
     strat_prompt = f"""You are the Strategist for a software project at {PROJECT_DIR}.
 
-FIRST — understand the project's PURPOSE, ARCHITECTURE, and RECENT HISTORY:
+{_refine_note}FIRST — understand the project's PURPOSE, ARCHITECTURE, and RECENT HISTORY:
 1. Read specs/mission.md, specs/tech-stack.md, specs/roadmap.md, specs/conventions.md (if missing, work from AGENTS.md).
 2. Read AGENTS.md at {PROJECT_DIR}/AGENTS.md — exact commands, non-standard tooling, permission boundaries.
 3. If .specify/ exists, read .specify/memory/constitution.md and .specify/specs/baseline/spec.md. Otherwise skip.
@@ -2274,6 +2666,24 @@ Report: what you fixed, commit hash."""
     print(f"Verdict:    {verdict}")
     print(f"Full log:   {OUTPUT_LOG}")
     print("✓ Pipeline complete.")
+
+    # ── NEXT MODE: mark feature as done ──
+    if is_next and verdict not in ("CODER_FAILED", "TIMED_OUT", "UNKNOWN"):
+        roadmap_path = os.path.join(PROJECT_DIR, "specs", "roadmap.md")
+        if os.path.exists(roadmap_path):
+            # Extract feature ID from PANEL_FEATURE (e.g. "F001: Login page")
+            fid_match = re.match(r'(F\d{3})', PANEL_FEATURE)
+            if fid_match:
+                fid = fid_match.group(1)
+                update_roadmap_status(roadmap_path, fid, "done")
+                commit_roadmap_update(roadmap_path, fid, "done")
+
+    # ── Release lock ──
+    lock_fd.close()
+    try:
+        os.remove(LOCK_FILE)
+    except OSError:
+        pass
 
     sys.stdout = _stdout
     logf.close()
