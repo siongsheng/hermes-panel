@@ -2,25 +2,39 @@
 # ───────────────────────────────────────────────────────────────────
 # Hermes Panel — Linux Server Setup
 # One-time machine setup. Idempotent — safe to re-run.
-# Usage: chmod +x setup-linux.sh && ./setup-linux.sh
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/siongsheng/hermes-panel/main/scripts/setup-linux.sh | bash
 # ───────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 log()  { echo -e "${GREEN}[✓]${NC} $*"; }
 warn() { echo -e "${YELLOW}[!]${NC} $*"; }
 err()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 section() { echo -e "\n${YELLOW}───${NC} $* ${YELLOW}───${NC}"; }
+prompt() { echo -ne "${CYAN}→${NC} $* "; }
+
+# Reconnect stdin to the real terminal if we're being piped (curl|bash).
+# Falls back to non-interactive if no terminal is available (cron, no TTY).
+if [ ! -t 0 ] && exec < /dev/tty 2>/dev/null; then
+    INTERACTIVE=true
+elif [ -t 0 ]; then
+    INTERACTIVE=true
+else
+    INTERACTIVE=false
+fi
 
 # ── Config (override via env) ──────────────────────────────────────
 PANEL_REPO="${PANEL_REPO:-https://github.com/siongsheng/hermes-panel.git}"
 PANEL_DIR="${PANEL_DIR:-$HOME/hermes-panel}"
 BIN_DIR="${BIN_DIR:-$HOME/bin}"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+SHARED_ENV="$HERMES_HOME/shared.env"
 
 # ── 1. Prerequisites Check ─────────────────────────────────────────
 section "Checking prerequisites"
@@ -35,7 +49,6 @@ log "python3: $(python3 --version)"
 log "gh:      $(gh --version 2>&1 | head -1 || echo 'ok')"
 log "git:     $(git --version)"
 
-# adr-tools is optional
 if command -v adr >/dev/null 2>&1; then
     log "adr-tools: $(adr version 2>&1 || echo 'ok')"
 else
@@ -53,7 +66,6 @@ else
     git clone "$PANEL_REPO" "$PANEL_DIR"
 fi
 
-# Symlink to ~/bin
 mkdir -p "$BIN_DIR"
 if [ -L "$BIN_DIR/hermes-panel" ] || [ -f "$BIN_DIR/hermes-panel" ]; then
     log "hermes-panel already linked in $BIN_DIR"
@@ -62,18 +74,183 @@ else
     log "Linked hermes-panel → $BIN_DIR/hermes-panel"
 fi
 
-# Ensure ~/bin is in PATH for this session
 case ":$PATH:" in
     *:"$BIN_DIR":*) ;;
     *) export PATH="$BIN_DIR:$PATH" ;;
 esac
 
-# ── 3. Create Agent Profiles ───────────────────────────────────────
+# ── 3. Provider Configuration ──────────────────────────────────────
+section "Provider Configuration"
+
+# Provider catalog: provider_name → (api_key_env, strategist_model, coder_model, techlead_model)
+declare -A PROVIDER_LABEL PROVIDER_KEY_ENV PROVIDER_S_MODEL PROVIDER_C_MODEL PROVIDER_T_MODEL
+
+PROVIDER_LABEL[deepseek]="DeepSeek"
+PROVIDER_KEY_ENV[deepseek]="DEEPSEEK_API_KEY"
+PROVIDER_S_MODEL[deepseek]="deepseek-v4-pro"
+PROVIDER_C_MODEL[deepseek]="deepseek-v4-flash"
+PROVIDER_T_MODEL[deepseek]="deepseek-v4-pro"
+
+PROVIDER_LABEL[anthropic]="Anthropic"
+PROVIDER_KEY_ENV[anthropic]="ANTHROPIC_API_KEY"
+PROVIDER_S_MODEL[anthropic]="claude-opus-4-20250514"
+PROVIDER_C_MODEL[anthropic]="claude-sonnet-4-20250514"
+PROVIDER_T_MODEL[anthropic]="claude-opus-4-20250514"
+
+PROVIDER_LABEL[openai]="OpenAI"
+PROVIDER_KEY_ENV[openai]="OPENAI_API_KEY"
+PROVIDER_S_MODEL[openai]="gpt-5"
+PROVIDER_C_MODEL[openai]="gpt-4o"
+PROVIDER_T_MODEL[openai]="gpt-5"
+
+PROVIDER_LABEL[openrouter]="OpenRouter (multi-provider)"
+PROVIDER_KEY_ENV[openrouter]="OPENROUTER_API_KEY"
+PROVIDER_S_MODEL[openrouter]="deepseek/deepseek-chat"
+PROVIDER_C_MODEL[openrouter]="anthropic/claude-sonnet-4"
+PROVIDER_T_MODEL[openrouter]="deepseek/deepseek-chat"
+
+choose_provider() {
+    local purpose="$1"
+    local default="${2:-}"
+
+    echo ""
+    echo "  $purpose"
+    echo "  ──────────────────────────────────────────"
+    local i=1
+    declare -A idx_to_key
+    for key in deepseek anthropic openai openrouter; do
+        echo "    $i) ${PROVIDER_LABEL[$key]}"
+        idx_to_key[$i]=$key
+        ((i++))
+    done
+    echo ""
+
+    local choice
+    while true; do
+        prompt "Choose provider [1]:"
+        read -r choice
+        choice="${choice:-1}"
+        if [[ "$choice" =~ ^[1-4]$ ]]; then
+            echo "${idx_to_key[$choice]}"
+            return
+        fi
+        warn "Enter 1-4"
+    done
+}
+
+collect_api_key() {
+    local provider=$1
+    local key_env="${PROVIDER_KEY_ENV[$provider]}"
+
+    # Already set?
+    if [ -f "$SHARED_ENV" ] && grep -q "^${key_env}=" "$SHARED_ENV" 2>/dev/null; then
+        log "${key_env} already set in shared.env"
+        return 0
+    fi
+
+    # Check if it's in the environment already
+    if [ -n "${!key_env:-}" ]; then
+        log "${key_env} found in environment"
+        return 0
+    fi
+
+    if ! $INTERACTIVE; then
+        warn "No interactive terminal. Set ${key_env} in your environment:"
+        echo "    export ${key_env}=your-key-here"
+        return 0
+    fi
+
+    echo ""
+    prompt "Paste your ${PROVIDER_LABEL[$provider]} API key:"
+    read -rs API_KEY_VALUE
+    echo ""
+
+    if [ -z "$API_KEY_VALUE" ]; then
+        warn "No key entered — profiles will need manual setup. Run: hermes --profile strategist setup"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$SHARED_ENV")"
+    echo "${key_env}=${API_KEY_VALUE}" >> "$SHARED_ENV"
+    log "${key_env} saved to $SHARED_ENV"
+}
+
+# ── Choose primary provider
+if $INTERACTIVE; then
+    PRIMARY=$(choose_provider "Primary provider for all 3 roles (strategist, coder, tech-lead):")
+else
+    PRIMARY="deepseek"
+    warn "Non-interactive mode — using DeepSeek as primary. Override with env vars."
+fi
+
+collect_api_key "$PRIMARY"
+
+STRAT_MODEL="${PROVIDER_S_MODEL[$PRIMARY]}"
+CODER_MODEL="${PROVIDER_C_MODEL[$PRIMARY]}"
+TL_MODEL="${PROVIDER_T_MODEL[$PRIMARY]}"
+
+echo ""
+log "Primary: ${PROVIDER_LABEL[$PRIMARY]}"
+echo "    strategist → $STRAT_MODEL"
+echo "    coder      → $CODER_MODEL"
+echo "    tech-lead  → $TL_MODEL"
+
+# ── Optional secondary provider for nm
+SECONDARY=""
+if $INTERACTIVE; then
+    echo ""
+    echo "  Adversarial review (nm)"
+    echo "  ──────────────────────────────────────────"
+    echo "  nm catches model-family blind spots by using a DIFFERENT provider"
+    echo "  from the coder. Skip this and nm reviews use the same provider"
+    echo "  (weaker, but still catches code issues)."
+    echo ""
+
+    prompt "Add a secondary provider for nm? [y/N]:"
+    read -r ADD_SECONDARY
+    if [[ "$ADD_SECONDARY" =~ ^[Yy] ]]; then
+        # Filter out the primary provider
+        echo ""
+        echo "  Available (excluding ${PROVIDER_LABEL[$PRIMARY]}):"
+        local j=1
+        declare -A sec_idx
+        for key in deepseek anthropic openai openrouter; do
+            if [ "$key" != "$PRIMARY" ]; then
+                echo "    $j) ${PROVIDER_LABEL[$key]}"
+                sec_idx[$j]=$key
+                ((j++))
+            fi
+        done
+        echo ""
+
+        local sec_choice
+        while true; do
+            prompt "Choose nm provider [1]:"
+            read -r sec_choice
+            sec_choice="${sec_choice:-1}"
+            if [ -n "${sec_idx[$sec_choice]:-}" ]; then
+                SECONDARY="${sec_idx[$sec_choice]}"
+                break
+            fi
+            warn "Enter 1-$((j-1))"
+        done
+        collect_api_key "$SECONDARY"
+        log "nm provider: ${PROVIDER_LABEL[$SECONDARY]}"
+    else
+        warn "Skipping secondary provider — nm reviews will use ${PROVIDER_LABEL[$PRIMARY]}"
+        echo "    (This weakens the adversarial review but the panel still works.)"
+    fi
+else
+    warn "Non-interactive mode — skipping secondary provider. Set NM_PROVIDER env var to override."
+fi
+
+# ── 4. Create Agent Profiles ───────────────────────────────────────
 section "Creating agent profiles"
 
 create_profile() {
     local name=$1
     local model=$2
+    local provider=$3
 
     if hermes profile list 2>/dev/null | grep -qw "$name"; then
         log "Profile '$name' already exists"
@@ -82,9 +259,8 @@ create_profile() {
         hermes profile create "$name"
     fi
 
-    # Override specific config values (profile create gives full defaults)
     hermes --profile "$name" config set model.default "$model"
-    hermes --profile "$name" config set model.provider deepseek
+    hermes --profile "$name" config set model.provider "$provider"
     hermes --profile "$name" config set agent.max_turns 150
     hermes --profile "$name" config set terminal.env_passthrough '[GH_TOKEN, GITHUB_TOKEN, HERMES_HOME, HOME]'
 
@@ -92,14 +268,20 @@ create_profile() {
         hermes --profile "$name" config set agent.reasoning_effort medium
     fi
 
-    log "Profile '$name' configured ($model)"
+    log "Profile '$name' configured ($model @ $provider)"
 }
 
-create_profile "strategist" "deepseek-v4-pro"
-create_profile "coder"      "deepseek-v4-flash"
-create_profile "tech-lead"  "deepseek-v4-pro"
+create_profile "strategist" "$STRAT_MODEL" "$PRIMARY"
+create_profile "coder"      "$CODER_MODEL" "$PRIMARY"
+create_profile "tech-lead"  "$TL_MODEL"     "$PRIMARY"
 
-# ── 4. Deploy Panel Skills ────────────────────────────────────────
+# Configure nm profile if secondary provider chosen
+if [ -n "$SECONDARY" ]; then
+    NM_MODEL="${PROVIDER_S_MODEL[$SECONDARY]}"
+    create_profile "nm" "$NM_MODEL" "$SECONDARY"
+fi
+
+# ── 5. Deploy Panel Skills ────────────────────────────────────────
 section "Deploying panel skills"
 
 deploy_skill() {
@@ -120,7 +302,6 @@ deploy_skill() {
     fi
 }
 
-# Strategist skills
 SKILLS_DIR="software-development"
 STRAT_DIR="$HERMES_HOME/profiles/strategist/skills/$SKILLS_DIR"
 COD_DIR="$HERMES_HOME/profiles/coder/skills/$SKILLS_DIR"
@@ -134,18 +315,16 @@ deploy_skill "adversarial-review-lite"        "$TL_DIR"
 deploy_skill "ponytail-guard"                "$TL_DIR"
 deploy_skill "no-mistakes"                   "$GLOB_DIR"
 
-# ── 5. GitHub Token ────────────────────────────────────────────────
+# ── 6. GitHub Token ────────────────────────────────────────────────
 section "GitHub token"
 
-SHARED_ENV="$HERMES_HOME/shared.env"
 if [ -f "$SHARED_ENV" ] && grep -q 'GH_TOKEN=' "$SHARED_ENV" 2>/dev/null; then
     log "GH_TOKEN already set in shared.env"
-elif [ -t 0 ]; then
-    # Interactive terminal — prompt for token
+elif $INTERACTIVE; then
     warn "GH_TOKEN not found in $SHARED_ENV"
     echo ""
     echo "  Paste your GitHub token (needs 'repo' scope):"
-    read -rsp "  GH_TOKEN: " GH_TOKEN_VALUE
+    read -rs -p "  GH_TOKEN: " GH_TOKEN_VALUE
     echo ""
     mkdir -p "$(dirname "$SHARED_ENV")"
     echo "GH_TOKEN=$GH_TOKEN_VALUE" >> "$SHARED_ENV"
@@ -157,17 +336,15 @@ else
     echo "  echo 'GITHUB_TOKEN=ghp_...' >> $SHARED_ENV"
 fi
 
-# ── 6. Verify ──────────────────────────────────────────────────────
+# ── 7. Verify ──────────────────────────────────────────────────────
 section "Verifying setup"
 
-# Check panel is executable
 if python3 -c "compile(open('$PANEL_DIR/hermes-panel').read(), 'hermes-panel', 'exec')" 2>/dev/null; then
     log "hermes-panel: syntax OK"
 else
     err "hermes-panel has syntax errors"
 fi
 
-# Quick profile smoke tests (non-blocking — warn only)
 for profile in strategist coder tech-lead; do
     if hermes --profile "$profile" -q "echo ok" --yolo 2>/dev/null; then
         log "Profile '$profile': responds OK"
@@ -178,6 +355,16 @@ done
 
 # ── Done ───────────────────────────────────────────────────────────
 section "Setup complete"
+echo ""
+echo "  Profiles:"
+echo "    strategist  → $STRAT_MODEL (${PROVIDER_LABEL[$PRIMARY]})"
+echo "    coder       → $CODER_MODEL (${PROVIDER_LABEL[$PRIMARY]})"
+echo "    tech-lead   → $TL_MODEL (${PROVIDER_LABEL[$PRIMARY]})"
+if [ -n "$SECONDARY" ]; then
+    echo "    nm          → $NM_MODEL (${PROVIDER_LABEL[$SECONDARY]})"
+else
+    echo "    nm          → same as coder (no secondary provider configured)"
+fi
 echo ""
 echo "  Next steps:"
 echo "  1. Add AGENTS.md to your project root (see docs/setup.md §3.1)"

@@ -18,6 +18,8 @@ Hermes Panel puts five agents in a room and makes them distrust each other. The 
 
 ### One-liner (Linux/macOS)
 
+The setup script walks you through everything — provider choice, API keys, GitHub token, profile creation. Works with DeepSeek, Anthropic, OpenAI, or OpenRouter.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/siongsheng/hermes-panel/main/scripts/setup-linux.sh | bash
 ```
@@ -151,7 +153,7 @@ The panel shines for **greenfield features with ambiguous requirements** where a
 
 - An AI agent runtime — [Hermes Agent](https://hermes-agent.nousresearch.com), [Claude Code](https://claude.ai), or [Codex](https://github.com/openai/codex)
 - 3 agent profiles/workspaces: `strategist`, `coder`, `tech-lead` (see [setup guide](docs/setup.md))
-- DeepSeek API access (strategist/coder/TL) + one additional model family (nm adversarial review)
+- An AI model provider (DeepSeek, Anthropic, OpenAI, or OpenRouter) + optional secondary provider for nm adversarial review
 - `gh` CLI (GitHub) installed and authenticated
 - [adr-tools](https://github.com/npryce/adr-tools) installed (for ADR lifecycle support)
 - `AGENTS.md` at project root with test and build commands
