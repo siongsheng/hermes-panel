@@ -70,6 +70,17 @@ Explores the codebase, reads `AGENTS.md`, searches for relevant code, understand
 
 **Interview mode:** When confidence < High, the strategist saves clarification questions to `/tmp/hermes-panel-interview.json` and exits code 2. Re-run with `--answers` to continue.
 
+### TL Spec Pre-Review (between Strategist and Coder)
+**Why:** Architecture issues and test-plan gaps are cheapest to fix before code is written. TL reviews the spec — not the code — for architectural impact and test plan completeness.
+**Sees:** The spec. **Detects:** Architectural coupling, implicit assumptions, migration gaps, vague test plans. **Does NOT detect:** Code-level issues (no code yet), misaligned intent (Human Gate catches that).
+
+The Tech Lead profile reviews the strategist's spec BEFORE the coder touches anything. Two dimensions:
+
+1. **Architectural Impact** — coupling risks, service boundaries, API contracts, migration needs, pattern consistency.
+2. **Test Plan Verification** — is the Test Plan section present and concrete? Are edge cases specific? Are failure modes named? Missing or vague test plan = BLOCKER.
+
+Findings are shown at the Human Gate — the user decides whether to revise the spec. No automatic refinement (unlike the old self-review loopback). Skip with `PANEL_SKIP_ORCHESTRATOR_REVIEW=1`.
+
 ### Phase 2: Coder
 **Why:** A coder without a spec overbuilds. A coder without TDD writes untestable code. The panel's coder is constrained — spec-bound, TDD-enforced, task-granular.
 **Sees:** Spec + task list. **Detects:** Implementation gaps — spec says X, code does Y. **Does NOT detect:** Whether the spec is correct.

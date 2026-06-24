@@ -100,7 +100,7 @@ Every stage has a contract:
 
 **Why not more?** Adding stages without eliminating overlap is anti-Hermes. A Test Architect overlaps with Strategist (both design upstream). A separate Security Reviewer overlaps with nm (both review code). The bar for a new stage is: *prove it catches a failure class no existing stage can catch, with evidence, not intuition.*
 
-**Coherence vs Specialization.** nm and vet are specialists — each catches one category. TL is the coherence anchor — the only stage that asks "does this change make the SYSTEM consistent?" Distributed checks without a coherence anchor produce locally correct components and globally broken systems.
+**Coherence vs Specialization.** nm and vet are specialists — each catches one category. TL is the coherence anchor — the only stage that asks "does this change make the SYSTEM consistent?" TL checks twice: once on the spec before code (architectural impact, test plan), once on the PR after code (spec compliance, architecture drift). Distributed checks without a coherence anchor produce locally correct components and globally broken systems.
 
 ## Features
 

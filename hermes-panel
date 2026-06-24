@@ -2,7 +2,7 @@
 """Hermes Panel — Multi-agent orchestration engine.
 Usage: hermes-panel "Feature description" [project_dir]
        If project_dir is omitted, uses current working directory.
-Flow: Strategist → User Clarifications → Strategist Refine → Orchestrator Review → Strategist Loopback → Orchestrator Gate → Coder(branch) → nm(validate+PR) → Tech Lead(review PR) → Report
+Flow: Strategist → User Clarifications → Strategist Refine → TL Spec Pre-Review → Orchestrator Gate → Human Gate → Coder(branch) → vet(validate) → nm(adversarial+PR) → Tech Lead(spec review) → Report
 Output: Live to terminal + saved to /tmp/hermes-panel-output.txt
 """
 import sys, json, subprocess, os, pwd, time, shlex, re
@@ -1076,95 +1076,49 @@ CRITICAL: You are a DESIGNER, not a coder. Output goes to a frontend coder who m
         tasks_extract_path = ""
         print(f"  ⚠ Task extraction failed: {e} — coder will read full spec", flush=True)
 
-    # ── ORCHESTRATOR REVIEW → STRATEGIST LOOPBACK (2026-06-20) ──
-    # After spec is finalized (user clarifications done), the orchestrator reviews
-    # the spec critically for gaps: edge cases, unaddressed design decisions,
-    # missing error paths, silent failure modes. Questions go back to the strategist
-    # for ONE round of refinement. This catches what neither strategist nor user spotted.
+    # ── TECH LEAD — SPEC PRE-REVIEW ──
+    # After spec is finalized and before Human Gate, the Tech Lead reviews
+    # the spec for architectural impact and test plan completeness.
+    # Distinct from nm (code blind spots) and TL-post (spec compliance after code).
+    # This catches architecture issues and test gaps BEFORE implementation.
     if not os.environ.get("PANEL_SKIP_ORCHESTRATOR_REVIEW"):
-        print("\n── Orchestrator Review → Strategist Loopback ──", flush=True)
-        review_prompt = f"""You are an adversarial reviewer. Read the spec at {spec_path} and find gaps the strategist missed.
+        print("\n── Tech Lead — Spec Pre-Review ──", flush=True)
+        review_prompt = f"""You are the Tech Lead reviewing a spec BEFORE implementation. Read the spec at {spec_path}.
 
-Look for:
-1. Edge cases not addressed (what happens if X fails? what about empty state?)
-2. Design decisions left implicit (ownership questions, error propagation, async boundaries)
-3. Missing error paths (panic risks, silent failure modes, resource leaks)
-4. Ambiguities the coder would have to guess at
-5. Testability gaps (untestable assumptions, missing testable boundaries)
+Your job is NOT to find general gaps — the Human Gate and nm will catch those. Focus on what ONLY you can assess:
 
-IMPORTANT:
-- Do NOT suggest solutions — just identify the gap as a question.
-- Do NOT re-litigate decisions that are clearly stated.
-- Do NOT ask about out-of-scope features.
-- If the spec is solid with no gaps, say "No gaps found — spec is complete."
+## 1. Architectural Impact
+- Does this design introduce coupling where it shouldn't?
+- Are there implicit assumptions about service boundaries, data ownership, or API contracts?
+- Will this change break existing consumers or require migrations?
+- Is the design consistent with the codebase's existing patterns?
 
-Format each gap as:
-GAP N: <one-sentence question>
+## 2. Test Plan Verification
+- Does the spec's Test Plan section exist and is it complete?
+- Are edge cases concrete (not generic "test edge cases")?
+- Are failure modes specified (what breaks, how it breaks, what happens)?
+- Are contract invariants defined (what must remain true)?
+- If the Test Plan is missing or vague, that's a BLOCKER.
 
-Example:
-GAP 1: What happens if the background task panics — does the main loop detect it?
-GAP 2: How should the system handle the case where the cached net_liq is f64::NAN?
-GAP 3: Is the Mutex held during await points, and could that deadlock?
+Output format:
+TEST PLAN: PASS / BLOCKER — <reason>
+ARCHITECTURE: PASS / CONCERN — <reason>
 
-Output NOTHING ELSE — just the numbered gaps or the "No gaps found" message."""
-        review_output = spawn_agent("strategist", ["spec-strategist-lite", "ponytail-guard"], review_prompt, timeout=120, cwd=PROJECT_DIR)
+If BLOCKER: name the missing test plan sections.
+If CONCERN: name the specific architectural risk (not generic "consider coupling").
+If both PASS: say "Spec pre-review approved — no architectural concerns, test plan complete."
+
+Output NOTHING ELSE.""" 
+        review_output = spawn_agent("tech-lead", ["adversarial-review-lite", "ponytail-guard"], review_prompt, timeout=120, cwd=PROJECT_DIR)
         review_text = extract_agent_messages(review_output)
         if len(review_text) < 20 and len(review_output) > 100:
             review_text = review_output
-        print(f"  Review output: {len(review_text)} chars", flush=True)
+        print(f"  Pre-review: {review_text.strip()[:200]}", flush=True)
 
-        # Parse gaps from review
-        gap_pattern = re.compile(r'GAP\s+(\d+)\s*[：:]\s*(.+)', re.IGNORECASE)
-        gaps = []
-        for m in gap_pattern.finditer(review_text):
-            gaps.append(m.group(2).strip())
-        # Also check review_text directly for "GAP" format (non-numbered)
-        if not gaps:
-            for line in review_text.split("\n"):
-                stripped = line.strip()
-                if stripped.upper().startswith("GAP") and ":" in stripped:
-                    gaps.append(stripped.split(":", 1)[1].strip())
-
-        if not gaps:
-            if "no gaps found" in review_text.lower() or "spec is complete" in review_text.lower():
-                print("  ✓ No gaps found — spec is complete", flush=True)
-            else:
-                print("  ⚠ No gaps parsed from review output — proceeding with original spec", flush=True)
-        else:
-            print(f"\n  Found {len(gaps)} gap(s):", flush=True)
-            for i, g in enumerate(gaps, 1):
-                print(f"    {i}. {g}", flush=True)
-
-            # Feed gaps back to strategist for ONE refinement pass
-            print(f"\n  ↻ Re-running strategist to address {len(gaps)} gap(s)...", flush=True)
-            gaps_block = "\n".join(f"GAP {i}: {g}" for i, g in enumerate(gaps, 1))
-            refine_prompt = f"""The orchestrator reviewed your spec and found these gaps. Address EACH one.
-
-{gaps_block}
-
-Read the current spec at {spec_path}. Update it to address every gap above.
-If a gap points out something you already handled, add a clarification comment.
-If a gap is valid, add the missing detail to the spec.
-
-Write the COMPLETE updated spec below. Do NOT summarize or skip sections.
-Keep ALL existing content — only add what's needed to close the gaps."""
-            strat_output = spawn_agent("strategist", ["spec-strategist-lite", "ponytail-guard"], refine_prompt, timeout=300, cwd=PROJECT_DIR)
-            print(f"  ✓ Refined spec finished ({len(strat_output)} chars)", flush=True)
-
-            # Extract and re-save updated spec
-            spec = extract_agent_messages(strat_output)
-            if len(spec) < 100 and len(strat_output) > 500:
-                spec = strat_output
-            print(f"  Refined spec extracted: {len(spec)} chars", flush=True)
-            with open(spec_path, "w") as f:
-                f.write(f"# {feature}\n\n{spec}")
-            print(f"  ✓ Updated spec saved: {spec_path}", flush=True)
-
-            # Re-extract PR sections from refined spec
-            pr_sections = extract_pr_sections(spec, feature)
-            print(f"  PR sections re-extracted: {len(pr_sections)} chars", flush=True)
+        # Note: TL pre-review findings are shown to the user at the Human Gate.
+        # No automatic refinement — the user decides whether to revise the spec.
     else:
-        print("\n── Orchestrator Review → Strategist Loopback — SKIPPED (PANEL_SKIP_ORCHESTRATOR_REVIEW=1) ──", flush=True)
+        print("\n── Tech Lead — Spec Pre-Review — SKIPPED (PANEL_SKIP_ORCHESTRATOR_REVIEW=1) ──", flush=True)
 
     # ── ORCHESTRATOR GATE ──
     print("\n── Orchestrator Gate ──", flush=True)
