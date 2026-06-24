@@ -266,10 +266,21 @@ For long-lived projects, every Strategist run shouldn't rediscover the same deci
 If `docs/adr/` exists, the Strategist runs `adr list` during codebase exploration and reads recent ADRs. Past decisions become context for the current design — no re-litigating whether to use Redis vs in-memory.
 
 **After Human Gate — Panel creates a new ADR.**
-Once the spec is final (user approved or edited), the panel extracts the Strategist's decision table and runs `adr new` to persist it as a numbered ADR in `docs/adr/`. Status: Proposed. The user changes status to Accepted later.
+Once the spec is final (user approved or edited), the panel extracts the Strategist's decision table and runs `adr new` to persist it as a numbered ADR in `docs/adr/`. Status: Proposed. The panel adds cross-references: ADR links back to spec, spec links forward to ADR.
 
 **TL pre-review — checks spec against existing ADRs.**
 TL runs `adr list` and checks whether the spec violates any existing architectural decision. Violations are flagged as CONCERN with the ADR reference — e.g. "ADR-0003 chose in-memory cache; this spec introduces Redis."
+
+**Spec↔ADR cross-references.**
+Each ADR gets `## Source` pointing to the spec that produced it. Each spec gets `## ADR` pointing to its decision record. After merge, the spec can be archived but the ADR persists — and you can trace "why was this decided?" via ADR → source spec.
+
+## Spec Archive
+
+Specs are temporary — write them, build from them, archive after merge. The panel handles this automatically.
+
+**Auto-archive at startup.** Before each run, the panel checks `gh pr list --state merged` for any local spec directories with merged PRs. Archived specs move to `specs/archive/`. `specs/STATUS.md` is regenerated listing active vs archived specs. Skip with `PANEL_SKIP_AUTO_ARCHIVE=1`.
+
+**Manual archive.** After merging a panel PR, you can also archive manually: `mv specs/<feature>/ specs/archive/`. The panel will pick up the change on next run.
 
 ### Setup
 
@@ -281,7 +292,7 @@ One-time setup per project. The panel uses `adr-tools` as a CLI — no new agent
 
 ### What the panel won't do
 
-The panel won't maintain an ADR index, track false-BLOCKER history across runs, or remember which modules are fragile. Each run is self-contained — ADRs persist in the repo as markdown files, not as pipeline state.
+The panel won't delete specs (only archives them), track false-BLOCKER history across runs, or remember which modules are fragile. Each run is self-contained — ADRs persist in the repo as markdown files, not as pipeline state.
 
 ---
 

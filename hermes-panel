@@ -788,6 +788,52 @@ def main():
     except Exception:
         pass  # keep 'master'
 
+    # ── Auto-archive specs from merged PRs ──
+    specs_dir = os.path.join(PROJECT_DIR, "specs")
+    archive_dir = os.path.join(specs_dir, "archive")
+    if os.path.isdir(specs_dir) and not os.environ.get("PANEL_SKIP_AUTO_ARCHIVE"):
+        # Find local spec dirs that have corresponding merged PRs
+        merged_archived = 0
+        for entry in sorted(os.listdir(specs_dir)):
+            entry_path = os.path.join(specs_dir, entry)
+            if not os.path.isdir(entry_path) or entry == "archive":
+                continue
+            # Check if a branch for this feature has a merged PR
+            branch_name = f"feat/{entry}"[:80]  # truncate to match branch naming
+            try:
+                result = subprocess.run(
+                    ["gh", "pr", "list", "--repo", REPO, "--head", branch_name,
+                     "--state", "merged", "--json", "url", "--jq", ".[0].url"],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    universal_newlines=True, timeout=15)
+                if result.returncode == 0 and result.stdout.strip():
+                    # PR was merged — archive the spec
+                    os.makedirs(archive_dir, exist_ok=True)
+                    dest = os.path.join(archive_dir, entry)
+                    if os.path.exists(dest):
+                        # Already archived — just add a suffix
+                        import shutil
+                        shutil.rmtree(dest)
+                    os.rename(entry_path, dest)
+                    merged_archived += 1
+                    print(f"  📦 Archived spec: {entry} (PR merged: {result.stdout.strip()})", flush=True)
+            except Exception:
+                pass  # gh CLI not available or network error — skip
+        if merged_archived > 0:
+            # Update STATUS.md
+            status_path = os.path.join(specs_dir, "STATUS.md")
+            with open(status_path, "w") as sf:
+                sf.write(f"# Specs Status — auto-updated {time.strftime('%Y-%m-%d %H:%M')}\n\n")
+                sf.write(f"## Active\n")
+                for entry in sorted(os.listdir(specs_dir)):
+                    if os.path.isdir(os.path.join(specs_dir, entry)) and entry != "archive":
+                        sf.write(f"- {entry}\n")
+                sf.write(f"\n## Archived\n")
+                if os.path.isdir(archive_dir):
+                    for entry in sorted(os.listdir(archive_dir)):
+                        sf.write(f"- {entry}\n")
+            print(f"  STATUS.md updated", flush=True)
+
     TEST_CMD, BUILD_CMD, LINT_CMD = detect_commands()
 
     # Export GH_TOKEN for all child processes (gh CLI, spawned agents)
@@ -1256,7 +1302,25 @@ Output NOTHING ELSE."""
                 universal_newlines=True, timeout=30, cwd=PROJECT_DIR,
                 env={**os.environ, "PATH": f"{adr_bin}:{os.environ.get('PATH', '')}"})
             if result.returncode == 0:
-                print(f"  ADR created: {result.stdout.strip()}", flush=True)
+                adr_output = result.stdout.strip()
+                print(f"  ADR created: {adr_output}", flush=True)
+                # Extract ADR filename and add cross-references
+                adr_file_match = re.search(r'(docs/adr/\\d+-.+\\.md)', adr_output)
+                if adr_file_match:
+                    adr_rel_path = adr_file_match.group(1)
+                    adr_full_path = os.path.join(PROJECT_DIR, adr_rel_path)
+                    # Add source link to ADR: references the spec
+                    try:
+                        with open(adr_full_path, "a") as af:
+                            af.write(f"\n## Source\n\nSpec: {spec_path}\n")
+                    except Exception:
+                        pass
+                    # Add ADR reference to spec: forward-reference
+                    try:
+                        with open(spec_path, "a") as sf:
+                            sf.write(f"\n\n## ADR\n\nSee: {adr_rel_path}\n")
+                    except Exception:
+                        pass
             else:
                 print(f"  ⚠ ADR creation skipped: {result.stderr.strip()[:100]}", flush=True)
     else:

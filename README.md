@@ -113,6 +113,7 @@ Every stage has a contract:
 - **Two adversarial reviews** — nm (fresh model, different family) + TL (spec compliance). Two independent models catch different classes of bugs.
 - **Graceful degradation** — timeouts produce partial results, not failures. Partial review > no review.
 - **ADR lifecycle** — strategist reads past architectural decisions before designing. Panel creates new ADRs from decision tables. TL checks spec against existing ADRs. Powered by [adr-tools](https://github.com/npryce/adr-tools).
+- **Auto-archive specs** — panel detects merged PRs at startup and archives completed specs to `specs/archive/`. Keeps `specs/STATUS.md` current. Skip with `PANEL_SKIP_AUTO_ARCHIVE=1`.
 
 ## When NOT to Use
 
