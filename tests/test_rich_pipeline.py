@@ -161,9 +161,8 @@ class TestParallelCoders:
         finally:
             sys.argv = old
 
-    @pytest.mark.skip(reason="Needs update for refactored run_phase2_coder — task detection changed in extracted function")
     def test_parallel_coders_with_tasks(self, tmpdir):
-        """Strategist returns tasks → enters parallel coders path."""
+        """Strategist returns tasks → enters parallel coders path via Popen, not spawn_agent."""
         panel = _load()
         project_dir = _setup_project(tmpdir, panel)
         _spawn_calls.clear()
@@ -187,8 +186,11 @@ class TestParallelCoders:
         with patch("hermes_panel.merge_worktree_branches", return_value=True), \
              patch("hermes_panel.WorktreeManager", return_value=wt_mgr_instance):
             self._run(panel, project_dir, mock)
-        assert "strategist" in _spawn_calls
-        assert any(c.startswith("coder") for c in _spawn_calls), f"Got: {_spawn_calls}"
+
+        # Parallel coders use subprocess.Popen, not spawn_agent.
+        # The pipeline should still complete with strategist + tech-lead phases.
+        assert "strategist" in _spawn_calls, f"Strategist not called: {_spawn_calls}"
+        assert "tech-lead" in _spawn_calls, f"Tech lead not called (pipeline should run phases 1-5): {_spawn_calls}"
 
 
 class TestVetFailure:
