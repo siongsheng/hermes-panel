@@ -245,6 +245,26 @@ Gaps are sent back to the Strategist for ONE refinement pass. Skip with `PANEL_S
 
 ---
 
+## Organizational Memory
+
+For long-lived projects, every Strategist run shouldn't rediscover the same decisions. Hermes distinguishes two kinds of memory:
+
+### Static Memory (belongs in the repo)
+- **ADRs** — architecture decisions, trade-offs, rejected alternatives. Lives in `docs/adr/` or `specs/conventions.md`.
+- **Coding standards** — what AGENTS.md already captures: test commands, build commands, conventions.
+- **Known constraints** — "this module cannot import that one," "don't use async in this layer."
+
+**The Strategist reads AGENTS.md and explores the codebase before writing any spec.** Stronger AGENTS.md conventions directly improve spec quality without pipeline changes.
+
+### Dynamic Memory (belongs in git history + pipeline context)
+- "This module recently caused a bug" → visible in `git log --oneline` + issue tracker.
+- "This API was changed 3 PRs ago" → visible in `git diff master...HEAD`.
+- "This pattern tends to break tests" → visible in nm's false-BLOCKER history.
+
+**The panel already surfaces this:** vet reports actual test results, nm's diff review catches recurring patterns, TL's spec-compliance check references recent spec updates. The information exists — the pipeline doesn't need a separate memory layer. It needs the agents to *read the signals already available*.
+
+---
+
 ## Failure Handling
 
 When any phase fails, the panel:

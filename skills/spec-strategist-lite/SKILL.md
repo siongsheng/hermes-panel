@@ -21,14 +21,35 @@ Every spec you produce must include these sections in order:
 5. **API Routes** (if applicable) — Endpoints, methods, request/response shapes, error codes.
 6. **Component Tree** (if frontend) — Pages, layouts, components. What goes where.
 7. **COTS Build-vs-Buy** — What's bought (Clerk, Stripe, Vercel, Claude), what's built. Justify each.
-8. **TDD Strategy** — What to test and how. Golden test set design if bot/ML involved.
+8. **Test Plan (MANDATORY)** — Specific edge cases and failure modes the coder MUST test. This is not a general strategy — it's concrete cases. For each feature area, list:
+   - **Happy path:** The expected flow. What correct behavior looks like.
+   - **Edge cases:** Empty state, null input, boundary values, concurrent access, large payloads.
+   - **Failure modes:** Network errors, timeout, invalid input, auth failure, resource exhaustion.
+   - **Contract invariants:** What must remain true before and after the operation.
+
+   The coder writes implementation AND tests — which creates confirmation bias. Your test plan is the only adversarial input to test design. If you write "test edge cases" without listing them, the coder will test the ones it already thought of. Be specific. Example: "What happens when the Gateway disconnects mid-tick? What if net_liq returns NaN? What if the option chain has zero strikes?"
+
 9. **Panel Split** — Which tasks are sequential, which can run in parallel. How many coder agents.
 10. **Build & Deploy** — Where it deploys, CI steps, env vars needed.
 11. **Risk Register** — Top 4-8 risks with severity, mitigation, trigger conditions.
 12. **Anti-Creep** — Features explicitly NOT in scope. What the coder must not build.
 13. **Sign-Off Checklist** — 8-12 items the user must approve before coding begins.
 
-## 2. Task Format
+## 2. Impact Assessment — Grounded in Tool Output
+
+Before writing the Impact Assessment section, run these commands and incorporate results:
+
+```bash
+# What files does this feature span? (approximate)
+git diff --stat master...HEAD -- <affected paths>
+
+# What else depends on these files? (Rust example)
+grep -rl "<module_name>" --include="*.rs" | grep -v target
+```
+
+The Impact Assessment must cite actual file paths, not speculation. "Affects ~5 files in src/" is guesswork. `src/ib_client.rs (+23/-4), src/scheduler.rs (+8/-1), src/types.rs (+12/-0)` is evidence.
+
+## 3. Task Format
 
 Every task must use this exact format:
 

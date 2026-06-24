@@ -109,6 +109,40 @@ equity-curve bugs that nm has caught in practice.
 | Doc Lint | Find stale documentation | Yes |
 | Push + PR | Create PR with risk assessment. PR body must include `## Why` — extract the problem/motivation from commit messages (or the spec if available). Never use bare "See commits on this branch." | Yes |
 
+## Fresh-Context Review: Specialist Lenses
+
+The review stage (Stage 4) is not a generic "review everything." Apply these specialist lenses, each looking for a distinct failure class:
+
+### Security Lens
+Look for: auth bypass, unprotected endpoints, secrets in code, injection vectors (SQL, command), missing CSRF/CORS, hardcoded credentials, exposed error details.
+
+### Reliability Lens
+Look for: missing retries, race conditions, missing timeouts, unhandled error paths, resource leaks (connections, files, memory), crash-on-null, missing guards on external data.
+
+### Performance Lens
+Look for: N+1 queries, unbounded allocations, missing indexes, synchronous blocking in async contexts, large payloads without pagination, repeated computation without caching.
+
+**Rule:** Report findings with the lens label. Example: `[SECURITY]` or `[RELIABILITY]`. A finding that fits multiple lenses is flagged once under the most severe lens. Do NOT produce three separate review passes — apply all lenses in a single pass.<｜end▁of▁thinking｜>
+
+<｜｜DSML｜｜tool_calls>
+<｜｜DSML｜｜invoke name="patch">
+<｜｜DSML｜｜parameter name="new_string" string="true">| Push + PR | Create PR with risk assessment. PR body must include `## Why` — extract the problem/motivation from commit messages (or the spec if available). Never use bare "See commits on this branch." | Yes |
+
+## Fresh-Context Review: Specialist Lenses
+
+The review stage (Stage 4) is not a generic "review everything." Apply these specialist lenses, each looking for a distinct failure class:
+
+### Security Lens
+Look for: auth bypass, unprotected endpoints, secrets in code, injection vectors (SQL, command), missing CSRF/CORS, hardcoded credentials, exposed error details.
+
+### Reliability Lens
+Look for: missing retries, race conditions, missing timeouts, unhandled error paths, resource leaks (connections, files, memory), crash-on-null, missing guards on external data.
+
+### Performance Lens
+Look for: N+1 queries, unbounded allocations, missing indexes, synchronous blocking in async contexts, large payloads without pagination, repeated computation without caching.
+
+**Rule:** Report findings with the lens label. Example: `[SECURITY]` or `[RELIABILITY]`. A finding that fits multiple lenses is flagged once under the most severe lens. Do NOT produce three separate review passes — apply all lenses in a single pass.
+
 ## Risk Triage
 
 | Risk Level | Agent delivers | User action required |
