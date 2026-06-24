@@ -2055,7 +2055,417 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
     }
 
 
-# ── main ─────────────────────────────────────────
+def run_phase3_vet(feature, branch, pr_sections, impact, spec_path):
+    """Phase 3: vet — checkout branch, run tests, run build, create PR, merge worktrees.
+    Returns dict with: nm_output, pr_url, coder_failed, verdict."""
+    global PROJECT_DIR, REPO, DEFAULT_BRANCH, TEST_CMD, BUILD_CMD
+    nm_output = ""
+    pr_url = None
+    coder_failed = False
+    verdict = None
+
+    print("\n── Phase 3: vet (coder claimed clean — let's check) ──", flush=True)
+
+    # 1. Verify branch
+    print("  ⏳ Checking out branch...", flush=True)
+    co_out, co_err, co_rc = git("checkout", branch)
+    if co_rc != 0:
+        print(f"  ❌ Checkout failed: {co_err}", flush=True)
+        halt_and_revert(f"nm: cannot checkout {branch}", "PHASE 3 (vet)", branch)
+        coder_failed = True
+        verdict = "VET_FAILED"
+        return {"nm_output": "", "pr_url": None, "coder_failed": True, "verdict": "VET_FAILED"}
+
+    # ── Verification loop: fail → coder fixes → re-verify ──
+    MAX_VERIFY_RETRIES = 2
+    test_pass = build_pass = False
+    test_output = build_output = ""
+    tests_passed = tests_failed = "?"
+
+    for verify_attempt in range(MAX_VERIFY_RETRIES + 1):
+        if verify_attempt > 0:
+            print(f"\n  ↻ Verification retry {verify_attempt}/{MAX_VERIFY_RETRIES} — spawning coder to fix...", flush=True)
+
+        git("pull", "origin", branch)
+
+        # Run test suite
+        print("  ⏳ Running test suite...", flush=True)
+        t0 = time.time()
+        test_result = _safe_run(TEST_CMD, cwd=PROJECT_DIR, timeout=300)
+        test_output = test_result.stdout or ""
+        test_pass = test_result.returncode == 0
+        pm = re.search(r'(\d+)\s+passed', test_output)
+        fm = re.search(r'(\d+)\s+failed', test_output)
+        tests_passed = pm.group(1) if pm else "?"
+        tests_failed = fm.group(1) if fm else ("0" if test_pass else "?")
+        print(f"  {'✅' if test_pass else '❌'} Tests: {tests_passed} passed, {tests_failed} failed ({time.time()-t0:.0f}s)", flush=True)
+
+        # Run build
+        print("  ⏳ Running build...", flush=True)
+        t0 = time.time()
+        build_result = _safe_run(BUILD_CMD, cwd=PROJECT_DIR, timeout=300)
+        build_pass = build_result.returncode == 0
+        build_output = build_result.stdout or ""
+        print(f"  {'✅' if build_pass else '❌'} Build: {'passed' if build_pass else 'FAILED'} ({time.time()-t0:.0f}s)", flush=True)
+
+        if test_pass and build_pass:
+            break  # Clean!
+
+        # Show failures
+        if not test_pass:
+            print("  Test failures (last 15 lines):", flush=True)
+            for line in test_output.split("\n")[-15:]:
+                if line.strip():
+                    print(f"    {line.strip()}", flush=True)
+        if not build_pass:
+            for line in build_output.split("\n")[-8:]:
+                if line.strip():
+                    print(f"    {line.strip()}", flush=True)
+
+        if verify_attempt < MAX_VERIFY_RETRIES:
+            # Loop back to coder
+            fix_prompt = f"""Verification failed on branch '{branch}'. Fix these failures and push.
+
+TEST FAILURES:
+{test_output[-2000:] if not test_pass else 'Tests passed.'}
+
+BUILD FAILURES:
+{build_output[-1000:] if not build_pass else 'Build passed.'}
+
+Fix the code so both pass. Then: git add <fixed files> && git commit -m "fix: verification failures" && git push origin {branch}
+Do NOT change tests unless they are wrong. Do NOT change code outside this scope.
+Report: what was broken, what you fixed, commit hash."""
+            spawn_agent("coder", ["ai-coding-best-practices-lite"],
+                        fix_prompt, timeout=600, cwd=PROJECT_DIR)
+            print(f"  ✓ Coder fix attempt finished", flush=True)
+        else:
+            print(f"\n  🔴 BLOCKED — Verification failed after {MAX_VERIFY_RETRIES} retries", flush=True)
+            print(f"  Coder pushed code that doesn't pass. Must be fixed manually.", flush=True)
+            halt_and_revert("nm: verification failed after max retries", "PHASE 3 (Verification)", branch)
+            return {"nm_output": "", "pr_url": None, "coder_failed": True, "verdict": "VET_FAILED"}
+
+    # 4. Create PR (verification passed)
+    print("  ⏳ Creating PR...", flush=True)
+
+    pr_sections_final = _supplement_pr_sections(pr_sections, PROJECT_DIR, branch, DEFAULT_BRANCH)
+    try:
+        tp = int(tests_passed)
+    except (ValueError, TypeError):
+        tp = 0
+    try:
+        tf = int(tests_failed)
+    except (ValueError, TypeError):
+        tf = 0
+    total_tests = tp + tf if (tp + tf) > 0 else "?"
+    passed_str = f"{tests_passed}/{total_tests}" if total_tests != "?" else f"{tests_passed} passed"
+    pr_body = (
+        f"{pr_sections_final}\n\n"
+        f"## Validation\n"
+        f"- {passed_str} tests\n"
+        f"- Build passes\n"
+    )
+    pr_stdout, pr_stderr, pr_rc = gh("pr", "create", "--repo", REPO,
+        "--base", DEFAULT_BRANCH, "--head", branch,
+        "--title", f"feat: {feature}",
+        "--body", pr_body)
+    if pr_rc == 0 and pr_stdout.strip():
+        parts = pr_stdout.strip().split()
+        if parts:
+            pr_url = parts[-1]
+            print(f"  ✅ PR created: {pr_url}", flush=True)
+        else:
+            pr_url = None
+    else:
+        # Try finding existing PR
+        stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", branch,
+                           "--json", "url", "--jq", ".[0].url")
+        if rc == 0 and stdout:
+            pr_url = stdout
+            print(f"  Found existing PR: {pr_url}", flush=True)
+        else:
+            print(f"  ❌ No PR found — create failed: {pr_stderr[:200]}", flush=True)
+            pr_url = None
+
+    # 5. Risk: reuse strategist's impact assessment (zero AI tokens)
+    risk = impact  # LOW/MEDIUM/HIGH — already determined in orchestrator gate
+    print(f"  Risk: {risk} (from strategist impact={impact})", flush=True)
+
+    # Build nm output for report
+    nm_output = (
+        f"Tests: {tests_passed} passed, {tests_failed} failed\n"
+        f"Build: {'PASS' if build_pass else 'FAIL'}\n"
+        f"PR: {pr_url or 'N/A'}\n"
+        f"Risk: {risk}"
+    )
+    print(f"✓ Verification passed ({len(nm_output)} chars)", flush=True)
+
+    return {"nm_output": nm_output, "pr_url": pr_url, "coder_failed": coder_failed, "verdict": verdict, "tests_passed": tests_passed, "tests_failed": tests_failed, "build_pass": build_pass}
+
+
+def run_phase4_nm(feature, branch, impact, pr_url_in):
+    """Phase 4: nm — adversarial review, parse PR. Returns dict with nm_ok, pr_url, risk."""
+    global PROJECT_DIR, REPO
+    print("\n── Phase 4: nm (adversarial review) ──", flush=True)
+    print("  ⏳ Spawning fresh Hermes session with different model family...", flush=True)
+    nm_cmd = os.path.expanduser("~/bin/nm") + " --skip-tests"
+    nm_result = _safe_run(nm_cmd, cwd=PROJECT_DIR, timeout=600)
+    nm_stdout = nm_result.stdout or ""
+    print(f"  ✓ nm finished ({len(nm_stdout)} chars)", flush=True)
+
+    pr_url = pr_url_in
+
+    # Extract PR URL from nm output
+    pr_match = re.search(r'(https://github\.com/[^/]+/[^/]+/pull/\d+)', nm_stdout)
+    if pr_match:
+        pr_url = pr_match.group(1)
+        print(f"  PR: {pr_url}", flush=True)
+    else:
+        stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", branch,
+                           "--json", "url", "--jq", ".[0].url")
+        if rc == 0 and stdout:
+            pr_url = stdout
+            print(f"  Found existing PR: {pr_url}", flush=True)
+        else:
+            print("  ⚠ No PR found in nm output", flush=True)
+
+    # Extract risk from nm output
+    risk_match = re.search(r'RISK:\s*(LOW|MEDIUM|HIGH)', nm_stdout, re.IGNORECASE)
+    risk = risk_match.group(1).upper() if risk_match else impact
+    print(f"  Risk: {risk}", flush=True)
+
+    # ── nm AUTO-FIX LOOPBACK ──
+    # Auto-fix objective nm findings (missing tests, uncaught exceptions, TDD violations).
+    # Skips subjective findings (architecture, spec compliance) — human judges those.
+    nm_auto_fix_patterns = [
+        (r'(?i)missing\s+test', "missing test"),
+        (r'(?i)uncaught\s+(panic|exception)', "uncaught exception"),
+        (r'(?i)\bunwrap\b.*\b(result|option)\b', "unwrap on Result/Option"),
+        (r'(?i)bundled\s+commit', "TDD violation: bundled commit"),
+        (r'(?i)TDD\s+violation', "TDD violation"),
+        (r'(?i)unhandled\s+error', "unhandled error"),
+    ]
+    nm_auto_fixable = []
+    for pattern, label in nm_auto_fix_patterns:
+        if re.search(pattern, nm_stdout):
+            nm_auto_fixable.append(label)
+
+    if nm_auto_fixable and not os.environ.get("PANEL_SKIP_AUTOFIX"):
+        issues_text = "\n".join(f"  - {i}" for i in nm_auto_fixable)
+        print(f"\n  ↻ nm found {len(nm_auto_fixable)} auto-fixable issue(s):", flush=True)
+        print(issues_text, flush=True)
+        print("  Spawning coder to fix...", flush=True)
+
+        fix_prompt = f"""nm adversarial review found these issues. Fix them and push to branch '{branch}'.
+
+ISSUES TO FIX:
+{chr(10).join(f'- {i}' for i in nm_auto_fixable)}
+
+RULES:
+- Add missing tests (do NOT change existing tests unless they are wrong).
+- Fix uncaught exceptions/panics — use proper error handling (Result, ?).
+- Fix TDD violations — split bundled commits into separate RED + GREEN.
+- Do NOT change architecture, spec design, or anything not listed above.
+- After fixing: git add <files> && git commit -m "fix: address nm review findings" && git push origin {branch}
+- Run {TEST_CMD} before pushing. Fix if it fails.
+Report: what you fixed, commit hash."""
+        spawn_agent("coder", ["ai-coding-best-practices-lite"],
+                    fix_prompt, timeout=600, cwd=PROJECT_DIR)
+        print(f"  ✓ Coder fix finished", flush=True)
+
+        # Re-vet after fix
+        print("  ⏳ Re-verifying after auto-fix...", flush=True)
+        test_result = _safe_run(TEST_CMD, cwd=PROJECT_DIR, timeout=300)
+        build_result = _safe_run(BUILD_CMD, cwd=PROJECT_DIR, timeout=300)
+        if test_result.returncode == 0 and build_result.returncode == 0:
+            # Re-run nm to refresh PR with fixes
+            print("  ✓ Re-verify passed — re-running nm with fixes...", flush=True)
+            nm_result = _safe_run(nm_cmd, cwd=PROJECT_DIR, timeout=600)
+            nm_stdout = nm_result.stdout or ""
+            pr_match = re.search(r'(https://github\.com/[^/]+/[^/]+/pull/\d+)', nm_stdout)
+            if pr_match:
+                pr_url = pr_match.group(1)
+            print(f"  ✓ nm re-run finished ({len(nm_stdout)} chars)", flush=True)
+        else:
+            print("  ⚠ Re-verify failed after auto-fix — proceeding with original nm output", flush=True)
+    elif nm_auto_fixable:
+        print("  ⚠ Auto-fix skipped (PANEL_SKIP_AUTOFIX=1)", flush=True)
+
+    return {"nm_ok": True, "pr_url": pr_url, "risk": risk, "nm_stdout": nm_stdout}
+
+
+def run_phase5_tech_lead(feature, pr_url, branch, spec_path, impact):
+    """Phase 5: Tech Lead — spawn tech lead, handle BLOCKED/CHANGES_REQUESTED verdicts, auto-fix loop.
+    Returns dict with: verdict, tl_output, changes_made."""
+    global PROJECT_DIR, REPO, DEFAULT_BRANCH, TEST_CMD, BUILD_CMD
+    tl_output = ""
+
+    print("\n── Phase 5: Tech Lead (PR review) ──", flush=True)
+    tl_prompt = f"""You are the Tech Lead — your job is a THREE-PART adversarial review against the spec at {spec_path}.
+
+FIRST — read the spec: the chosen approach, API/interface proposal, and task breakdown.
+
+THEN — review the pull request{' at ' + pr_url if pr_url else ' for branch ' + branch}:
+1. Source .env: export $(grep -v '^#' .env | xargs) 2>/dev/null
+2. Fetch PR: gh pr view --repo {REPO} {'--json body,additions,deletions,files,reviews' if pr_url else ''}
+3. Check out branch, review diff: git diff master...{branch}
+4. Verify TDD: git log master..{branch} --oneline — RED before GREEN
+5. Read changed files — understand what was built
+
+THREE DIMENSIONS (every finding: severity + dimension + file:line + rule violated):
+1. SPEC COMPLIANCE: Approach matches decision table? API/interface matches? ALL tasks done? README updated if spec required it? Scope creep?
+2. ARCHITECTURAL IMPACT: New deps/coupling? Breaking changes? DB schema impact? Deployment impact?
+3. CODE QUALITY: TDD, correctness, security, error handling, performance.
+
+SEVERITY: BLOCKER (spec violation, architecture violation, TDD violation, missing guards, uncaught exceptions, security, missing tests, missing README update when spec required it) | SHOULD FIX (conventions, naming, AGENTS.md, redundant code) | NIT (formatting, comments, style)
+
+FINAL: export $(grep -v '^#' .env | xargs) 2>/dev/null && gh pr review --repo {REPO} PR_NUMBER --comment --body "Tech Lead Review: <verdict>. <summary>"
+Do NOT --approve (self-approval blocked). User merges manually.
+
+End with: VERDICT (APPROVED/CHANGES REQUESTED/BLOCKED) + RISK (LOW/MEDIUM/HIGH) + RELEASE (YES/NO + level if yes).
+RELEASE determination: Check if this feature introduces new functionality, API changes, or breaking changes visible to users. YES → recommend semver level (patch/minor/major). NO → no release needed."""
+    tl_output = spawn_agent("tech-lead", ["adversarial-review-lite", "ponytail-guard"],
+                            tl_prompt, timeout=600, cwd=PROJECT_DIR)
+    print(f"\n✓ Tech Lead finished ({len(tl_output)} chars)", flush=True)
+
+    # ── TL AUTO-FIX LOOPBACK ──
+    # Auto-fix objective TL BLOCKERs (missing tests, TDD violations, uncaught exceptions).
+    # Skips subjective BLOCKERs (spec violation, architecture, security) — human judges.
+    if not os.environ.get("PANEL_SKIP_AUTOFIX"):
+        tl_auto_fix_keywords = {
+            "tdd violation": "TDD violation",
+            "missing test": "missing test",
+            "uncaught exception": "uncaught exception",
+            "uncaught panic": "uncaught panic",
+            "missing guard": "missing guard (null/error check)",
+            "missing readme": "missing README update",
+        }
+        tl_auto_fixable = []
+        for line in tl_output.split("\n"):
+            upper = line.upper()
+            if "BLOCKER" not in upper:
+                continue
+            # Skip subjective blockers
+            if any(kw in upper for kw in ("SPEC VIOLATION", "ARCHITECTURE VIOLATION", "SECURITY", "ARCHITECTURAL")):
+                continue
+            for kw, label in tl_auto_fix_keywords.items():
+                if kw in line.lower():
+                    tl_auto_fixable.append(label)
+                    break
+
+        if tl_auto_fixable:
+            issues_text = "\n".join(f"  - {i}" for i in tl_auto_fixable)
+            print(f"\n  ↻ TL found {len(tl_auto_fixable)} auto-fixable BLOCKER(s):", flush=True)
+            print(issues_text, flush=True)
+            print("  Spawning coder to fix...", flush=True)
+
+            fix_prompt = f"""Tech Lead review found these BLOCKER issues. Fix them and push to branch '{branch}'.
+
+ISSUES TO FIX:
+{chr(10).join(f'- {i}' for i in tl_auto_fixable)}
+
+RULES:
+- Add missing tests (do NOT change existing tests unless they are wrong).
+- Fix uncaught exceptions/panics — use proper error handling (Result, ?).
+- Fix TDD violations — split bundled commits into separate RED + GREEN.
+- Add missing guard clauses for null/error conditions.
+- Do NOT change architecture, spec design, security posture, or anything not in the list above.
+- After fixing: git add <files> && git commit -m "fix: address TL review blockers" && git push origin {branch}
+- Run {TEST_CMD} + {BUILD_CMD} before pushing. Fix if either fails.
+Report: what you fixed, commit hash."""
+            spawn_agent("coder", ["ai-coding-best-practices-lite"],
+                        fix_prompt, timeout=600, cwd=PROJECT_DIR)
+            print(f"  ✓ Coder fix finished", flush=True)
+
+            # Re-vet + re-TL
+            print("  ⏳ Re-verifying after auto-fix...", flush=True)
+            test_result = _safe_run(TEST_CMD, cwd=PROJECT_DIR, timeout=300)
+            build_result = _safe_run(BUILD_CMD, cwd=PROJECT_DIR, timeout=300)
+            if test_result.returncode == 0 and build_result.returncode == 0:
+                print("  ✓ Re-verify passed — re-running Tech Lead with fixes...", flush=True)
+                tl_output = spawn_agent("tech-lead", ["adversarial-review-lite", "ponytail-guard"],
+                                        tl_prompt, timeout=600, cwd=PROJECT_DIR)
+                print(f"  ✓ Tech Lead re-run finished ({len(tl_output)} chars)", flush=True)
+            else:
+                print("  ⚠ Re-verify failed after auto-fix — proceeding with original TL output", flush=True)
+    elif any("BLOCKER" in l.upper() for l in tl_output.split("\n")):
+        print("  ⚠ Auto-fix skipped (PANEL_SKIP_AUTOFIX=1) — TL blockers will remain in review", flush=True)
+
+    # Tech Lead contingency: use partial output for verdict if timed out
+    if "[TIMEOUT:" in tl_output:
+        print("  ⚠ Tech Lead timed out — using partial output for verdict and issues")
+
+    # ── POST-TECH-LEAD GATE ──
+    verdict = "TIMED_OUT" if "[TIMEOUT:" in tl_output and "VERDICT:" not in tl_output.upper() else "UNKNOWN"
+    if verdict != "TIMED_OUT":
+        tl_upper = tl_output.upper()
+        if "VERDICT: APPROVED" in tl_upper:
+            verdict = "APPROVED"
+        elif "VERDICT: BLOCKED" in tl_upper:
+            verdict = "BLOCKED"
+        elif "VERDICT: CHANGES REQUESTED" in tl_upper:
+            verdict = "CHANGES REQUESTED"
+
+    # ── Inject TL review into PR body ──
+    if pr_url and verdict not in ("SKIPPED", "UNKNOWN", "TIMED_OUT"):
+        pr_num = pr_url.split("/")[-1]
+        # Extract blocker lines
+        blocker_lines = [
+            l.strip() for l in tl_output.split("\n")
+            if any(kw in l.upper() for kw in ("BLOCKER", "MUST FIX"))
+            and l.strip()
+        ][:10]
+        # Extract risk from TL output or use strategist's impact
+        risk_match = re.search(r'RISK:\s*(LOW|MEDIUM|HIGH)', tl_output, re.IGNORECASE)
+        tl_risk = risk_match.group(1).upper() if risk_match else impact
+        # Fetch existing PR body
+        existing_body, _, _ = gh("pr", "view", pr_num, "--repo", REPO,
+                                 "--json", "body", "--jq", ".body")
+        review_section = f"\n\n## Review\n\n**Verdict:** {verdict}  \n**Risk:** {tl_risk}\n"
+        if blocker_lines:
+            review_section += "\n### Blockers\n"
+            for bl in blocker_lines:
+                review_section += f"- {bl}\n"
+        new_body = (existing_body or "") + review_section
+        print(f"  ⏳ Updating PR body with verdict ({verdict}, {len(blocker_lines)} blockers)...", flush=True)
+        _, edit_err, edit_rc = gh("api",
+            f"repos/{REPO}/pulls/{pr_num}",
+            "--method", "PATCH",
+            "-f", f"body={new_body}")
+        if edit_rc == 0:
+            print(f"  ✅ PR updated with Review section", flush=True)
+        else:
+            print(f"  ⚠ Could not update PR body (gh api rc={edit_rc}): {edit_err[:200]}", flush=True)
+
+    # Create GitHub Issues for SHOULD FIX items
+    should_fix_lines = [l for l in tl_output.split("\n") if "SHOULD FIX" in l.upper() and "—" in l]
+    if should_fix_lines:
+        print(f"\n── Creating GitHub Issues for {len(should_fix_lines)} SHOULD FIX items ──", flush=True)
+        for line in should_fix_lines[:5]:
+            parts = line.split("—", 1)
+            desc = parts[1].strip() if len(parts) > 1 else line.strip()
+            title = f"SHOULD FIX: {desc[:80]}"
+            body = (
+                f"## Tech Lead Review Finding\n\n"
+                f"**Feature:** {feature}\n"
+                f"**Branch:** {branch}\n"
+                f"**PR:** {pr_url or 'N/A'}\n"
+                f"**Verdict:** {verdict}\n"
+                f"**Spec:** {spec_path}\n\n"
+                f"### Finding\n{line.strip()}\n\n"
+                f"### Context\nFound during adversarial review of `{branch}` against the spec. "
+                f"See the PR for full review details and other findings."
+            )
+            stdout, stderr, rc = gh("issue", "create", "--repo", REPO,
+                                    "--title", title, "--body", body)
+            if rc == 0:
+                print(f"  Created: {stdout}", flush=True)
+            else:
+                print(f"  Failed: {stderr}", flush=True)
+
+    return {"verdict": verdict, "tl_output": tl_output}
+
+
+# ── main ──
 
 def main():
     global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE, DEFAULT_BRANCH, lock_fd
