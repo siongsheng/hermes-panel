@@ -44,14 +44,18 @@ stateDiagram-v2
 ## Phases
 
 ### Stage 0: Human Gate
-Pauses after the strategist finishes, before any code gets written. The #1 pipeline failure mode defense.
+**Why:** The #1 pipeline failure mode is building the wrong thing from a bad spec. If no human sees the spec before code, the entire pipeline faithfully implements the wrong feature. One 30-second review prevents hours of wasted tokens.
+
+Pauses after the strategist finishes, before any code gets written.
 
 - **Interactive (TTY):** Shows spec path, branch name, depth decision. Options: `[y]` review in less, `[e]` edit in vim, `[Enter]` approve, `[q]` abort.
 - **Non-interactive (Telegram/cron):** Auto-skips with a message.
 - **Skip:** `PANEL_SKIP_HUMAN_GATE=1`
 
 ### Phase 1: Strategist
-Full Hermes session exploring the codebase. Reads `AGENTS.md`, searches for relevant code, understands existing patterns. Produces a 13-section spec:
+**Why:** Without a spec, an AI coder drifts — adding features, refactoring unrelated code, installing unnecessary dependencies. The strategist bounds the coder's ambition with a concrete design.
+
+Explores the codebase, reads `AGENTS.md`, searches for relevant code, understands existing patterns. Produces a 13-section spec:
 
 - Decision table comparing ≥2 approaches
 - Impact assessment (files/tables/routes affected)
@@ -65,6 +69,8 @@ Full Hermes session exploring the codebase. Reads `AGENTS.md`, searches for rele
 **Interview mode:** When confidence < High, the strategist saves clarification questions to `/tmp/hermes-panel-interview.json` and exits code 2. Re-run with `--answers` to continue.
 
 ### Phase 2: Coder
+**Why:** A coder without a spec overbuilds. A coder without TDD writes untestable code. The panel's coder is constrained — spec-bound, TDD-enforced, task-granular.
+
 Implements the spec on a `feat/<slug>` branch with TDD (RED→GREEN two-commit discipline):
 
 - Panel schedules coders in waves based on the dependency DAG — independent tasks run in parallel (up to 5 worktrees), dependent tasks queue behind.
@@ -76,6 +82,8 @@ Implements the spec on a `feat/<slug>` branch with TDD (RED→GREEN two-commit d
 **Parallel mode** (default): Tasks with no file collisions run in parallel worktrees. `PANEL_PARALLEL=0` forces sequential.
 
 ### Phase 3: vet (Shell — Zero AI Tokens)
+**Why:** AI agents claim "tests pass" without running them. Shell scripts don't hallucinate. vet is the minimum gate — deterministic, mechanical, zero hallucination surface.
+
 Pure shell script. No AI agent. No tokens. No model.
 
 1. Checkout feature branch
@@ -88,6 +96,8 @@ Pure shell script. No AI agent. No tokens. No model.
 At `depth=vet`: panel creates a basic PR after vet passes. For deeper depths, nm handles PR creation.
 
 ### Phase 4: nm (Adversarial Review)
+**Why:** No model should grade its own homework. A fresh session with a different model family catches bias-blind spots the coder's model can't see — the same model reviewing its own work misses edge cases.
+
 Fresh session, different model family. The panel invokes `~/bin/nm --skip-tests` (tests already passed in vet):
 
 1. Captures git diff from `HEAD~1` (or working tree)
@@ -106,6 +116,8 @@ Fresh session, different model family. The panel invokes `~/bin/nm --skip-tests`
 **nm gets only the diff** — no spec, no feature description. This is adversarial by design: fresh eyes on the code, no bias from knowing intent. See [no-mistakes](https://github.com/kunchenguid/no-mistakes) for the original design.
 
 ### Phase 5: Tech Lead (depth=full only)
+**Why:** nm reviews the code; TL reviews against the spec. Spec compliance, architecture drift, and scope creep are invisible to a diff-only reviewer. TL catches "this doesn't do what was asked for."
+
 Three-part adversarial review against the spec using `deepseek-v4-pro` + `adversarial-review-lite` + `ponytail-guard` skills:
 
 1. **Spec Compliance** — Approach matches decision table? API/interface matches? ALL tasks done? Scope creep?
