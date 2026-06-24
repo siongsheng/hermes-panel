@@ -16,13 +16,31 @@ Hermes Panel puts five agents in a room and makes them distrust each other. The 
 
 ## Quick Start
 
+### One-liner (Linux/macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/siongsheng/hermes-panel/main/scripts/setup-linux.sh | bash
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/siongsheng/hermes-panel/main/scripts/setup-windows.ps1 | iex
+```
+
+### Manual install
+
 ```bash
 # Clone
 git clone https://github.com/siongsheng/hermes-panel.git ~/hermes-panel
 
 # Install (symlink to PATH)
 ln -sf ~/hermes-panel/hermes-panel ~/bin/hermes-panel
+```
 
+### Usage
+
+```bash
 # Run on any project with AGENTS.md + git remote
 hermes-panel "Add rate limiting middleware" ~/project
 
