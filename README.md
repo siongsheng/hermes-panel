@@ -53,7 +53,7 @@ stateDiagram-v2
     Review : Spec compliance, code quality
 
     [*] --> Plan : feature request
-    Plan --> Implement : spec approved (Human Gate)
+    Plan --> Implement : spec approved (Human Gate + TL pre-review)
 
     Implement --> Validate : code pushed
     Validate --> Implement : build / test fail (2x)
