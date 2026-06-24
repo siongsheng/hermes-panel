@@ -165,6 +165,14 @@ The panel doesn't invent methodology. Every stage draws from battle-tested open-
 - **[docs/setup.md](docs/setup.md)** — Deployment guide: one-time machine setup, per-project config, smoke test, cron integration, troubleshooting.
 - **[docs/pipeline.md](docs/pipeline.md)** — Full pipeline reference: phases, depth matrix, interview flow, token optimizations, failure handling.
 
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Pipeline complete — PR created, all phases passed |
+| `1` | Pipeline halted — unrecoverable error (BLOCKER, failed verification) |
+| `2` | Interview mode — strategist needs clarification. Re-run with `--answers` |
+
 ## Files
 
 ```
