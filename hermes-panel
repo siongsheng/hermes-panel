@@ -58,13 +58,17 @@ def call_agent(port, system_prompt, user_prompt, model="deepseek-v4-pro", max_to
         raise ValueError(f"API call failed on port {port}: {e}")
     if not body.strip():
         raise ValueError(f"Empty response from strategist API on port {port}")
-    resp = json.loads(body)
+    try:
+        resp = json.loads(body)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON from API on port {port}: {body[:200]}")
     if "error" in resp:
         return {"error": resp["error"]["message"][:500]}
     return {"content": resp["choices"][0]["message"]["content"],
             "tokens": resp["usage"]["completion_tokens"]}
 
 def spawn_agent(profile, skills, prompt, timeout=600, cwd=None):
+    """Spawn a Hermes agent as a subprocess. Returns stdout or raises on failure."""
     cmd = [HERMES_BIN, "--profile", profile, "--yolo"]
     for s in skills:
         cmd.extend(["-s", s])
@@ -78,7 +82,7 @@ def spawn_agent(profile, skills, prompt, timeout=600, cwd=None):
     if gh_token:
         env["GH_TOKEN"] = gh_token
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             universal_newlines=True, cwd=cwd, env=env)
     output = []
     timed_out = False
@@ -100,11 +104,22 @@ def spawn_agent(profile, skills, prompt, timeout=600, cwd=None):
             proc.terminate()
         # Drain any remaining output after kill
         try:
-            remaining = proc.stdout.read()
-            if remaining:
-                output.append(remaining)
+            remaining_out, remaining_err = proc.communicate(timeout=10)
+            if remaining_out:
+                output.append(remaining_out)
+            if remaining_err:
+                output.append(f"\n[stderr]\n{remaining_err}")
         except Exception:
             pass
+
+    # Collect stderr
+    try:
+        stderr_output = proc.stderr.read()
+        if stderr_output and stderr_output.strip():
+            print(f"{tag} [stderr] {stderr_output.strip()[:500]}", flush=True)
+            output.append(f"\n[stderr]\n{stderr_output}")
+    except Exception:
+        pass
 
     result = "".join(output)
     if timed_out:
@@ -141,7 +156,12 @@ def _safe_run(cmd_str: str, cwd: str, timeout: int = 300):
                               universal_newlines=True, timeout=timeout, cwd=cwd)
 
 def slugify(text):
-    return re.sub(r'[^a-z0-9-]', '', text.lower().replace(" ", "-"))[:40]
+    import hashlib
+    base = re.sub(r'[^a-z0-9-]', '', text.lower().replace(" ", "-"))[:40]
+    if len(text) > 40:
+        h = hashlib.md5(text.encode()).hexdigest()[:8]
+        return f"{base}-{h}"
+    return base
 
 def extract_pr_sections(spec_text: str, feature: str) -> str:
     """Extract Why, Impact, and What Changed from the strategist's spec.
@@ -232,7 +252,11 @@ def extract_pr_sections(spec_text: str, feature: str) -> str:
     if what_changed:
         parts.append(what_changed)
 
-    return "\n\n".join(parts)
+    result = "\n\n".join(parts)
+    # Fallback: if extraction produced very little content, generate a basic PR body
+    if len(result) < 100:
+        result = f"## Why\n\n{feature}\n\n## What Changed\n\nSee diff for details."
+    return result
 
 
 def extract_agent_messages(session_output: str) -> str:
@@ -283,16 +307,24 @@ def detect_commands():
     agents_path = os.path.join(PROJECT_DIR, "AGENTS.md")
     if os.path.exists(agents_path):
         with open(agents_path) as f:
-            content = f.read()
-            test_m = re.search(r'(?:[Uu]nit )?[Tt]est[s]?.*?:\s*`([^`]+)`', content)
-            build_m = re.search(r'(?:[Ff]ull )?[Bb]uild.*?:\s*`([^`]+)`', content)
-            lint_m = re.search(r'(?:[Ll]int).*?:\s*`([^`]+)`', content)
+            agent_content = f.read()
+            # Primary: backtick-enclosed commands
+            test_m = re.search(r'(?:[Uu]nit )?[Tt]est[s]?.*?:\s*`([^`]+)`', agent_content)
+            build_m = re.search(r'(?:[Ff]ull )?[Bb]uild.*?:\s*`([^`]+)`', agent_content)
+            lint_m = re.search(r'(?:[Ll]int).*?:\s*`([^`]+)`', agent_content)
+            # Fallback: fenced code blocks after "Test:" / "Build:" / "Lint:" labels
+            if not test_m:
+                test_m = re.search(r'(?:[Uu]nit )?[Tt]est[s]?.*?:\s*```\s*(.+?)```', agent_content, re.DOTALL)
+            if not build_m:
+                build_m = re.search(r'(?:[Ff]ull )?[Bb]uild.*?:\s*```\s*(.+?)```', agent_content, re.DOTALL)
+            if not lint_m:
+                lint_m = re.search(r'(?:[Ll]int).*?:\s*```\s*(.+?)```', agent_content, re.DOTALL)
             if test_m:
-                test_cmd = test_m.group(1)
+                test_cmd = test_m.group(1).strip()
             if build_m:
-                build_cmd = build_m.group(1)
+                build_cmd = build_m.group(1).strip()
             if lint_m:
-                lint_cmd = lint_m.group(1)
+                lint_cmd = lint_m.group(1).strip()
     return test_cmd, build_cmd, lint_cmd
 
 # ── infrastructure classes ────────────────────────
@@ -600,23 +632,23 @@ def try_auto_merge(pr_url: str) -> str:
     if not pr_num.isdigit():
         print(f"  Cannot parse PR number from: {pr_url}")
         return "failed"
-    stdout, stderr, rc = gh("pr", "merge", pr_num, "--repo", REPO,
+    merge_stdout, merge_stderr, merge_rc = gh("pr", "merge", pr_num, "--repo", REPO,
                             "--merge", "--delete-branch")
-    if rc == 0:
+    if merge_rc == 0:
         print(f"  PR #{pr_num} merged")
         return "merged"
-    err_lower = (stderr or "").lower()
-    if any(kw in err_lower for kw in
+    merge_err_lower = (merge_stderr or "").lower()
+    if any(kw in merge_err_lower for kw in
            ("required status", "required check", "status check", "required")):
         print(f"  PR #{pr_num} - branch protection requires CI. Queuing auto-merge...")
-        _, err2, rc2 = gh("pr", "merge", pr_num, "--repo", REPO,
+        _, queue_stderr, queue_rc = gh("pr", "merge", pr_num, "--repo", REPO,
                           "--auto", "--delete-branch")
-        if rc2 == 0:
+        if queue_rc == 0:
             print(f"  PR #{pr_num} auto-merge queued")
             return "queued"
-        print(f"  Auto-merge queue failed: {err2[:200]}")
+        print(f"  Auto-merge queue failed: {queue_stderr[:200]}")
         return "failed"
-    print(f"  PR #{pr_num} merge failed: {(stderr or 'unknown')[:200]}")
+    print(f"  PR #{pr_num} merge failed: {(merge_stderr or 'unknown')[:200]}")
     return "failed"
 
 
@@ -645,6 +677,43 @@ EXAMPLES:
   hermes-panel --continuous ~/huat
   hermes-panel --status ~/huat"""
 
+
+
+def _supplement_pr_sections(pr_sections, project_dir, branch, default_branch):
+    """Supplement thin PR sections with git diff summary. Returns enriched pr_sections string."""
+    result = pr_sections
+    if "## Impact" not in pr_sections or "## What Changed" not in pr_sections:
+        diff_stat = subprocess.run(
+            ["git", "-C", project_dir, "diff", "--stat", f"{default_branch}...{branch}"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            universal_newlines=True, timeout=15)
+        diff_summary = diff_stat.stdout.strip()
+        if diff_summary:
+            if "## Impact" not in pr_sections:
+                result += f"\n\n## Impact\n\nMinimal — see What Changed."
+            if "## What Changed" not in pr_sections:
+                result += f"\n\n## What Changed\n\n```\n{diff_summary}\n```"
+    return result
+
+def _detect_default_branch(project_dir):
+    """Detect default branch from origin/HEAD. Returns branch name string."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", project_dir, "symbolic-ref", "refs/remotes/origin/HEAD"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            universal_newlines=True, timeout=10)
+        if result.returncode == 0:
+            ref = result.stdout.strip()
+            return ref.split("/")[-1] if "/" in ref else "master"
+    except Exception:
+        pass
+    return "master"
+
+def _set_gh_token():
+    """Load GH_TOKEN and export to environment if available."""
+    gh_token = load_github_token()
+    if gh_token:
+        os.environ["GH_TOKEN"] = gh_token
 
 def show_help():
     print(HELP_TEXT)
@@ -1004,9 +1073,9 @@ def _reap_completed(running: dict, tasks: dict[str, Task], locks: TaskLock) -> l
         if ret is not None:
             output = ""
             try:
-                remaining = proc.stdout.read()
+                remaining, _ = proc.communicate(timeout=5)
                 if remaining:
-                    output = remaining
+                    output = remaining.decode(errors="replace") if isinstance(remaining, bytes) else remaining
             except Exception:
                 pass
 
@@ -1866,22 +1935,9 @@ def main():
             print("ERROR: Could not detect GitHub owner/repo from git remote origin.")
             sys.exit(1)
 
-        # Detect default branch
-        try:
-            result = subprocess.run(
-                ["git", "-C", PROJECT_DIR, "symbolic-ref", "refs/remotes/origin/HEAD"],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                universal_newlines=True, timeout=10)
-            if result.returncode == 0:
-                ref = result.stdout.strip()
-                DEFAULT_BRANCH = ref.split("/")[-1] if "/" in ref else DEFAULT_BRANCH
-        except Exception:
-            pass
+        DEFAULT_BRANCH = _detect_default_branch(PROJECT_DIR)
 
-        # Export GH_TOKEN for child processes
-        gh_token = load_github_token()
-        if gh_token:
-            os.environ["GH_TOKEN"] = gh_token
+        _set_gh_token()
 
         # Ensure on default branch
         git("checkout", DEFAULT_BRANCH)
@@ -1919,17 +1975,7 @@ def main():
             print("  The panel needs a GitHub remote to create PRs and issues.")
             sys.exit(1)
 
-        # Detect default branch (modern repos use 'main', older ones 'master')
-        try:
-            result = subprocess.run(
-                ["git", "-C", PROJECT_DIR, "symbolic-ref", "refs/remotes/origin/HEAD"],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                universal_newlines=True, timeout=10)
-            if result.returncode == 0:
-                ref = result.stdout.strip()
-                DEFAULT_BRANCH = ref.split("/")[-1] if "/" in ref else DEFAULT_BRANCH
-        except Exception:
-            pass  # keep 'master'
+        DEFAULT_BRANCH = _detect_default_branch(PROJECT_DIR)
 
     # ── Auto-archive specs from merged PRs ──
     specs_dir = os.path.join(PROJECT_DIR, "specs")
@@ -2409,7 +2455,7 @@ def main():
                     choice = "q"
 
                 if choice == "y":
-                    os.system(f"less {spec_path}")
+                    subprocess.run(["less", spec_path], timeout=300)
                     # After reviewing, re-ask
                     try:
                         confirm = input("\n  Proceed with this spec? [Enter=yes / q=quit]: ").strip().lower()
@@ -2419,7 +2465,7 @@ def main():
                         print("\n  ✋ Pipeline halted by human. Spec saved — revise and re-run.", flush=True)
                         sys.exit(0)
                 elif choice == "e":
-                    os.system(f"vim {spec_path}")
+                    subprocess.run(["vim", spec_path], timeout=600)
                     # Re-read the edited spec for downstream processing
                     try:
                         with open(spec_path) as f:
@@ -2564,20 +2610,7 @@ def main():
                     if not coder_failed and depth == "vet":
                         print("\n── Creating PR (depth=coder) ──", flush=True)
 
-                        # Supplement PR sections with git diff summary when spec parsing was thin
-                        pr_sections_final = pr_sections
-                        if "## Impact" not in pr_sections or "## What Changed" not in pr_sections:
-                            diff_stat = subprocess.run(
-                                ["git", "-C", PROJECT_DIR, "diff", "--stat", f"{DEFAULT_BRANCH}...{branch}"],
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                universal_newlines=True, timeout=15)
-                            diff_summary = diff_stat.stdout.strip()
-                            if diff_summary:
-                                if "## Impact" not in pr_sections:
-                                    pr_sections_final += f"\n\n## Impact\n\nMinimal — see What Changed."
-                                if "## What Changed" not in pr_sections:
-                                    pr_sections_final += f"\n\n## What Changed\n\n```\n{diff_summary}\n```"
-
+                        pr_sections_final = _supplement_pr_sections(pr_sections, PROJECT_DIR, branch, DEFAULT_BRANCH)
                         pr_body = f"{pr_sections_final}\n\n## Validation\n- Build passes\n"
                         stdout, _, rc = gh("pr", "create", "--repo", REPO,
                                            "--base", DEFAULT_BRANCH, "--head", branch,
@@ -2847,20 +2880,7 @@ def main():
                     # 4. Create PR (verification passed)
                     print("  ⏳ Creating PR...", flush=True)
 
-                    # Supplement PR sections with git diff summary when spec parsing was thin
-                    pr_sections_final = pr_sections
-                    if "## Impact" not in pr_sections or "## What Changed" not in pr_sections:
-                        diff_stat = subprocess.run(
-                            ["git", "-C", PROJECT_DIR, "diff", "--stat", f"{DEFAULT_BRANCH}...{branch}"],
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            universal_newlines=True, timeout=15)
-                        diff_summary = diff_stat.stdout.strip()
-                        if diff_summary:
-                            if "## Impact" not in pr_sections:
-                                pr_sections_final += f"\n\n## Impact\n\nMinimal — see What Changed."
-                            if "## What Changed" not in pr_sections:
-                                pr_sections_final += f"\n\n## What Changed\n\n```\n{diff_summary}\n```"
-
+                    pr_sections_final = _supplement_pr_sections(pr_sections, PROJECT_DIR, branch, DEFAULT_BRANCH)
                     pr_body = (
                         f"{pr_sections_final}\n\n"
                         f"## Validation\n"
