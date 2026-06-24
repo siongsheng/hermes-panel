@@ -132,12 +132,16 @@ def git(*args, **kwargs):
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=30)
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
+_GH_TOKEN_CACHE = None
+
 def gh(*args, **kwargs):
     """Run gh CLI with GH_TOKEN. Returns (stdout, stderr, returncode)."""
+    global _GH_TOKEN_CACHE
     env = os.environ.copy()
-    gh_token = load_github_token()
-    if gh_token:
-        env["GH_TOKEN"] = gh_token
+    if _GH_TOKEN_CACHE is None:
+        _GH_TOKEN_CACHE = load_github_token()
+    if _GH_TOKEN_CACHE:
+        env["GH_TOKEN"] = _GH_TOKEN_CACHE
     result = subprocess.run(["gh"] + list(args),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=30, env=env)
     return result.stdout.strip(), result.stderr.strip(), result.returncode
@@ -693,16 +697,19 @@ def _supplement_pr_sections(pr_sections, project_dir, branch, default_branch):
     """Supplement thin PR sections with git diff summary. Returns enriched pr_sections string."""
     result = pr_sections
     if "## Impact" not in pr_sections or "## What Changed" not in pr_sections:
-        diff_stat = subprocess.run(
-            ["git", "-C", project_dir, "diff", "--stat", f"{default_branch}...{branch}"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            universal_newlines=True, timeout=15)
-        diff_summary = diff_stat.stdout.strip()
-        if diff_summary:
-            if "## Impact" not in pr_sections:
-                result += f"\n\n## Impact\n\nMinimal — see What Changed."
-            if "## What Changed" not in pr_sections:
-                result += f"\n\n## What Changed\n\n```\n{diff_summary}\n```"
+        try:
+            diff_stat = subprocess.run(
+                ["git", "-C", project_dir, "diff", "--stat", f"{default_branch}...{branch}"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                universal_newlines=True, timeout=15)
+            diff_summary = diff_stat.stdout.strip()
+            if diff_summary:
+                if "## Impact" not in pr_sections:
+                    result += f"\n\n## Impact\n\nMinimal — see What Changed."
+                if "## What Changed" not in pr_sections:
+                    result += f"\n\n## What Changed\n\n```\n{diff_summary}\n```"
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            print(f"  ⚠ _supplement_pr_sections: git diff failed ({e}) — proceeding without supplement", flush=True)
     return result
 
 def _detect_default_branch(project_dir):
@@ -731,7 +738,9 @@ def show_help():
 
 
 def parse_roadmap(roadmap_path: str) -> list:
-    """Parse specs/roadmap.md into a list of RoadmapFeature. Returns empty list if none found."""
+    """Parse specs/roadmap.md into a list of RoadmapFeature. Returns empty list if none found.
+    # FIXME: O(n²) for large roadmaps — each feature's section detection scans all preceding lines.
+    """
     if not os.path.exists(roadmap_path):
         return []
 
@@ -1879,8 +1888,13 @@ def main():
         if arg == "--answers" and i + 1 < len(sys.argv):
             answers_idx = i
             answers_path = sys.argv[i + 1]
-            with open(answers_path) as f:
-                interview_state = json.load(f)
+            try:
+                with open(answers_path) as f:
+                    interview_state = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
+                print(f"  ⚠ Failed to load answers file '{answers_path}': {e}", flush=True)
+                answers_path = None
+                break
             answers_list = interview_state.get("answers", [])
             questions = interview_state.get("questions", [])
             if answers_list and questions:
@@ -2332,7 +2346,7 @@ def main():
             # Save spec
             spec_dir = os.path.join(PROJECT_DIR, "specs")
             os.makedirs(spec_dir, exist_ok=True)
-            spec_name = feature.lower().replace(" ", "-").replace("/", "-")[:50]
+            spec_name = slugify(feature)[:50]
             spec_path = os.path.join(spec_dir, f"{spec_name}-spec.md")
             with open(spec_path, "w") as f:
                 f.write(f"# {feature}\n\n{spec}")
@@ -2524,7 +2538,8 @@ def main():
             # Runs AFTER Human Gate so the spec is final — user edits are reflected.
             adr_dir = os.path.join(PROJECT_DIR, "docs", "adr")
             adr_bin = os.path.join(REAL_HOME, "adr-tools", "src")
-            if os.path.isdir(adr_dir):
+            adr_binary = os.path.join(adr_bin, "adr")
+            if os.path.isdir(adr_dir) and os.path.exists(adr_binary):
                 # Re-read spec in case the user edited it
                 try:
                     with open(spec_path) as f:
@@ -2766,8 +2781,8 @@ def main():
                 coder_ok = True
                 if mode == "active":
                     print("\n── Orchestrator: Reviewing Coder Output ──", flush=True)
-                    has_red = "RED" in coder_output or "test:" in coder_output
-                    has_green = "GREEN" in coder_output or "feat:" in coder_output
+                    has_red = bool(re.search(r'\bRED\b', coder_output)) or bool(re.search(r'^test:', coder_output, re.MULTILINE))
+                    has_green = bool(re.search(r'\bGREEN\b', coder_output)) or bool(re.search(r'^feat:', coder_output, re.MULTILINE))
                     build_ok = "build" in coder_output.lower() and any(w in coder_output.lower() for w in ["pass", "clean", "succeed", "0 error"])
                     tests_ok = "pass" in coder_output.lower() and "0 fail" not in coder_output.lower()
 
@@ -2806,13 +2821,10 @@ def main():
             if not coder_failed:
                 pr_url = None
                 if depth == "vet":
-                    pr_pattern = f"github.com/{REPO}/pull/"
-                    for line in coder_output.split("\n"):
-                        if pr_pattern in line:
-                            pr_url = line.strip().split()[-1].rstrip(".")
-                            if pr_url.startswith("http"):
-                                print(f"\n  PR (coder): {pr_url}", flush=True)
-                                break
+                    pr_urls = re.findall(r'https://github\.com/[\w.-]+/[\w.-]+/pull/\d+', coder_output)
+                    if pr_urls:
+                        pr_url = pr_urls[-1]
+                        print(f"\n  PR (coder): {pr_url}", flush=True)
                     if not pr_url:
                         stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", branch,
                                            "--json", "url", "--jq", ".[0].url")

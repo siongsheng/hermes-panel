@@ -108,7 +108,7 @@ Pure shell script. No AI agent. No tokens. No model.
 
 **Verification retry loop:** On test/build failure → spawn coder with failure output → fix → re-verify (up to 2 retries). BLOCKED if still failing after max retries.
 
-At `depth=vet`: panel creates a basic PR after vet passes. For deeper depths, nm handles PR creation.
+**PR creation:** At `depth=vet`, the panel creates a basic PR after vet passes (nm creates the PR for deeper depths). The vet phase also handles the coder fix loopback when verification fails — spawning the coder to address build/test failures deterministically.
 
 ### Phase 4: nm (Adversarial Review)
 **Why:** No model should grade its own homework. A fresh session with a different model family catches bias-blind spots the coder's model can't see.
@@ -244,7 +244,7 @@ Gaps are sent back to the Strategist for ONE refinement pass. Skip with `PANEL_S
 | Phase 4 fresh nm session | Different model family catches bias-blind spots | ~15% of pipeline |
 | Lite skills | 2.2K vs 13.8K for full skills | ~11.5K system tokens saved |
 
-**54% cheaper than an unoptimized pipeline.** Cost distribution by phase (approximate):
+**Cost distribution by phase (approximate):**
 
 | Phase | % of total |
 |-------|-----------|

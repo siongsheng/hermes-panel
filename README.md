@@ -10,7 +10,7 @@ It installed Tailwind. Refactored your CSS. Wrote 14 components, a theme context
 
 One agent, zero accountability, unlimited ambition. Give it a button and it builds you a space elevator.
 
-Hermes Panel puts five agents in a room and makes them distrust each other. The strategist writes the spec — because "just code it" is the fastest route to 47 files for a button. The coder tests first (RED commit, GREEN commit, or it didn't happen). vet runs the build with zero AI tokens — shell scripts don't hallucinate, and they certainly don't install Tailwind. nm reviews from a fresh session with a different model, because nobody grades their own homework. The Tech Lead checks the spec, checks the code, and checks for space elevators.
+Hermes Panel puts five agents in a room and makes them distrust each other. The strategist writes the spec — because "just code it" is the fastest route to 47 files for a button. The coder tests first (RED commit, GREEN commit, or it didn't happen). vet runs the build with zero AI tokens — shell scripts don't hallucinate, and they certainly don't install Tailwind. nm reviews from a fresh session — configured to use a different model family, because nobody grades their own homework (note: the panel shells out to `~/bin/nm` and cannot enforce which model nm uses — requires nm to be pre-configured with a different model family). The Tech Lead checks the spec, checks the code, and checks for space elevators.
 
 **What comes out:** passing tests, passing build, a PR with two independent reviews, all automated. **What doesn't:** a CSS framework you didn't ask for.
 
@@ -129,9 +129,9 @@ Every stage has a contract:
 - **TDD enforced** — RED→GREEN two-commit discipline verified at each phase. Bundled commits = BLOCKER.
 - **Parallel coders** — worktree isolation with task claiming. DAG-based wave scheduling.
 - **Filtered auto-fix** — nm and TL loop back to Coder for objective issues (missing tests, uncaught exceptions, TDD violations). Architecture and spec findings stay human-only. Re-verified after fix. `PANEL_SKIP_AUTOFIX=1` to disable.
-- **Cost-optimized** — 54% below unoptimized baseline. Shell verification (zero AI tokens), flash model for coder, lite skills (2.2K vs 13.8K system tokens), spec noise extraction (45-58% smaller), task-extract (coder reads ~800 chars, not full 12K spec).
+- **Cost-optimized** — Uses depth-gating to skip unnecessary phases. Shell verification (zero AI tokens), flash model for coder, lite skills (2.2K vs 13.8K system tokens), spec noise extraction (45-58% smaller), task-extract (coder reads ~800 chars, not full 12K spec).
 - **Two adversarial reviews** — nm (fresh model, different family) + TL (spec compliance). Two independent models catch different classes of bugs.
-- **Graceful degradation** — timeouts produce partial results, not failures. Partial review > no review.
+- **Graceful degradation for coder and tech lead phases** — timeouts produce partial results, not failures (strategist short output aborts). Partial review > no review.
 - **ADR lifecycle** — strategist reads past architectural decisions before designing. Panel creates new ADRs from decision tables. TL checks spec against existing ADRs. Powered by [adr-tools](https://github.com/npryce/adr-tools).
 - **Auto-archive specs** — panel detects merged PRs at startup and archives completed specs to `specs/archive/`. Keeps `specs/STATUS.md` current. Skip with `PANEL_SKIP_AUTO_ARCHIVE=1`.
 
