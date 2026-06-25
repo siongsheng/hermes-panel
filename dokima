@@ -2005,7 +2005,7 @@ def extract_blockers_from_pr(pr_body, pr_number=None):
     return filtered
 
 
-def run_fix_mode(project_dir, fix_all=False):
+def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
     """Fix-mode orchestrator: detect BLOCKED PR, extract blockers, run fix pipeline."""
     global PROJECT_DIR, REPO, DEFAULT_BRANCH, TEST_CMD, BUILD_CMD
     PROJECT_DIR = project_dir
@@ -2059,6 +2059,16 @@ def run_fix_mode(project_dir, fix_all=False):
     code_blockers = [b for b in blockers if "ARCHITECTURAL" not in b.upper()
                      and "ARCHITECTURE VIOLATION" not in b.upper()]
     arch_blockers = [b for b in blockers if b not in code_blockers]
+
+    # Step 4b: Filter out non-blocker prose (lines without explicit BLOCKER markers)
+    # The TL review may include commentary, verdicts, and release notes under ### Blockers.
+    # Only keep lines that look like actual blockers: contain 🔴 BLOCKER, or start with "BLOCKER",
+    # or are in table format with a BLOCKER label.
+    code_blockers = [b for b in code_blockers
+                     if "🔴 BLOCKER" in b
+                     or re.search(r'^\|.*BLOCKER.*\|', b)
+                     or b.upper().startswith("BLOCKER")
+                     or "BLOCKER:" in b]
 
     if arch_blockers:
         print(f"  ⚠ Architectural blockers (skipped — require human decision):", flush=True)
@@ -3617,7 +3627,7 @@ def main():
 
     # ── FIX MODE: early dispatch ──
     if is_fix:
-        run_fix_mode(project_dir=PROJECT_DIR, fix_all=fix_all)
+        run_fix_mode(project_dir=PROJECT_DIR, fix_all=fix_all, skip_human_gate=skip_human_gate)
         _cleanup_lock()
         return
 
