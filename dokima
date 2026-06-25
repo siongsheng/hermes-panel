@@ -2545,6 +2545,11 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
                 r'## Fix Applied[^\n]*\n\n(\|.*?\n)*\n?',
                 '', existing_body, flags=re.DOTALL
             )
+            # Remove old Review sections (TL appends new one after us)
+            existing_body = re.sub(
+                r'\n## Review\n\n.*?(?=\n## |\Z)',
+                '', existing_body, flags=re.DOTALL
+            )
             new_body = f"{resolution}\n{existing_body}" if existing_body else resolution
             _, edit_err, edit_rc = gh("api",
                 f"repos/{REPO}/pulls/{pr_num}",
@@ -3126,9 +3131,13 @@ Report: what you fixed, commit hash."""
         # Extract risk from TL output or use strategist's impact
         risk_match = re.search(r'RISK:\s*(LOW|MEDIUM|HIGH)', tl_output, re.IGNORECASE)
         tl_risk = risk_match.group(1).upper() if risk_match else impact
-        # Fetch existing PR body
+        # Fetch existing PR body, strip old Review sections
         existing_body, _, _ = gh("pr", "view", pr_num, "--repo", REPO,
                                  "--json", "body", "--jq", ".body")
+        existing_body = re.sub(
+            r'\n## Review\n\n.*?(?=\n## |\Z)',
+            '', existing_body or '', flags=re.DOTALL
+        )
         review_section = f"\n\n## Review\n\n**Verdict:** {verdict}  \n**Risk:** {tl_risk}\n"
         if blocker_lines:
             review_section += "\n### Blockers\n"
