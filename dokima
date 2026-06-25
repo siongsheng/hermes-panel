@@ -2978,7 +2978,6 @@ Do NOT --approve (self-approval blocked). User merges manually.
 
 CRITICAL — your final output MUST end with this exact format (these lines are parsed):
 VERDICT: APPROVED
-IMPACT: <describe in plain English how this affects users/developers — what changed, why it matters>
 RISK: LOW
 RELEASE: NO
 (Use APPROVED / BLOCKED / CHANGES REQUESTED. Use LOW / MEDIUM / HIGH. Use YES + semver or NO.)
@@ -3193,9 +3192,15 @@ def run_phase1_strategist(feature, user_answers_prefill):
 
     strat_prompt += """THEN — design the feature:
 
-    1. DECISION TABLE: Compare \u22652 approaches (approach, isolation, faithfulness to patterns, simplicity, verdict). Pick one.
+    1. DECISION TABLE: Compare ≥2 approaches (approach, isolation, faithfulness to patterns, simplicity, verdict). Pick one.
 
-    2. IMPACT ASSESSMENT: Files/tables/routes changed, cascading effects, estimated lines, risk.
+    2. IMPACT ASSESSMENT (REQUIRED — this section is parsed for the PR body). Use exact format:
+       Area: <component/module being changed>
+       File(s): <paths, comma-separated>
+       Change: <plain English — what changes and how it affects users/developers>
+       Est. Lines: ~N
+       Risk: LOW/MEDIUM/HIGH
+       Cascading effects: <what else breaks or needs updating>
 
     3. CONFIDENCE + IMPACT markers (REQUIRED — exact format):
        Confidence: (High)/(Medium)/(Low)
