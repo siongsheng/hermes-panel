@@ -2978,6 +2978,7 @@ Do NOT --approve (self-approval blocked). User merges manually.
 
 CRITICAL — your final output MUST end with this exact format (these lines are parsed):
 VERDICT: APPROVED
+IMPACT: <describe in plain English how this affects users/developers — what changed, why it matters>
 RISK: LOW
 RELEASE: NO
 (Use APPROVED / BLOCKED / CHANGES REQUESTED. Use LOW / MEDIUM / HIGH. Use YES + semver or NO.)
@@ -3077,6 +3078,9 @@ Report: what you fixed, commit hash."""
         # Extract risk from TL output or use strategist's impact
         risk_match = re.search(r'RISK:\s*(LOW|MEDIUM|HIGH)', tl_output, re.IGNORECASE)
         tl_risk = risk_match.group(1).upper() if risk_match else impact
+        # Extract impact from TL output
+        impact_match = re.search(r'IMPACT:\s*(.+?)(?=\n(?:VERDICT|RISK|RELEASE|$))', tl_output, re.DOTALL | re.IGNORECASE)
+        tl_impact = impact_match.group(1).strip() if impact_match else ""
         # Fetch existing PR body, strip old Review sections
         existing_body, _, _ = gh("pr", "view", pr_num, "--repo", REPO,
                                  "--json", "body", "--jq", ".body")
@@ -3085,6 +3089,8 @@ Report: what you fixed, commit hash."""
             '', existing_body or '', flags=re.DOTALL
         )
         review_section = f"\n\n## Review\n\n**Verdict:** {verdict}  \n**Risk:** {tl_risk}\n"
+        if tl_impact:
+            review_section += f"\n**Impact:** {tl_impact}\n"
         if blocker_lines:
             review_section += "\n### Blockers\n"
             for bl in blocker_lines:
