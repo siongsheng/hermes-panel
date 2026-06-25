@@ -1899,6 +1899,100 @@ def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, ve
     return continue_loop, should_stop
 
 
+def discover_blocked_pr():
+    """Detect most recent BLOCKED PR via gh CLI.
+    Returns {number, title, headRefName, body} or None."""
+    global REPO
+    stdout, _, rc = gh("pr", "list", "--state", "open",
+                       "--repo", REPO,
+                       "--json", "number,title,body,headRefName,updatedAt",
+                       "--jq", "sort_by(.updatedAt) | reverse")
+    if rc != 0 or not stdout.strip():
+        print("  No open PRs found.", flush=True)
+        return None
+
+    import json as _json
+    try:
+        pr_list = _json.loads(stdout.strip())
+    except _json.JSONDecodeError:
+        print("  Failed to parse PR list output.", flush=True)
+        return None
+
+    prs = []
+    for pr_data in pr_list:
+        number = pr_data.get("number")
+        title = pr_data.get("title", "")
+        body = pr_data.get("body", "")
+        head = pr_data.get("headRefName")
+        updated = pr_data.get("updatedAt", "")
+
+        is_blocked = (
+            "[BLOCKED]" in title
+            or re.search(r'VERDICT.*?BLOCKED', body, re.IGNORECASE | re.DOTALL)
+            or "### Blockers" in body
+        )
+        if is_blocked:
+            prs.append({
+                "number": number,
+                "title": title,
+                "headRefName": head,
+                "body": body,
+                "updatedAt": updated,
+            })
+
+    if not prs:
+        print("  No BLOCKED PRs found.", flush=True)
+        return None
+
+    if len(prs) > 1:
+        print(f"  Found {len(prs)} BLOCKED PRs. Fixing #{prs[0]['number']} (most recent).", flush=True)
+    return prs[0]
+
+
+def extract_blockers_from_pr(pr_body, pr_number=None):
+    """Parse PR body for blocker descriptions under ### Blockers section.
+    Returns list of blocker strings with ARCHITECTURAL lines excluded.
+    Falls back to PR comments if pr_number provided."""
+    global REPO
+    blockers = []
+
+    # Primary: ### Blockers section
+    blockers_section = re.search(r'### Blockers\s*\n(.*?)(?=\n### |\n## |\Z)', pr_body, re.DOTALL)
+    if blockers_section:
+        section_text = blockers_section.group(1)
+        for line in section_text.split("\n"):
+            line = line.strip()
+            if line.startswith("- "):
+                desc = line[2:].strip()
+                if desc:
+                    blockers.append(desc)
+
+    # Fallback: look for 🔴 BLOCKER or BLOCKER: lines anywhere
+    if not blockers:
+        for line in pr_body.split("\n"):
+            stripped = line.strip()
+            if "🔴 BLOCKER" in stripped or stripped.startswith("BLOCKER:"):
+                desc = stripped.replace("🔴", "").replace("BLOCKER:", "").replace("BLOCKER", "").strip()
+                if desc:
+                    blockers.append(desc)
+
+    # Fallback: PR comments if no blockers found and pr_number given
+    if not blockers and pr_number:
+        try:
+            stdout, _, rc = gh("pr", "view", str(pr_number), "--repo", REPO, "--comments",
+                               "--json", "body", "--jq", ".body")
+            if rc == 0 and stdout.strip():
+                # Recurse with comment body as pr_body
+                return extract_blockers_from_pr(stdout)
+        except Exception:
+            print("  ⚠ Failed to fetch PR comments for blocker extraction", flush=True)
+
+    # Filter out ARCHITECTURAL blockers
+    filtered = [b for b in blockers if "ARCHITECTURAL" not in b.upper() and "ARCHITECTURE VIOLATION" not in b.upper()]
+
+    return filtered
+
+
 def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, branch, depth, mode, is_next):
     """Phase 2: Coder — spawn coder, retry loop, TDD verification. Returns dict."""
     global PROJECT_DIR, REPO, DEFAULT_BRANCH, TEST_CMD, BUILD_CMD, LINT_CMD
