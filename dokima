@@ -2008,6 +2008,28 @@ def extract_blockers_from_pr(pr_body, pr_number=None):
     return filtered
 
 
+def extract_file_paths(text):
+    """Extract file paths from blocker descriptions or task lists.
+    Matches backtick-quoted paths like `src/app/layout.tsx:29-33` or
+    `src/components/Sidebar.tsx`, stripping line numbers.
+    Returns sorted unique list of relative paths."""
+    paths = set()
+    # Pattern: backtick-quoted paths with optional line numbers
+    for match in re.finditer(r'`([^`]+\.[a-z]{2,6}(?::\d+(?:-\d+)?)?)`', text):
+        raw = match.group(1)
+        # Strip line numbers
+        path = re.sub(r':\d+(?:-\d+)?', '', raw)
+        # Normalize: remove leading ./ or src/ if it's a relative reference
+        if path.startswith('./'):
+            path = path[2:]
+        # Only keep paths that look like real files (not URLs or commands)
+        # Require a / — bare filenames like 'layout.tsx' are ambiguous
+        if '/' in path:
+            if not path.startswith('http') and not path.startswith('git '):
+                paths.add(path)
+    return sorted(paths)
+
+
 def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
     """Fix-mode orchestrator: detect BLOCKED PR, extract blockers, run fix pipeline."""
     global PROJECT_DIR, REPO, DEFAULT_BRANCH, TEST_CMD, BUILD_CMD
@@ -2166,6 +2188,15 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
     )
     for i, task in enumerate(fix_tasks, 1):
         fix_prompt += f"{i}. {task}\n"
+
+    # Step 6b: Extract target file paths from blocker text
+    target_files = extract_file_paths("\n".join(fix_tasks))
+    if target_files:
+        fix_prompt += "\n### Target Files (start here — read these first)\n"
+        for f in target_files:
+            fix_prompt += f"- {f}\n"
+        fix_prompt += "\n"
+
     fix_prompt += (
         "\n### Constraints\n"
         "- FIX MODE: only fix the listed blockers. Do NOT add features.\n"
@@ -2175,6 +2206,9 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
         "- Single commit message: `fix: address TL review blockers`\n"
         "- Run BUILD_CMD + TEST_CMD before pushing.\n"
         "- If unable to fix a blocker, report: ⚠ CODER UNABLE TO FIX: <reason>\n"
+        "- ⚡ PERFORMANCE: Read the target files above FIRST. Only explore beyond\n"
+        "  them if you need context to understand a blocker. Do NOT read the entire\n"
+        "  codebase before starting.\n"
     )
 
     # Use existing coder invocation pattern
@@ -2287,7 +2321,26 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
             # Fix mode: spec IS the fix prompt (blockers + constraints inline)
             coder_prompt = spec
         else:
-            coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).
+            # Extract target file hints from task extract for faster codebase navigation
+            file_hints = ""
+            if tasks_extract_path and os.path.exists(tasks_extract_path):
+                try:
+                    with open(tasks_extract_path) as f:
+                        task_text = f.read()
+                    target_files = extract_file_paths(task_text)
+                    if target_files:
+                        file_hints = "\n### Target Files (start here — read these first)\n"
+                        for f in target_files[:12]:  # cap at 12 to avoid bloat
+                            file_hints += f"- {f}\n"
+                        file_hints += (
+                            "\n⚡ Read the target files first. Then if needed, explore "
+                            "related tests and adjacent files. Do NOT read the entire "
+                            "codebase before starting.\n"
+                        )
+                except Exception:
+                    pass  # Best-effort — not critical
+
+            coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).{file_hints}
 FIRST: Create and switch to branch '{branch}':
   git checkout -b {branch} 2>/dev/null || git checkout {branch}
   git push -u origin {branch}
