@@ -2055,10 +2055,10 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
     print(f"  URL: {pr_url}\n", flush=True)
 
     # Step 2: Check PR state (EC8: merged, closed)
+    import json as _json
     view_stdout, _, view_rc = gh("pr", "view", str(pr_num), "--repo", REPO,
                                  "--json", "state,merged", "--jq", "{state, merged}")
     if view_rc == 0:
-        import json as _json
         try:
             pr_state = _json.loads(view_stdout)
             if pr_state.get("merged"):
@@ -2069,6 +2069,21 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
                 return
         except _json.JSONDecodeError:
             pass  # Proceed anyway
+
+    # Step 2.5: Check most recent TL review verdict — skip if already APPROVED
+    reviews_out, _, reviews_rc = gh("pr", "view", str(pr_num), "--repo", REPO,
+                                    "--json", "reviews", "--jq", ".reviews")
+    if reviews_rc == 0 and reviews_out.strip():
+        try:
+            reviews = _json.loads(reviews_out)
+            if reviews:
+                latest_body = (reviews[-1].get("body") or "").upper()
+                if "VERDICT: APPROVED" in latest_body or "\nAPPROVED" in latest_body:
+                    print(f"  ✅ PR #{pr_num} already APPROVED in most recent review — nothing to fix.", flush=True)
+                    print(f"  {pr_url}", flush=True)
+                    return
+        except (_json.JSONDecodeError, IndexError, KeyError):
+            pass  # Proceed — best-effort check
 
     # Step 3: Extract blockers (EC13: no TL review fallback)
     blockers = extract_blockers_from_pr(pr_body, pr_number=pr_num)
