@@ -11,7 +11,8 @@ This repo IS the panel — you don't run the panel on itself.
 
 ## Commands
 - Test: `python3 -m pytest tests/ -q`
-- Syntax check: `python3 -c "compile(open('dokima').read(), 'dokima', 'exec')"`
+- Build: `python3 -c "compile(open('dokima').read(), 'dokima', 'exec')"`
+- Lint: `python3 -m py_compile dokima`
 - Verify nm script: `bash -n ~/bin/nm`
 - Verify vet script: `bash -n ~/bin/vet`
 
