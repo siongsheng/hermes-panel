@@ -2550,6 +2550,16 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
                 r'\n## Review\n\n.*?(?=\n## |\Z)',
                 '', existing_body, flags=re.DOTALL
             )
+            # Append correct Review section with fix verdict
+            review_block = (
+                f"\n\n## Review\n\n"
+                f"**Verdict:** {fix_verdict}  \n"
+                f"**Risk:** LOW\n\n"
+                f"### Re-reviewed Blockers\n"
+            )
+            for b in blockers:
+                review_block += f"- {b.strip()} → {'✅ Resolved' if fix_verdict == 'APPROVED' else '⚠️ Pending'}\n"
+            existing_body += review_block
             new_body = f"{resolution}\n{existing_body}" if existing_body else resolution
             _, edit_err, edit_rc = gh("api",
                 f"repos/{REPO}/pulls/{pr_num}",
