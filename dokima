@@ -5,7 +5,7 @@ Usage: dokima "Feature description" [project_dir]
 Flow: Strategist → User Clarifications → Strategist Refine → TL Spec Pre-Review → Orchestrator Gate → Human Gate → Coder(branch) → vet(validate) → nm(adversarial+PR) → Tech Lead(spec review) → Report
 Output: Live to terminal + saved to /tmp/dokima-output.txt
 """
-import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal
+import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal, datetime
 
 REAL_HOME = pwd.getpwuid(os.getuid()).pw_dir
 HERMES = os.path.join(REAL_HOME, ".hermes")
@@ -1860,6 +1860,9 @@ def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, ve
     print(f"Full log:   {OUTPUT_LOG}")
     print("✓ Pipeline complete.")
 
+    # Auto-refresh codebase map after pipeline completes
+    generate_codebase_map(PROJECT_DIR)
+
     if is_next:
         roadmap_path = os.path.join(PROJECT_DIR, "specs", "roadmap.md")
         fid_match = re.match(r'(F\d{3})', PANEL_FEATURE) if PANEL_FEATURE else None
@@ -2028,6 +2031,207 @@ def extract_file_paths(text):
             if not path.startswith('http') and not path.startswith('git '):
                 paths.add(path)
     return sorted(paths)
+
+
+def generate_codebase_map(project_dir, full=False):
+    """Generate a deterministic codebase map for the coder to read at session start.
+    Uses file hashes to skip unchanged files (incremental mode).
+    Output: specs/codebase-map.md with directory tree + per-file descriptions.
+    Returns True if map was updated."""
+    specs_dir = os.path.join(project_dir, "specs")
+    map_path = os.path.join(specs_dir, "codebase-map.md")
+    cache_path = os.path.join(specs_dir, ".map-cache.json")
+    os.makedirs(specs_dir, exist_ok=True)
+
+    # Load cache
+    cache = {}
+    if not full and os.path.exists(cache_path):
+        try:
+            with open(cache_path) as f:
+                cache = json.loads(f.read())
+        except (json.JSONDecodeError, IOError):
+            cache = {}
+
+    # Tech stack detection (heuristic)
+    tech = []
+    if os.path.exists(os.path.join(project_dir, "package.json")):
+        try:
+            with open(os.path.join(project_dir, "package.json")) as f:
+                pkg = json.loads(f.read())
+            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+            if "next" in deps: tech.append(f"Next.js {deps['next'].lstrip('^~')}")
+            if "react" in deps: tech.append(f"React {deps['react'].lstrip('^~')}")
+            if "tailwindcss" in deps: tech.append("Tailwind CSS")
+            if "typescript" in deps: tech.append("TypeScript")
+            if "vitest" in deps: tech.append("Vitest")
+        except Exception:
+            pass
+    if os.path.exists(os.path.join(project_dir, "Cargo.toml")):
+        tech.append("Rust")
+    if os.path.exists(os.path.join(project_dir, "pyproject.toml")):
+        tech.append("Python")
+
+    # Read AGENTS.md for commands
+    agents_path = os.path.join(project_dir, "AGENTS.md")
+    test_cmd = build_cmd = lint_cmd = "?"
+    if os.path.exists(agents_path):
+        try:
+            with open(agents_path) as f:
+                agents = f.read()
+            for cmd_name, prefix in [("test", "Test:"), ("build", "Build:"), ("lint", "Lint:")]:
+                m = re.search(rf'{prefix}\s+(.+)', agents)
+                if m:
+                    cmd = m.group(1).strip().rstrip('.')
+                    if cmd_name == "test": test_cmd = cmd
+                    elif cmd_name == "build": build_cmd = cmd
+                    elif cmd_name == "lint": lint_cmd = cmd
+        except Exception:
+            pass
+
+    # Build directory tree and analyze changed files
+    source_exts = {'.py', '.ts', '.tsx', '.js', '.jsx', '.rs', '.go', '.css', '.scss',
+                   '.md', '.json', '.yaml', '.yml', '.toml', '.sh', '.bash'}
+    skip_dirs = {'node_modules', '.git', '__pycache__', '.venv', 'venv', 'target',
+                 '.next', 'dist', 'build', '.turbo', '.hermes', 'specs', '.map-cache.json'}
+
+    tree_lines = []
+    changed = False
+    new_cache = {}
+    analyzed_files = 0
+
+    for dirpath, dirnames, filenames in os.walk(project_dir):
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs and not d.startswith('.')]
+        rel_dir = os.path.relpath(dirpath, project_dir)
+        if rel_dir == '.':
+            rel_dir = ''
+
+        for fname in sorted(filenames):
+            if not any(fname.endswith(ext) for ext in source_exts):
+                continue
+            fpath = os.path.join(dirpath, fname)
+            rel_path = os.path.join(rel_dir, fname) if rel_dir else fname
+
+            # Compute hash
+            try:
+                with open(fpath, 'rb') as f:
+                    import hashlib
+                    fhash = hashlib.md5(f.read()).hexdigest()
+            except Exception:
+                continue
+
+            entry = cache.get(rel_path, {})
+            old_hash = entry.get("hash", "")
+
+            description = ""
+            if old_hash == fhash and not full:
+                # Unchanged — reuse cached description
+                description = entry.get("desc", "")
+            else:
+                # Changed or new — analyze
+                try:
+                    with open(fpath, errors='replace') as f:
+                        content = f.read()
+                    description = _describe_file(fname, content, rel_path)
+                    changed = True
+                except Exception:
+                    description = ""
+
+            new_cache[rel_path] = {"hash": fhash, "desc": description}
+
+            # Tree entry
+            indent = "  " * rel_path.count(os.sep)
+            tree_lines.append(f"{indent}{fname}")
+            if description:
+                tree_lines[-1] += f"  — {description}"
+
+            analyzed_files += 1
+
+    if not changed and os.path.exists(map_path) and not full:
+        return False  # Nothing changed, no need to rewrite
+
+    # Write map
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    project_name = os.path.basename(os.path.abspath(project_dir))
+    mode = "full" if full else "incremental"
+
+    map_content = f"""## Project: {project_name}
+## Tech: {', '.join(tech) if tech else 'detected at runtime'}
+## Generated: {now} ({mode} | {analyzed_files} files)
+
+## Tree
+{chr(10).join(tree_lines)}
+
+## Commands
+- test: {test_cmd}
+- build: {build_cmd}
+- lint: {lint_cmd}
+"""
+    with open(map_path, 'w') as f:
+        f.write(map_content)
+    with open(cache_path, 'w') as f:
+        json.dump(new_cache, f, indent=2)
+
+    print(f"  📄 Codebase map: {map_path} ({analyzed_files} files, {mode})", flush=True)
+    return True
+
+
+def _describe_file(filename, content, rel_path):
+    """Extract a one-line description from a source file.
+    Uses exports, JSDoc, docstrings, and inferred roles."""
+    lines = content.split('\n')
+    ext = os.path.splitext(filename)[1]
+    basename = os.path.splitext(filename)[0]
+
+    # Try first docstring/comment
+    for line in lines[:10]:
+        line = line.strip()
+        if line.startswith('# ') or line.startswith('// '):
+            desc = line[2:].strip()
+            if len(desc) > 5:
+                return desc
+        if line.startswith('/**') or line.startswith('/*'):
+            continue
+    # Try JSDoc
+    for i, line in enumerate(lines):
+        if '/**' in line and i + 1 < len(lines):
+            next_line = lines[i + 1].strip().lstrip('*').strip()
+            if next_line and len(next_line) > 5:
+                return next_line
+
+    # Exports for JS/TS
+    if ext in ('.ts', '.tsx', '.js', '.jsx'):
+        exports = []
+        for line in lines[:50]:
+            m = re.search(r'export\s+(?:default\s+)?(?:function|class|const|interface|type|enum)\s+(\w+)', line)
+            if m:
+                exports.append(m.group(1))
+        if exports:
+            return f"Exports: {', '.join(exports[:5])}"
+
+    # Functions/classes for Python
+    if ext == '.py':
+        exports = []
+        for line in lines[:50]:
+            m = re.search(r'^(?:def|class)\s+(\w+)', line)
+            if m:
+                exports.append(m.group(1))
+        if exports:
+            return f"Exports: {', '.join(exports[:5])}"
+
+    # Fallback: infer from filename
+    role_map = {
+        'layout': 'RootLayout: <html> + <body> + children',
+        'page': 'Page component',
+        'globals': 'Global styles / CSS variables',
+        'config': 'Configuration / constants',
+        'setup': 'Test setup / fixtures',
+        'index': 'Entry point / barrel export',
+    }
+    for key, desc in role_map.items():
+        if key in basename.lower():
+            return desc
+
+    return ""
 
 
 def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
@@ -2315,6 +2519,10 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
         print(f"  ❌ Fix failed — coder could not complete.", flush=True)
         print(f"  {pr_url}", flush=True)
 
+    # Auto-refresh codebase map after fix completes
+    if not coder_failed:
+        generate_codebase_map(project_dir)
+
 
 def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, branch, depth, mode, is_next):
     """Phase 2: Coder — spawn coder, retry loop, TDD verification. Returns dict."""
@@ -2332,9 +2540,22 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
             print("\n── Phase 2: Coder (feature branch) ──", flush=True)
 
         spec_ref = f"{spec_path} for context" if spec_path else "the PR blocker descriptions above"
+
+        # Codebase map hint — coder reads this INSTEAD of exploring the full codebase
+        map_path = os.path.join(PROJECT_DIR, "specs", "codebase-map.md")
+        map_hint = ""
+        if os.path.exists(map_path):
+            map_hint = (
+                f"\n\n⚡ CODING STARTUP: Read {map_path} FIRST "
+                f"(~{os.path.getsize(map_path)} bytes). "
+                "It contains the directory tree, tech stack, file descriptions, "
+                "and commands. Use it instead of reading every file to understand "
+                "the codebase. Only read individual files when you need implementation details."
+            )
+
         if mode == "fix" and spec:
             # Fix mode: spec IS the fix prompt (blockers + constraints inline)
-            coder_prompt = spec
+            coder_prompt = spec + map_hint
         else:
             # Extract target file hints from task extract for faster codebase navigation
             file_hints = ""
@@ -2355,7 +2576,7 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
                 except Exception:
                     pass  # Best-effort — not critical
 
-            coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).{file_hints}
+            coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).{map_hint}{file_hints}
 FIRST: Create and switch to branch '{branch}':
   git checkout -b {branch} 2>/dev/null || git checkout {branch}
   git push -u origin {branch}
@@ -3499,6 +3720,8 @@ def main():
     is_status = False
     is_list_crons = False
     is_fix = False
+    is_map = False
+    map_full = False
     # --fix mode toggles (flags with env var fallbacks)
     fix_all = False
     skip_autofix = False
@@ -3544,6 +3767,13 @@ def main():
             continue
         if arg == "--fix":
             is_fix = True
+            continue
+        if arg == "--map":
+            is_map = True
+            continue
+        if arg == "--map-full":
+            is_map = True
+            map_full = True
             continue
         if arg == "--fix-all":
             fix_all = True
@@ -3614,8 +3844,8 @@ def main():
             break
 
     # ── Determine PROJECT_DIR and feature ──
-    if is_next or is_stop or is_kill or is_status or is_fix:
-        if is_stop or is_kill or is_status:
+    if is_next or is_stop or is_kill or is_status or is_fix or is_map:
+        if is_stop or is_kill or is_status or is_map:
             if len(filtered_argv) >= 1:
                 PROJECT_DIR = os.path.abspath(filtered_argv[0])
             else:
@@ -3658,6 +3888,9 @@ def main():
         handle_status(PROJECT_DIR)
     if is_list_crons:
         handle_list_crons()
+    if is_map:
+        generate_codebase_map(PROJECT_DIR, full=map_full)
+        return
 
     # ── INIT MODE: discovery & constitution, no pipeline ──
     if not is_next and feature == "init":
