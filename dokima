@@ -3459,9 +3459,13 @@ def main():
                 PROJECT_DIR = os.getcwd()
             PANEL_FEATURE = f"fix: {PROJECT_DIR}"
         else:
-            # --next: first arg is feature, second is project dir
-            PROJECT_DIR = os.path.abspath(filtered_argv[1]) if len(filtered_argv) >= 2 else os.getcwd()
-            feature = filtered_argv[0] if filtered_argv else ""
+            # --next: if two+ args, first is feature, second is project dir
+            # If one arg, it's the project dir (feature comes from roadmap)
+            if len(filtered_argv) >= 2:
+                PROJECT_DIR = os.path.abspath(filtered_argv[1])
+                feature = filtered_argv[0]
+            else:
+                PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
         if len(filtered_argv) < 1 and not is_help and not is_list_crons:
@@ -3577,6 +3581,14 @@ def main():
             _cleanup_lock()
             return
         PANEL_FEATURE = feature
+
+    # ── Pre-pipeline stop file check ──
+    sp = _stop_path(PROJECT_DIR)
+    if os.path.exists(sp):
+        print("  ⚠ Stop file detected — halting before pipeline")
+        os.remove(sp)
+        _cleanup_lock()
+        return
 
     # ── RUN PIPELINE ──
     if is_continuous:
