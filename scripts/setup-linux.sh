@@ -310,6 +310,8 @@ GLOB_DIR="$HERMES_HOME/skills/$SKILLS_DIR"
 
 deploy_skill "spec-strategist-lite"          "$STRAT_DIR"
 deploy_skill "ponytail-guard"                "$STRAT_DIR"
+deploy_skill "spec-kit"                      "$STRAT_DIR"
+deploy_skill "saas-ideation"                 "$STRAT_DIR"
 deploy_skill "ai-coding-best-practices-lite" "$COD_DIR"
 deploy_skill "adversarial-review-lite"        "$TL_DIR"
 deploy_skill "ponytail-guard"                "$TL_DIR"
