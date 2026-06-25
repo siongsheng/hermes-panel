@@ -1062,7 +1062,8 @@ def spawn_coder_in_worktree(task: Task, worktree_path: str, spec_path: str,
                             tasks_extract_path: str = "") -> subprocess.Popen:
     """Spawn a coder agent in an isolated worktree. Returns the Popen process."""
     spec_ref = tasks_extract_path if tasks_extract_path else spec_path
-    coder_prompt = f"""Read the task breakdown at {spec_ref} (full spec: {spec_path} for context).
+    spec_ctx = f"{spec_path} for context" if spec_path else "the task description"
+    coder_prompt = f"""Read the task breakdown at {spec_ref} (full spec: {spec_ctx}).
 
 You are working on Task {task.id}: {task.description}
 Files to create/modify: {', '.join(task.files) if task.files else 'determine from spec'}
@@ -2110,9 +2111,19 @@ def run_fix_mode(project_dir):
         for entry in sorted(os.listdir(specs_dir)):
             entry_path = os.path.join(specs_dir, entry)
             if os.path.isdir(entry_path) and entry != "archive":
-                spec_file = os.path.join(entry_path, "spec.md")
-                if os.path.exists(spec_file):
-                    spec_path = spec_file
+                # Try spec.md first, then requirements.md (some projects use different naming)
+                for name in ("spec.md", "requirements.md", "plan.md"):
+                    spec_file = os.path.join(entry_path, name)
+                    if os.path.exists(spec_file):
+                        spec_path = spec_file
+                        break
+                if spec_path:
+                    break
+        # Fallback: check for loose spec files at specs/ root (e.g., f002-home-page-content-spec.md)
+        if not spec_path:
+            for entry in sorted(os.listdir(specs_dir)):
+                if entry.endswith("-spec.md") or entry.endswith("_spec.md"):
+                    spec_path = os.path.join(specs_dir, entry)
                     break
 
     # Step 7: Coder phase (construct fix-only prompt, spawn coder)
@@ -2211,7 +2222,8 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
         else:
             print("\n── Phase 2: Coder (feature branch) ──", flush=True)
 
-        coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_path} for context).
+        spec_ref = f"{spec_path} for context" if spec_path else "the PR blocker descriptions above"
+        coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).
 FIRST: Create and switch to branch '{branch}':
   git checkout -b {branch} 2>/dev/null || git checkout {branch}
   git push -u origin {branch}
