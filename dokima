@@ -2180,9 +2180,9 @@ def run_fix_mode(project_dir, fix_all=False, skip_human_gate=False):
     # Use existing coder invocation pattern
     coder_result = run_phase2_coder(
         feature=pr_title,
-        spec="",
+        spec=fix_prompt,  # Blockers + constraints inlined — coder uses this directly in fix mode
         spec_path=spec_path or "",
-        tasks_extract_path="",  # Blockers ARE the tasks (inlined)
+        tasks_extract_path="",  # Fix mode: blockers are inlined in spec
         pr_sections=f"## Why\n\nFix blockers on PR #{pr_num}: {pr_title}",
         branch=pr_branch,
         depth="full",
@@ -2283,7 +2283,11 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
             print("\n── Phase 2: Coder (feature branch) ──", flush=True)
 
         spec_ref = f"{spec_path} for context" if spec_path else "the PR blocker descriptions above"
-        coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).
+        if mode == "fix" and spec:
+            # Fix mode: spec IS the fix prompt (blockers + constraints inline)
+            coder_prompt = spec
+        else:
+            coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).
 FIRST: Create and switch to branch '{branch}':
   git checkout -b {branch} 2>/dev/null || git checkout {branch}
   git push -u origin {branch}
