@@ -2542,12 +2542,13 @@ def run_phase4_nm(feature, branch, impact, pr_url_in):
 
     pr_url = pr_url_in
 
-    # Extract PR URL from nm output
-    pr_match = re.search(r'(https://github\.com/[^/]+/[^/]+/pull/\d+)', nm_stdout)
-    if pr_match:
-        pr_url = pr_match.group(1)
-        print(f"  PR: {pr_url}", flush=True)
-    else:
+    # Extract PR URL from nm output (only if we don't already have one)
+    if not pr_url:
+        pr_match = re.search(r'(https://github\.com/[^/]+/[^/]+/pull/\d+)', nm_stdout)
+        if pr_match:
+            pr_url = pr_match.group(1)
+            print(f"  PR: {pr_url}", flush=True)
+    if not pr_url:
         stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", branch,
                            "--json", "url", "--jq", ".[0].url")
         if rc == 0 and stdout:
