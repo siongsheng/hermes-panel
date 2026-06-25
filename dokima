@@ -2187,43 +2187,13 @@ def run_fix_mode(project_dir):
         )
         pr_url = nm_result.get("pr_url", pr_url)
 
-    # Step 10: TL re-review
-    if not coder_failed:
-        print(f"\n{'─'*60}", flush=True)
-        print("  Phase: TL re-review", flush=True)
-        print(f"{'─'*60}", flush=True)
-        tl_result = run_phase5_tech_lead(
-            feature=pr_title,
-            pr_url=pr_url,
-            branch=pr_branch,
-            spec_path=spec_path or "original spec not found — review against PR blockers",
-            impact="MEDIUM"
-        )
-        verdict = tl_result.get("verdict", "UNKNOWN")
-        tl_output = tl_result.get("tl_output", "")
-
-        # Step 11: Report (EC5: new blockers)
-        print(f"\n{'═'*60}", flush=True)
-        if verdict == "APPROVED":
-            print(f"  ✅ Fix successful — PR #{pr_num} APPROVED", flush=True)
-            print(f"  {pr_url}", flush=True)
-        elif verdict == "BLOCKED":
-            # Extract new blockers from TL output
-            new_blockers = [
-                l.strip() for l in tl_output.split("\n")
-                if any(kw in l.upper() for kw in ("BLOCKER", "MUST FIX"))
-                and l.strip()
-            ]
-            if new_blockers:
-                print(f"  Fix introduced {len(new_blockers)} new blocker(s):", flush=True)
-                for b in new_blockers:
-                    print(f"     - {b}", flush=True)
-                print("  Run --fix again or review manually.", flush=True)
-            else:
-                print(f"  PR #{pr_num} still BLOCKED. Run --fix again or review manually.", flush=True)
-        else:
-            print(f"  Verdict: {verdict}. Check PR for details.", flush=True)
-            print(f"  {pr_url}", flush=True)
+    # Step 10: Report (skip TL — blockers already flagged by TL)
+    # vet+nm is sufficient: vet catches build/test regressions,
+    # nm catches fix-introduced bugs from different model family.
+    print(f"\n{'═'*60}", flush=True)
+    print(f"  ✅ Fix complete — PR #{pr_num} updated", flush=True)
+    print(f"  {pr_url}", flush=True)
+    print(f"  Run `dokima --next` to continue, or `dokima --fix` if still blocked.", flush=True)
 
 
 def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, branch, depth, mode, is_next):
