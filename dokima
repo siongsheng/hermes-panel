@@ -1793,6 +1793,35 @@ CRITICAL RULES:
 
 # ── extracted phase functions ─────────────────────
 
+def archive_specs_for_feature(spec_path, branch, pr_url):
+    """Move a feature's spec directory to archive/ if PR is merged.
+    Returns True if archived, False otherwise."""
+    if not pr_url:
+        return False
+    import shutil as _shutil
+    pr_num = pr_url.rstrip("/").split("/")[-1]
+    if not pr_num.isdigit():
+        return False
+    try:
+        stdout, _, rc = gh("pr", "view", pr_num, "--json", "merged,state")
+        if rc != 0 or not stdout.strip():
+            return False
+        import json as _json
+        data = _json.loads(stdout)
+        if data.get("merged") is True:
+            parent_dir = os.path.dirname(spec_path)
+            archive_dir = os.path.join(parent_dir, "archive")
+            os.makedirs(archive_dir, exist_ok=True)
+            dirname = os.path.basename(spec_path)
+            archive_target = os.path.join(archive_dir, dirname)
+            if os.path.exists(archive_target):
+                _shutil.rmtree(archive_target)
+            _shutil.move(spec_path, archive_target)
+            return True
+    except Exception:
+        pass
+    return False
+
 def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, verdict, impact, branch, spec_path, strat_output, mode):
     """Post-pipeline: report, roadmap update, auto-merge. Returns (continue_loop, should_stop)."""
     global PANEL_FEATURE, PROJECT_DIR, REPO, OUTPUT_LOG
@@ -1828,8 +1857,8 @@ def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, ve
                 print(f"  {fid} reverted to [ ] Pending — will retry on next run")
 
         elif is_continuous:
-            continue_loop = False
             if pr_url and verdict == "APPROVED":
+                continue_loop = False
                 if impact in ("LOW", "MEDIUM"):
                     merge_result = try_auto_merge(pr_url)
                     if merge_result == "merged":
@@ -1840,8 +1869,11 @@ def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, ve
                         print("\n── Continuous: auto-merge failed")
                 else:
                     print(f"\n── Continuous: risk HIGH — human review required for {fid}")
+            elif verdict in ("BLOCKED", "CHANGES_REQUESTED"):
+                continue_loop = False
+                print(f"  ⚠ PR not approved (verdict: {verdict}) — stopping loop")
             else:
-                continue_loop = True
+                continue_loop = False
 
             if continue_loop:
                 if fid and os.path.exists(roadmap_path):
@@ -1851,13 +1883,22 @@ def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, ve
                     update_status_md(status_path, fid, title, "done",
                                      pr_url=pr_url or "", source="panel")
         else:
-            # --next (non-continuous): mark done immediately
-            if fid and os.path.exists(roadmap_path):
-                update_roadmap_status(roadmap_path, fid, "done")
-                commit_roadmap_update(roadmap_path, fid, "done")
-                status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
-                update_status_md(status_path, fid, title, "done",
-                                 pr_url=pr_url or "", source="panel")
+            # --next (non-continuous): only mark done if APPROVED
+            if verdict == "APPROVED":
+                if fid and os.path.exists(roadmap_path):
+                    update_roadmap_status(roadmap_path, fid, "done")
+                    commit_roadmap_update(roadmap_path, fid, "done")
+                    status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
+                    update_status_md(status_path, fid, title, "done",
+                                     pr_url=pr_url or "", source="panel")
+            else:
+                print(f"  ⚠ PR {fid} has verdict: {verdict} — not marking as done. Will retry on next run.")
+
+    # Archive spec if PR was merged (only for approved/merged features)
+    if verdict == "APPROVED" and pr_url and spec_path:
+        archived = archive_specs_for_feature(spec_path, branch, pr_url)
+        if archived:
+            print(f"  Spec archived: {os.path.basename(spec_path)} → specs/archive/")
 
     should_stop = False
     if not is_continuous:
@@ -2678,6 +2719,10 @@ def run_phase3_vet(feature, branch, pr_sections, impact, spec_path):
         coder_failed = True
         verdict = "VET_FAILED"
         return {"nm_output": "", "pr_url": None, "coder_failed": True, "verdict": "VET_FAILED"}
+
+    # Refresh detect_commands after checkout to use feature branch's AGENTS.md
+    global TEST_CMD, BUILD_CMD, LINT_CMD
+    TEST_CMD, BUILD_CMD, LINT_CMD = detect_commands()
 
     # ── Verification loop: fail → coder fixes → re-verify ──
     MAX_VERIFY_RETRIES = 2
@@ -3904,7 +3949,7 @@ def main():
         _cleanup_lock()
         return
 
-    # ── Auto-archive specs from merged PRs ──
+    # ── Auto-archive specs from merged PRs (fallback startup scan) ──
     specs_dir = os.path.join(PROJECT_DIR, "specs")
     archive_dir = os.path.join(specs_dir, "archive")
     if os.path.isdir(specs_dir) and not skip_auto_archive:
@@ -3913,7 +3958,8 @@ def main():
             entry_path = os.path.join(specs_dir, entry)
             if not os.path.isdir(entry_path) or entry == "archive":
                 continue
-            branch_name = f"feat/{entry}"[:80]
+            # Use case-insensitive branch matching: lowercased entry matches slugify'd branch
+            branch_name = f"feat/{entry.lower()}"[:80]
             try:
                 result = subprocess.run(
                     ["gh", "pr", "list", "--repo", REPO, "--head", branch_name,
