@@ -1517,8 +1517,10 @@ def handle_list_crons():
     sys.exit(0)
 
 
-def run_next_setup(interactive: bool = False) -> str | None:
+def run_next_setup(interactive: bool = False, feature_hint: str | None = None) -> str | None:
     """Parse roadmap, pick next feature, mark in-progress, return feature string.
+       If feature_hint is provided (user-specified feature name), search for it
+       in the roadmap instead of using pick_next_feature.
        Returns None if nothing to do. Caller falls through to pipeline after this."""
     global REPO, DEFAULT_BRANCH
 
@@ -1541,8 +1543,22 @@ def run_next_setup(interactive: bool = False) -> str | None:
     if repaired:
         features = parse_roadmap(roadmap_path)
 
-    # 3. Pick next
-    next_feat = pick_next_feature(features)
+    # 3. Pick next — respect user-specified feature hint if provided
+    if feature_hint:
+        hint_upper = feature_hint.upper()
+        # Try exact ID match first, then substring match on title/ID
+        for f in features:
+            if f.id.upper() == hint_upper or feature_hint.lower() in f.title.lower():
+                if f.status == "done":
+                    print(f"  {f.id} is already done. Use --force to re-run.")
+                    sys.exit(0)
+                next_feat = f
+                break
+        if not next_feat:
+            print(f"  Feature '{feature_hint}' not found in roadmap. Available: {[f.id for f in features]}")
+            sys.exit(1)
+    else:
+        next_feat = pick_next_feature(features)
     if not next_feat:
         done_count = sum(1 for f in features if f.status == "done")
         total = len(features)
@@ -4128,7 +4144,8 @@ def main():
     if is_next:
         git("checkout", DEFAULT_BRANCH)
         git("pull", "origin", DEFAULT_BRANCH)
-        feature = run_next_setup(interactive=is_interactive)
+        feature_hint = filtered_argv[0] if len(filtered_argv) >= 2 else None
+        feature = run_next_setup(interactive=is_interactive, feature_hint=feature_hint)
         if feature is None:
             print("Nothing to do.")
             _cleanup_lock()
