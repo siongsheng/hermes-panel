@@ -3320,20 +3320,26 @@ def run_phase1_strategist(feature, user_answers_prefill):
     # ── DAG format enforcement ──
     if not re.search(r'### Task \d+:', strat_output):
         print("  ⚠ No DAG-format tasks (### Task N:) found — re-prompting strategist...", flush=True)
+        # Truncate first output to keep re-prompt tokens reasonable (first 4K chars)
+        truncated = strat_output[:4096] + ("...[truncated]" if len(strat_output) > 4096 else "")
         dag_correction = (
             f"── FORMAT CORRECTION REQUIRED ──\n"
-            f"You were writing a spec for feature: {feature}\n"
+            f"Feature: {feature}\n"
             f"Project: {PROJECT_DIR}\n\n"
-            f"Your previous output did not contain any `### Task N:` headers.\n"
-            f"The panel DAG parser requires EXACTLY this format (three hashes, not four):\n\n"
-            f"### Task 1: Brief description\n"
+            f"Your spec is below. Keep ALL sections (Decision Table, Impact, What Changed,\n"
+            f"Confidence, Impact markers, API/Interface, Security, Documentation) EXACTLY\n"
+            f"as they are. Rewrite ONLY the task breakdown section as ### Task N: headers.\n\n"
+            f"Format:\n"
+            f"### Task N: Brief description\n"
             f"**Files:** path/to/file1, path/to/file2\n"
-            f"**Dependencies:** [none]\n"
+            f"**Dependencies:** [none] or [Task N]\n"
             f"**Parallelizable:** yes or no\n"
             f"**Description:** What this task accomplishes.\n\n"
-            f"Re-output your ENTIRE spec for {feature} with proper ### Task N: format.\n"
-            f"Do NOT write a spec for a different feature. Do NOT search other projects.\n"
-            f"Do NOT use #### (four hashes), bullet points, or numbered lists for tasks."
+            f"DO NOT change the spec content. DO NOT write a new spec. DO NOT change\n"
+            f"the feature, project, or approach. Only add ### Task N: headers above\n"
+            f"each task in the task breakdown section.\n\n"
+            f"── YOUR EXISTING SPEC (preserve this) ──\n\n"
+            f"{truncated}"
         )
         strat_output = spawn_agent("strategist", ["spec-strategist-lite", "ponytail-guard"],
                                    dag_correction, timeout=300, cwd=PROJECT_DIR)
