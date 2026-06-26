@@ -2584,6 +2584,23 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
                         )
                 except Exception:
                     pass  # Best-effort — not critical
+            # Fallback: if task extract is empty, parse spec file directly for file hints
+            if not file_hints and spec_path and os.path.exists(spec_path):
+                try:
+                    with open(spec_path) as f:
+                        spec_text = f.read()
+                    target_files = extract_file_paths(spec_text)
+                    if target_files:
+                        file_hints = "\n### Target Files (start here — read these first)\n"
+                        for f in target_files[:12]:
+                            file_hints += f"- {f}\n"
+                        file_hints += (
+                            "\n⚡ Read the target files first. Then if needed, explore "
+                            "related tests and adjacent files. Do NOT read the entire "
+                            "codebase before starting.\n"
+                        )
+                except Exception:
+                    pass
 
             coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).{map_hint}{file_hints}
 FIRST: Create and switch to branch '{branch}':
@@ -3396,7 +3413,7 @@ def run_phase1_strategist(feature, user_answers_prefill):
     try:
         dag_pre = TaskDAG()
         feature_slug = slugify(feature)
-        dag_pre.parse(spec, feature_slug)
+        dag_pre.parse(strat_output, feature_slug)  # raw output, not extracted spec (extract_agent_messages strips write_file tool output containing tasks)
         if dag_pre.tasks:
             tasks_extract = []
             for t in sorted(dag_pre.tasks.values(), key=lambda x: int(x.id)):
