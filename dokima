@@ -3544,7 +3544,7 @@ Output NOTHING ELSE."""
             impact = marker
             break
     depth_matrix = {
-        ("High", "LOW"):    "coder",
+        ("High", "LOW"):    "vet+nm",   # Minimum: always verify build+test (coder-only = no PR, no verification)
         ("High", "MEDIUM"): "vet+nm",
         ("High", "HIGH"):   "full",
         ("Medium", "LOW"):  "full",
