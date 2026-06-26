@@ -685,6 +685,7 @@ FLAGS:
   --skip-auto-archive  Don't auto-archive merged specs
   --skip-human-gate    Skip Human Gate prompt (for automation)
   --max-parallel=N     Max parallel coder agents (default: 5)
+  --base-branch <b>    Override default branch for PR base (default: detected from origin/HEAD)
 
   All flags also accept their legacy PANEL_* env var equivalents
   (e.g., PANEL_FORCE_FULL=1). Flags take priority.
@@ -2701,7 +2702,7 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
                 f'    ## What Changed — bullet summary of what was implemented (use this exact heading)\n'
                 f'    ## Impact — who/what is affected (from the spec)\n'
                 f'    ## Spec — {spec_path}\n'
-                f'  gh pr create --repo {REPO} --base master --head {branch} --title "{feature}" --body-file /tmp/pr-body.md\n'
+                f'  gh pr create --repo {REPO} --base {DEFAULT_BRANCH} --head {branch} --title "{feature}" --body-file /tmp/pr-body.md\n'
                 f'Report the PR URL.\n'
             )
 
@@ -3095,8 +3096,8 @@ FIRST — read the spec: the chosen approach, API/interface proposal, and task b
 THEN — review the pull request{' at ' + pr_url if pr_url else ' for branch ' + branch}:
 1. Source .env: export $(grep -v '^#' .env | xargs) 2>/dev/null
 2. Fetch PR: gh pr view --repo {REPO} {'--json body,additions,deletions,files,reviews' if pr_url else ''}
-3. Check out branch, review diff: git diff master...{branch}
-4. Verify TDD: git log master..{branch} --oneline — RED before GREEN
+3. Check out branch, review diff: git diff {DEFAULT_BRANCH}...{branch}
+4. Verify TDD: git log {DEFAULT_BRANCH}..{branch} --oneline — RED before GREEN
 5. Read changed files — understand what was built
 
 THREE DIMENSIONS (every finding: severity + dimension + file:line + rule violated):
@@ -3310,7 +3311,7 @@ def run_phase1_strategist(feature, user_answers_prefill):
     2. Read AGENTS.md at {PROJECT_DIR}/AGENTS.md — exact commands, non-standard tooling, permission boundaries.
     3. If .specify/ exists, read .specify/memory/constitution.md and .specify/specs/baseline/spec.md. Otherwise skip.
     3b. If {PROJECT_DIR}/docs/adr/ exists, run `adr list` and read the most recent ADRs — they capture past architectural decisions. Respect them.
-    4. Run `git log --oneline -20` and `git log origin/master..HEAD --oneline` — recent work and unmerged changes.
+    4. Run `git log --oneline -20` and `git log origin/{DEFAULT_BRANCH}..HEAD` — recent work and unmerged changes.
     5. Search for relevant code: rg on patterns related to "{feature}" — find existing abstractions and conventions.
     6. Read the key files — understand the architecture before designing.
 
@@ -3553,7 +3554,7 @@ def run_phase1_strategist(feature, user_answers_prefill):
             for t in sorted(dag_pre.tasks.values(), key=lambda x: int(x.id)):
                 tasks_extract.append(f"### Task {t.id}: {t.description}\n"
                     f"**Files:** {', '.join(t.files) if t.files else 'from spec'}\n"
-                    f"**Dependencies:** {', '.join(t.deps) if t.deps else '[none]'}\n"
+                    f"**Dependencies:** {', '.join(t.dependencies) if t.dependencies else '[none]'}\n"
                     f"**Description:** {t.description}\n")
             with open(tasks_extract_path, "w") as tf:
                 tf.write(f"# Task Breakdown: {feature}\n\n" + "\n".join(tasks_extract))
@@ -3681,7 +3682,7 @@ Output NOTHING ELSE."""
                     for t in sorted(dag_pre.tasks.values(), key=lambda x: int(x.id)):
                         tasks_extract.append(f"### Task {t.id}: {t.description}\n"
                             f"**Files:** {', '.join(t.files) if t.files else 'from spec'}\n"
-                            f"**Dependencies:** {', '.join(t.deps) if t.deps else '[none]'}\n"
+                            f"**Dependencies:** {', '.join(t.dependencies) if t.dependencies else '[none]'}\n"
                             f"**Description:** {t.description}\n")
                     with open(tasks_extract_path, "w") as tf:
                         tf.write(f"# Task Breakdown: {feature}\n\n" + "\n".join(tasks_extract))
@@ -3985,6 +3986,9 @@ def main():
             except ValueError:
                 print(f"  ⚠ Invalid --max-parallel value: {arg}", flush=True)
             continue
+        if arg == "--base-branch":
+            skip_next = True
+            continue
         filtered_argv.append(arg)
 
     # ── Env var fallbacks for flags (flag wins if set, then env var, then default) ──
@@ -4005,6 +4009,13 @@ def main():
         mp = os.environ.get("PANEL_MAX_PARALLEL")
         if mp and mp.isdigit():
             max_parallel_override = int(mp)
+
+    # ── --base-branch flag ──
+    base_branch_override = os.environ.get("PANEL_BASE_BRANCH") or None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--base-branch" and i + 1 < len(sys.argv):
+            base_branch_override = sys.argv[i + 1]
+            break
 
     answers_idx = None
     answers_path = None
@@ -4118,6 +4129,9 @@ def main():
         sys.exit(1)
 
     DEFAULT_BRANCH = _detect_default_branch(PROJECT_DIR)
+    if base_branch_override:
+        DEFAULT_BRANCH = base_branch_override
+        print(f"  ⚡ Base branch override: {DEFAULT_BRANCH}", flush=True)
     _set_gh_token()
     TEST_CMD, BUILD_CMD, LINT_CMD = detect_commands()
 
