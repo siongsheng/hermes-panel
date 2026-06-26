@@ -17,6 +17,7 @@ DEFAULT_BRANCH = "master"  # detected at startup, may be 'main'
 SKIP_AUTOFIX = False       # set from --skip-autofix flag or PANEL_SKIP_AUTOFIX env
 FORCE_FULL = False         # set from --force-full flag or PANEL_FORCE_FULL env
 SKIP_HUMAN_GATE = False    # set from --skip-human-gate flag or PANEL_SKIP_HUMAN_GATE env
+max_parallel_override = None  # set from --max-parallel=N flag in main()
 
 # ── helpers ──────────────────────────────────────
 
@@ -151,8 +152,8 @@ def gh(*args, **kwargs):
 
 
 def _safe_run(cmd_str: str, cwd: str, timeout: int = 300):
-    """Safely run a command string without shell injection via bash -c.
-    Uses shlex.split to parse into argument list. Falls back to bash -lc."""
+    """Safely run a command string without shell injection.
+    Uses shlex.split to parse into argument list."""
     try:
         args = shlex.split(cmd_str)
         return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -854,12 +855,29 @@ def update_roadmap_status(roadmap_path: str, feature_id: str, new_status: str):
 
 
 def commit_roadmap_update(roadmap_path: str, feature_id: str, action: str):
-    """Commit a roadmap status change to the default branch."""
+    """Commit a roadmap status change to the default branch.
+    Also commits STATUS.md, codebase-map.md, .map-cache.json, and any untracked
+    loose spec files in specs/ (F*-spec.md) — so the working tree is clean
+    before the next feature's PR creation."""
     # Ensure we're on default branch
     rel_path = os.path.relpath(roadmap_path, PROJECT_DIR)
     git("checkout", DEFAULT_BRANCH)
     git("pull", "origin", DEFAULT_BRANCH)
     git("add", rel_path)
+    # Also stage STATUS.md (written by update_status_md)
+    status_rel = "specs/STATUS.md"
+    if os.path.exists(os.path.join(PROJECT_DIR, status_rel)):
+        git("add", status_rel)
+    # Also stage codebase map files (written by generate_codebase_map)
+    for map_file in ["specs/codebase-map.md", "specs/.map-cache.json"]:
+        if os.path.exists(os.path.join(PROJECT_DIR, map_file)):
+            git("add", map_file)
+    # Stage any loose spec files the strategist wrote
+    specs_dir = os.path.join(PROJECT_DIR, "specs")
+    if os.path.isdir(specs_dir):
+        for entry in os.listdir(specs_dir):
+            if entry.endswith("-spec.md") and not os.path.isdir(os.path.join(specs_dir, entry)):
+                git("add", os.path.join("specs", entry))
     if action == "start":
         msg = f"chore: mark {feature_id} as in progress [panel]"
     elif action == "revert":
@@ -903,6 +921,10 @@ def auto_repair_status(features: list, roadmap_path: str) -> int:
         git("checkout", DEFAULT_BRANCH)
         git("pull", "origin", DEFAULT_BRANCH)
         git("add", rel_path)
+        # Also stage STATUS.md (modified by update_status_md above)
+        status_rel = os.path.join("specs", "STATUS.md")
+        if os.path.exists(os.path.join(PROJECT_DIR, status_rel)):
+            git("add", status_rel)
         git("commit", "-m", f"chore: auto-repair {repaired} roadmap statuses [panel]")
         git("push", "origin", DEFAULT_BRANCH)
 
@@ -1122,11 +1144,9 @@ def merge_worktree_branches(feature_branch: str, tasks: dict[str, Task],
 
     print(f"\n── Merge Assembly: {len(completed_tasks)} branches → {feature_branch} ──", flush=True)
 
-    # Create feature branch from master
+    # Create feature branch from default
     subprocess.run(["git", "checkout", DEFAULT_BRANCH], cwd=project_dir,
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
-    subprocess.run(["git", "branch", "-D", feature_branch], cwd=project_dir,
-                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
     subprocess.run(["git", "checkout", "-b", feature_branch, DEFAULT_BRANCH], cwd=project_dir,
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
 
@@ -1141,8 +1161,10 @@ def merge_worktree_branches(feature_branch: str, tasks: dict[str, Task],
         if result.returncode != 0:
             print(f"  ❌ Merge conflict merging {task.branch}", flush=True)
             print(f"  {result.stderr[:500]}", flush=True)
-            # Abort merge, return failure
+            # Abort merge, delete feature branch (merge failed)
             subprocess.run(["git", "merge", "--abort"], cwd=project_dir,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            subprocess.run(["git", "branch", "-D", feature_branch], cwd=project_dir,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
             return False
 
@@ -1514,13 +1536,14 @@ def run_next_setup(interactive: bool = False) -> str | None:
 
     # 4. Mark in progress (on default branch)
     update_roadmap_status(roadmap_path, next_feat.id, "in_progress")
-    commit_roadmap_update(roadmap_path, next_feat.id, "start")
 
-    # Update STATUS.md
+    # Update STATUS.md BEFORE commit so it's included
     status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
     branch = f"feat/{slugify(f'{next_feat.id}-{next_feat.title}')[:50]}"
     update_status_md(status_path, next_feat.id, next_feat.title, "in_progress",
                      branch=branch, source="panel")
+
+    commit_roadmap_update(roadmap_path, next_feat.id, "start")
 
     # 5. Return feature string for the pipeline
     feature = f"{next_feat.id}: {next_feat.title}"
@@ -1823,7 +1846,7 @@ def archive_specs_for_feature(spec_path, branch, pr_url):
     return False
 
 def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, verdict, impact, branch, spec_path, strat_output, mode):
-    """Post-pipeline: report, roadmap update, auto-merge. Returns (continue_loop, should_stop)."""
+    """Post-pipeline: report, roadmap update, auto-merge. Returns continue_loop."""
     global PANEL_FEATURE, PROJECT_DIR, REPO, OUTPUT_LOG
     print("\n" + "═" * 55)
     print("  PANEL REPORT")
@@ -1878,19 +1901,19 @@ def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, ve
             if continue_loop:
                 if fid and os.path.exists(roadmap_path):
                     update_roadmap_status(roadmap_path, fid, "done")
-                    commit_roadmap_update(roadmap_path, fid, "done")
                     status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
                     update_status_md(status_path, fid, title, "done",
                                      pr_url=pr_url or "", source="panel")
+                    commit_roadmap_update(roadmap_path, fid, "done")
         else:
             # --next (non-continuous): only mark done if APPROVED
             if verdict == "APPROVED":
                 if fid and os.path.exists(roadmap_path):
                     update_roadmap_status(roadmap_path, fid, "done")
-                    commit_roadmap_update(roadmap_path, fid, "done")
                     status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
                     update_status_md(status_path, fid, title, "done",
                                      pr_url=pr_url or "", source="panel")
+                    commit_roadmap_update(roadmap_path, fid, "done")
             else:
                 print(f"  ⚠ PR {fid} has verdict: {verdict} — not marking as done. Will retry on next run.")
 
@@ -1900,13 +1923,9 @@ def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, ve
         if archived:
             print(f"  Spec archived: {os.path.basename(spec_path)} → specs/archive/")
 
-    should_stop = False
-    if not is_continuous:
-        should_stop = True
     if not continue_loop:
         print("\n── Continuous: stopping loop")
-        should_stop = True
-    return continue_loop, should_stop
+    return continue_loop
 
 
 def discover_blocked_pr():
@@ -3654,8 +3673,8 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill):
                 print("\n── Phase 3: vet — SKIPPED (depth=vet, parallel) ──", flush=True)
                 print("── Phase 4+5: nm+TL — SKIPPED (depth=vet) ──", flush=True)
                 verdict = "APPROVED" if not coder_failed else "CODER_FAILED"
-                continue_loop, should_stop = run_post_pipeline(feature, is_next, is_continuous, True, pr_url, verdict, impact, branch, spec_path, strat_output, mode)
-                if should_stop:
+                continue_loop = run_post_pipeline(feature, is_next, is_continuous, True, pr_url, verdict, impact, branch, spec_path, strat_output, mode)
+                if not continue_loop:
                     return 0
                 return 0
 
@@ -3702,14 +3721,14 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill):
 
     # Post pipeline
     continue_loop = True
-    continue_loop, should_stop = run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, verdict, impact, branch, spec_path, strat_output, mode)
+    continue_loop = run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, verdict, impact, branch, spec_path, strat_output, mode)
     return 0
 
 
 # ── main ──
 
 def main():
-    global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE, DEFAULT_BRANCH, lock_fd, SKIP_AUTOFIX, FORCE_FULL, SKIP_HUMAN_GATE
+    global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE, DEFAULT_BRANCH, lock_fd, SKIP_AUTOFIX, FORCE_FULL, SKIP_HUMAN_GATE, max_parallel_override
     import shutil
     if len(sys.argv) < 2:
         print("Usage: dokima [--next|--continuous|--fix] [--fix-all] [--skip-autofix] [--force-full] [--skip-auto-archive] [--skip-human-gate] [--max-parallel=N] [--interactive] [--answers <json>] 'Feature' [dir]")
