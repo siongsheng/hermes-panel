@@ -234,6 +234,19 @@ def extract_agent_messages(session_output: str) -> str:
     # Fallback for unknown format: return raw output
     return session_output
 
+def clean_spec_content(raw: str) -> str:
+    """Strip model thinking, Ponytail Guard verdicts, and session metadata
+    from strategist output — keep only the actual spec content."""
+    # Remove session resume text and everything after
+    raw = re.sub(r'\nResume this session with:.*', '', raw, flags=re.DOTALL)
+    # Remove Ponytail Guard blocks
+    raw = re.sub(r'\n\s*Ponytail Guard verdict:.*?(\n\n|\Z)', '\n', raw, flags=re.DOTALL)
+    # Remove model chatter lines (sign-off, "do you want me to")
+    raw = re.sub(r'\n\s*(The spec is ready.*|Do you want me to.*|Shall I.*|Let me know if.*)\n.*', '\n', raw, flags=re.IGNORECASE)
+    # Strip leading blank lines
+    raw = raw.strip()
+    return raw
+
 def halt_and_revert(reason, phase, branch):
     """Revert all changes and print failure summary for orchestrator."""
     print(f"\n{'═'*55}", flush=True)
@@ -3481,6 +3494,7 @@ def run_phase1_strategist(feature, user_answers_prefill):
     spec = extract_agent_messages(strat_output)
     if len(spec) < 100 and len(strat_output) > 500:
         spec = strat_output
+    spec = clean_spec_content(spec)
     print(f"  Spec extracted: {len(spec)} chars (from {len(strat_output)} raw)", flush=True)
 
     spec_dir = os.path.join(PROJECT_DIR, "specs")
