@@ -1845,7 +1845,10 @@ def archive_specs_for_feature(spec_path, branch, pr_url):
             dirname = os.path.basename(spec_path)
             archive_target = os.path.join(archive_dir, dirname)
             if os.path.exists(archive_target):
-                _shutil.rmtree(archive_target)
+                if os.path.isdir(archive_target):
+                    _shutil.rmtree(archive_target)
+                else:
+                    os.remove(archive_target)
             _shutil.move(spec_path, archive_target)
             return True
     except Exception:
@@ -3277,9 +3280,29 @@ def run_phase1_strategist(feature, user_answers_prefill):
 
     """
 
-    strat_prompt += """THEN — design the feature. BREVITY IS CORRECTNESS. Overlong specs waste pipeline time.
+    strat_prompt += """THEN — design the feature. BREVITY IS CORRECTNESS.
 
-    1. DECISION TABLE: For novel/complex features, compare ≥2 approaches. For features with an obvious pattern match (visual change, config, docs, standard CRUD), use "SINGLE APPROACH: <one sentence>" — skip the comparison table.
+    ╔═════════════════════════════════════════════════════════════╗
+    ║ TASK FORMAT — THIS IS THE ONLY THING THE PANEL PARSES.    ║
+    ║ If your output does not contain ### Task N: headers, the  ║
+    ║ feature runs SEQUENTIALLY (3x slower), no model upgrade   ║
+    ║ fires, no target file hints, and you will be RE-PROMPTED. ║
+    ║ Do NOT use wave groupings, bullet points, numbered lists, ║
+    ║ or bold text for tasks. ONLY this format:                 ║
+    ║                                                           ║
+    ║ ### Task N: Brief description                             ║
+    ║ **Files:** path/to/file1, path/to/file2                   ║
+    ║ **Dependencies:** [none] or [Task N]                      ║
+    ║ **Parallelizable:** yes or no                             ║
+    ║ **Description:** One sentence.                            ║
+    ║                                                           ║
+    ║ ALL FIVE FIELDS REQUIRED. The panel regex is              ║
+    ║ ^### Task \\d+: — ONLY that pattern is parsed. Not       ║
+    ║ "Wave 1: (T1)", not "- [ ] Task 1", not **Task 1**.       ║
+    ║ Before submitting, search your output for ### Task.        ║
+    ╚═════════════════════════════════════════════════════════════╝
+
+    1. DECISION TABLE: For novel/complex features, compare \u22652 approaches. For features with an obvious pattern match (visual change, config, docs, standard CRUD), use "SINGLE APPROACH: <one sentence>" — skip the comparison table.
 
     2. Impact: <one sentence — what changes for users/developers.>
 
@@ -3342,7 +3365,7 @@ def run_phase1_strategist(feature, user_answers_prefill):
             f"{truncated}"
         )
         strat_output = spawn_agent("strategist", ["spec-strategist-lite", "ponytail-guard"],
-                                   dag_correction, timeout=300, cwd=PROJECT_DIR)
+                                   dag_correction, timeout=600, cwd=PROJECT_DIR)
         print(f"  ✓ Strategist re-run finished ({len(strat_output)} chars)", flush=True)
 
     if _orig_reasoning and os.path.exists(_strat_config):
