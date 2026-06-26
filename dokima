@@ -220,7 +220,7 @@ def extract_pr_sections(spec_text: str, feature: str) -> str:
 
     result = "\n\n".join(parts)
     if len(result) < 100:
-        result = f"## Why\n\n{feature}\n\n## What Changed\n\nSee diff for details."
+        result = f"## Why\n\n{feature}\n\n## Impact\n\nSee What Changed below.\n\n## What Changed\n\nSee diff for details."
     return result
 
 
@@ -2631,7 +2631,8 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
                 f'  Source .env for gh auth: export $(grep -v "^#" .env | xargs) 2>/dev/null\n'
                 f'  Write the PR body to /tmp/pr-body.md with sections:\n'
                 f'    ## Why — the problem statement from the spec (what problem does this solve?)\n'
-                f'    ## Changes — summary of what was implemented\n'
+                f'    ## What Changed — bullet summary of what was implemented (use this exact heading)\n'
+                f'    ## Impact — who/what is affected (from the spec)\n'
                 f'    ## Spec — {spec_path}\n'
                 f'  gh pr create --repo {REPO} --base master --head {branch} --title "{feature}" --body-file /tmp/pr-body.md\n'
                 f'Report the PR URL.\n'
