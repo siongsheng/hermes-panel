@@ -327,19 +327,38 @@ class WorktreeManager:
             print(f"  [worktree] Reusing existing worktree at {path}", flush=True)
             return path
         os.makedirs(self.worktrees_dir, exist_ok=True)
+        # Clean up stale worktrees from crashed runs
+        try:
+            result = subprocess.run(
+                ["git", "worktree", "list", "--porcelain"],
+                cwd=self.project_root, check=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10,
+                text=True
+            )
+            for line in result.stdout.split("\n"):
+                if line.startswith("worktree ") and os.path.abspath(line.split(" ", 1)[1]) == path:
+                    subprocess.run(
+                        ["git", "worktree", "remove", "--force", path],
+                        cwd=self.project_root,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+                    )
+                    break
+        except Exception:
+            pass
+        # Force-delete stale branch if it exists
         try:
             subprocess.run(
-                ["git", "worktree", "add", "-b", branch, path, "HEAD"],
-                cwd=self.project_root, check=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30
+                ["git", "branch", "-D", branch],
+                cwd=self.project_root,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
             )
-        except subprocess.CalledProcessError:
-            # Branch may exist from a prior run — try without -b
-            subprocess.run(
-                ["git", "worktree", "add", path, branch],
-                cwd=self.project_root, check=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30
-            )
+        except Exception:
+            pass
+        subprocess.run(
+            ["git", "worktree", "add", "-b", branch, path, "HEAD"],
+            cwd=self.project_root, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30
+        )
         print(f"  [worktree] Created: {path} (branch: {branch})", flush=True)
         return path
 
