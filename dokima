@@ -71,7 +71,7 @@ def call_agent(port, system_prompt, user_prompt, model="deepseek-v4-pro", max_to
     return {"content": resp["choices"][0]["message"]["content"],
             "tokens": resp["usage"]["completion_tokens"]}
 
-def spawn_agent(profile, skills, prompt, timeout=600, cwd=None):
+def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None):
     """Spawn a Hermes agent as a subprocess. Returns stdout or raises on failure."""
     cmd = [HERMES_BIN, "--profile", profile, "--yolo"]
     for s in skills:
@@ -1214,7 +1214,7 @@ def run_parallel_coders(tasks: dict[str, Task], waves: list[list[str]],
                 wt_path = worktrees.create(tid, task.branch)
                 proc = spawn_coder_in_worktree(task, wt_path, spec_path, parent_branch, tasks_extract_path)
                 running[tid] = proc
-                _poll_until_wave_done([tid], running, tasks, locks, timeout=600)
+                _poll_until_wave_done([tid], running, tasks, locks, timeout=900)
         else:
             # Parallel spawn — honour max_parallel cap
             spawned_this_wave = 0
@@ -1241,7 +1241,7 @@ def run_parallel_coders(tasks: dict[str, Task], waves: list[list[str]],
             if overflow:
                 print(f"  ⚠ {len(overflow)} task(s) exceed max_parallel ({max_parallel}) — queued", flush=True)
 
-            _poll_until_wave_done(wave, running, tasks, locks, timeout=600)
+            _poll_until_wave_done(wave, running, tasks, locks, timeout=900)
 
             # Run overflow tasks
             for tid in overflow:
@@ -1256,7 +1256,7 @@ def run_parallel_coders(tasks: dict[str, Task], waves: list[list[str]],
                 wt_path = worktrees.create(tid, task.branch)
                 proc = spawn_coder_in_worktree(task, wt_path, spec_path, parent_branch, tasks_extract_path)
                 running[tid] = proc
-                _poll_until_wave_done([tid], running, tasks, locks, timeout=600)
+                _poll_until_wave_done([tid], running, tasks, locks, timeout=900)
 
         # Report wave results
         for tid in wave:
@@ -2630,7 +2630,7 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
                 f'Report the PR URL.\n'
             )
 
-        coder_output = spawn_agent("coder", ["ai-coding-best-practices-lite"], coder_prompt, timeout=600, cwd=PROJECT_DIR)
+        coder_output = spawn_agent("coder", ["ai-coding-best-practices-lite"], coder_prompt, cwd=PROJECT_DIR)
         print(f"\n✓ Coder finished ({len(coder_output)} chars)", flush=True)
 
         # ── Coder clarification gate ──
@@ -2669,7 +2669,7 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
                 )
                 print(f"\n  ↻ Re-running coder with {len([a for a in user_answers if a])} answer(s)...", flush=True)
                 coder_output = spawn_agent("coder", ["ai-coding-best-practices-lite"],
-                                           coder_prompt_refine, timeout=600, cwd=PROJECT_DIR)
+                                           coder_prompt_refine, cwd=PROJECT_DIR)
                 print(f"  ✓ Coder re-run finished ({len(coder_output)} chars)", flush=True)
             else:
                 print("  → No answers provided — proceeding with original output", flush=True)
@@ -2830,7 +2830,7 @@ Do NOT change tests unless they are wrong. Do NOT change code outside this scope
 WORKING DIRECTORY: {PROJECT_DIR}. Do NOT cd to other directories.
 Report: what was broken, what you fixed, commit hash."""
             spawn_agent("coder", ["ai-coding-best-practices-lite"],
-                        fix_prompt, timeout=600, cwd=PROJECT_DIR)
+                        fix_prompt, cwd=PROJECT_DIR)
             print(f"  ✓ Coder fix attempt finished", flush=True)
         else:
             print(f"\n  🔴 BLOCKED — Verification failed after {MAX_VERIFY_RETRIES} retries", flush=True)
@@ -2965,7 +2965,7 @@ RULES:
 - Run {TEST_CMD} before pushing. Fix if it fails.
 Report: what you fixed, commit hash."""
         spawn_agent("coder", ["ai-coding-best-practices-lite"],
-                    fix_prompt, timeout=600, cwd=PROJECT_DIR)
+                    fix_prompt, cwd=PROJECT_DIR)
         print(f"  ✓ Coder fix finished", flush=True)
 
         # Re-vet after fix
@@ -3029,7 +3029,7 @@ RELEASE: NO
  Use YES + semver or NO for RELEASE.)
 RELEASE determination: Check if this feature introduces new functionality, API changes, or breaking changes visible to users. YES → recommend semver level (patch/minor/major). NO → no release needed."""
     tl_output = spawn_agent("tech-lead", ["adversarial-review-lite", "ponytail-guard"],
-                            tl_prompt, timeout=600, cwd=PROJECT_DIR)
+                            tl_prompt, cwd=PROJECT_DIR)
     print(f"\n✓ Tech Lead finished ({len(tl_output)} chars)", flush=True)
 
     # ── TL AUTO-FIX LOOPBACK ──
@@ -3079,7 +3079,7 @@ RULES:
 - Run {TEST_CMD} + {BUILD_CMD} before pushing. Fix if either fails.
 Report: what you fixed, commit hash."""
             spawn_agent("coder", ["ai-coding-best-practices-lite"],
-                        fix_prompt, timeout=600, cwd=PROJECT_DIR)
+                        fix_prompt, cwd=PROJECT_DIR)
             print(f"  ✓ Coder fix finished", flush=True)
 
             # Re-vet + re-TL
@@ -3089,7 +3089,7 @@ Report: what you fixed, commit hash."""
             if test_result.returncode == 0 and build_result.returncode == 0:
                 print("  ✓ Re-verify passed — re-running Tech Lead with fixes...", flush=True)
                 tl_output = spawn_agent("tech-lead", ["adversarial-review-lite", "ponytail-guard"],
-                                        tl_prompt, timeout=600, cwd=PROJECT_DIR)
+                                        tl_prompt, cwd=PROJECT_DIR)
                 print(f"  ✓ Tech Lead re-run finished ({len(tl_output)} chars)", flush=True)
             else:
                 print("  ⚠ Re-verify failed after auto-fix — proceeding with original TL output", flush=True)
