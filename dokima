@@ -2109,7 +2109,7 @@ def generate_codebase_map(project_dir, full=False):
 
     # Build directory tree and analyze changed files
     source_exts = {'.py', '.ts', '.tsx', '.js', '.jsx', '.rs', '.go', '.css', '.scss',
-                   '.md', '.json', '.yaml', '.yml', '.toml', '.sh', '.bash'}
+                   '.md', '.mdx', '.json', '.yaml', '.yml', '.toml', '.sh', '.bash'}
     skip_dirs = {'node_modules', '.git', '__pycache__', '.venv', 'venv', 'target',
                  '.next', 'dist', 'build', '.turbo', '.hermes', 'specs', '.map-cache.json'}
 
