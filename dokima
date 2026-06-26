@@ -3277,50 +3277,42 @@ def run_phase1_strategist(feature, user_answers_prefill):
 
     """
 
-    strat_prompt += """THEN — design the feature:
+    strat_prompt += """THEN — design the feature. BREVITY IS CORRECTNESS. Overlong specs waste pipeline time.
 
-    1. DECISION TABLE: Compare ≥2 approaches (approach, isolation, faithfulness to patterns, simplicity, verdict). Pick one.
+    1. DECISION TABLE: For novel/complex features, compare ≥2 approaches. For features with an obvious pattern match (visual change, config, docs, standard CRUD), use "SINGLE APPROACH: <one sentence>" — skip the comparison table.
 
-    2. Impact: <one sentence in plain English — how does this affect users/developers? Not technical details, just what changes for them.>
+    2. Impact: <one sentence — what changes for users/developers.>
 
-    3. What Changed: <bullet list of key file changes and what they do>
+    3. What Changed: <bullet list of key files and what they do. Max 6 bullets.>
        - <file>: <what changed>
-       Do NOT use Area/File(s)/Change format. Simple bullets.
 
-    4. CONFIDENCE + IMPACT markers (REQUIRED — exact format):
+    4. CONFIDENCE + IMPACT markers (REQUIRED):
        Confidence: (High)/(Medium)/(Low)
-       High=clear scope, Low=novel/unclear pattern
        Impact: (LOW)/(MEDIUM)/(HIGH)
-       LOW=tests/docs, MEDIUM=DB/API/UI, HIGH=auth/payments/migrations/security
 
-    5. API/INTERFACE PROPOSAL: Function signatures, routes, request/response shapes, data structures. No implementation code.
+    5. API/INTERFACE PROPOSAL: Only if this feature adds/changes APIs, routes, or data structures. For visual-only, docs-only, config-only, or CSS-only changes, write EXACTLY: "N/A — visual/docs/config change only." No further text.
 
-    6. SECURITY CONSIDERATIONS: Auth, injection, rate limiting, data exposure.
+    6. SECURITY CONSIDERATIONS: Only if this feature touches auth, permissions, data exposure, injection surfaces, or rate limiting. For visual/docs/config/CSS changes, write EXACTLY: "N/A — no attack surface change." No further text.
 
-    7. DOCUMENTATION IMPACT (REQUIRED): State whether README.md needs updating.
-       - If YES: what section and what should be added/changed.
-       - If NO: write "README: No change needed."
-       The README lives at {{project_dir}}/README.md. Read it to determine impact.
+    7. DOCUMENTATION IMPACT: "README: No change needed." or a single sentence stating what section changes.
 
-    8. TASK BREAKDOWN — DAG FORMAT MANDATORY. Each task = one 5-15min RED→GREEN TDD cycle. Use EXACTLY:
-
+    8. TASK BREAKDOWN — DAG FORMAT MANDATORY:
     ### Task N: Brief description
     **Files:** path/to/file1, path/to/file2
     **Dependencies:** [none] or [Task N]
     **Parallelizable:** yes or no
-    **Description:** What this task accomplishes, which module, expected behaviour.
+    **Description:** One sentence.
 
-    RULES: Every task MUST start with "### Task N:" and have ALL five fields. Parallelizable:yes only if touching DIFFERENT files from all other tasks. Non-DAG formats (bullet points, numbered lists, bold headers, plain paragraphs) are DISCARDED \u2192 feature runs SEQUENTIALLY (3\u00d7 slower). BEFORE SUBMITTING: search output for "### Task" \u2014 every task must match.
+    BREVITY TARGETS: High confidence → <4,000 chars total. Medium → <6,000 chars. Low → no hard limit. Shorter specs run faster pipelines. Every section you can N/A moves you closer to the target. Count your output before submitting.
 
-    CODER CONSTRAINTS (2026-06-26 — the panel auto-upgrades to v4-pro for ≥8 tasks or --fix mode):
-    - v4-flash (default): aim for 5-8 tasks of ~100-300 lines each. The coder handles moderate complexity well.
-    - v4-pro (≥8 tasks): can handle larger tasks — design for 4-8 tasks of up to 500 lines each.
-    - Prefer medium-sized tasks (5-10) — fewer TDD cycles = faster pipeline. Only go granular (12+) when files collide.
-    - File collision rule: tasks touching the SAME file must be sequential (different waves). Design files so tasks touch different files.
-    - If the feature would need >12 tasks, add a "## Panel Split Recommendation" section suggesting how to split across multiple panel passes.
-    - Each task = one RED→GREEN TDD cycle. One function/component per task. No monolithic prompts.
+    RULES: Every task MUST start with "### Task N:" and have ALL five fields. Non-DAG formats are DISCARDED → feature runs SEQUENTIALLY (3× slower).
 
-    CRITICAL: You are a DESIGNER, not a coder. Output goes to a frontend coder who may copy-paste. Write NO implementation code (function bodies, SQL, HTML, CSS, shell commands). Allowed: pseudo-code, Mermaid diagrams, function SIGNATURES only, route definitions, data structure definitions (field names + types, no impl). Describe WHAT and WHY \u2014 the coder decides HOW."""
+    CODER CONSTRAINTS:
+    - v4-flash (default): 5-8 tasks of ~100-300 lines each.
+    - v4-pro (≥8 tasks): 4-8 tasks of up to 500 lines each.
+    - Tasks touching the SAME file must be sequential (different waves).
+
+    CRITICAL: You are a DESIGNER, not a coder. Write NO implementation code. Describe WHAT and WHY — the coder decides HOW."""
 
     strat_output = spawn_agent("strategist", ["spec-strategist-lite", "ponytail-guard"], strat_prompt, timeout=300, cwd=PROJECT_DIR)
     print(f"\n✓ Strategist finished ({len(strat_output)} chars)", flush=True)
