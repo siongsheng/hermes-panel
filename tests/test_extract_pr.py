@@ -1,43 +1,89 @@
 """Tests for extract_pr_sections() — PR body extraction from specs."""
 import pytest
 
-FULL_SPEC = """Position: This feature adds login to the application.
+FULL_SPEC = """# Login Feature — Spec
 
-IMPACT ASSESSMENT
-Cascading effects: Auth middleware requires token validation on all endpoints.
-Breaking change: API now requires Authorization header.
-Est. Lines: +350
+**Status: In Progress** | **Confidence: High** | **Impact: HIGH**
 
-Area: src/auth/
-File(s): src/auth/login.py, src/auth/models.py
-Change: Add password hashing and JWT token generation with refresh support.
+## 1. Constitution Check
 
-Area: src/middleware/
-File(s): src/middleware/auth.py
-Change: Validate Authorization header on protected routes.
+| Axiom | Verdict |
+|--------|---------|
+| Solves user pain? | YES |
+
+## 2. Decision Table
+
+SINGLE APPROACH: Standard JWT auth with refresh tokens.
+
+## 3. Impact
+
+Auth middleware requires token validation on all endpoints. API now requires Authorization header. Estimated +350 lines.
+
+## 4. What Changed
+
+- `src/auth/login.py` **(NEW)**: Add password hashing and JWT token generation with refresh support
+- `src/auth/models.py` **(NEW)**: User and session models
+- `src/middleware/auth.py` **(NEW)**: Validate Authorization header on protected routes
+
+## 5. API/Interface Proposal
+
+```
+POST /api/auth/login
+POST /api/auth/refresh
+GET /api/auth/me
+```
+
+## 6. Security Considerations
+
+Passwords hashed with bcrypt. JWTs signed with RS256. Refresh tokens rotated on use.
+
+## 8. Task Breakdown
+
+### Task 1: Create auth models
+**Files:** src/auth/models.py
+**Dependencies:** [none]
+**Parallelizable:** no
+**Description:** Define User and Session models with bcrypt password hashing.
+
+### Task 2: Implement login endpoint
+**Files:** src/auth/login.py
+**Dependencies:** [Task 1]
+**Parallelizable:** no
+**Description:** POST /api/auth/login with JWT token generation.
 """
 
-THIN_SPEC = """Position: Add login.
+THIN_SPEC = """# Add Login — Spec
 
-IMPACT ASSESSMENT
-Cascading effects: None.
-Est. Lines: +50
+**Confidence: High** | **Impact: LOW**
+
+## 3. Impact
+
+Add login to the application. Estimated +50 lines.
+
+## 4. What Changed
+
+- `src/auth/login.py` **(NEW)**: Basic login endpoint
 """
+
 
 def test_full_spec_all_sections(panel):
     result = panel.extract_pr_sections(FULL_SPEC, "Login Feature")
     assert "## Why" in result
     assert "Login Feature" in result
-    # Impact + What Changed extracted from IMPACT ASSESSMENT
-    # If extraction fails (format mismatch), fallback kicks in
-    assert "## Impact" in result or "## What Changed" in result
+    assert "## Impact" in result
+    assert "## What Changed" in result
+    # Modern format: extracts Impact paragraph and What Changed bullets
+    assert "Authorization header" in result
+    assert "src/auth/login.py" in result
+
 
 def test_thin_spec_fallback(panel):
     result = panel.extract_pr_sections(THIN_SPEC, "Login")
-    # With THIN_SPEC having IMPACT, it should parse something
-    # The thin spec only has cascading "None" — impact may be empty
     assert "## Why" in result
     assert "Login" in result
+    assert "## Impact" in result
+    assert "## What Changed" in result
+
 
 def test_under_100_chars_fallback(panel):
     result = panel.extract_pr_sections("No spec", "Tiny Feature")
@@ -46,70 +92,96 @@ def test_under_100_chars_fallback(panel):
     assert "## What Changed" in result
     assert "See diff for details" in result
 
+
 def test_format_a_area_file_change(panel):
-    spec = """Position: Fix.
+    """Modern format: Impact paragraph + What Changed bullet list are extracted."""
+    spec = """# Rate Limit — Spec
 
-IMPACT ASSESSMENT
-Area: src/api/
-File(s): src/api/routes.py
-Change: Add rate limiting.
-Est. Lines: +50
-CONFIDENCE: HIGH
+**Confidence: HIGH** | **Impact: MEDIUM**
 
+## 3. Impact
+
+Add rate limiting to the API to prevent abuse.
+
+## 4. What Changed
+
+- `src/api/routes.py` **(MODIFIED)**: Add rate limiting middleware
 """
     result = panel.extract_pr_sections(spec, "Rate Limit")
     assert "src/api/routes.py" in result
     assert "rate limiting" in result.lower()
 
+
 def test_format_b_area_change_no_file(panel):
-    spec = """Position: Fix.
+    """Modern format: Impact paragraph is extracted even without file paths."""
+    spec = """# Defaults — Spec
 
-IMPACT ASSESSMENT
-Area: src/config.py
-Change: Update defaults.
-Lines Est.: +10
-CONFIDENCE: MEDIUM
+**Confidence: MEDIUM** | **Impact: LOW**
 
+## 3. Impact
+
+Update defaults in config.
+
+## 4. What Changed
+
+- `src/config.py` **(MODIFIED)**: Update defaults
 """
     result = panel.extract_pr_sections(spec, "Defaults")
     assert "src/config.py" in result
     assert "Update defaults" in result
 
-def test_cascading_effects_none_skipped(panel):
-    spec = """Position: Fix.
 
-IMPACT ASSESSMENT
-Cascading effects: None
+def test_cascading_effects_none_skipped(panel):
+    """Impact section with 'None' content is still included (it's what the spec says)."""
+    spec = """# Fix — Spec
+
+**Confidence: HIGH** | **Impact: LOW**
+
+## 3. Impact
+
+None. No user-facing changes.
 """
     result = panel.extract_pr_sections(spec, "Fix")
-    # "None" cascading effects should not appear in impact
-    assert "None" not in result.split("## Impact")[-1] if "## Impact" in result else True
+    # "None" impact is genuine spec content — it should appear in Impact
+    assert "## Impact" in result
+
 
 def test_breaking_changes_present(panel):
-    spec = """Position: Fix.
+    """Modern format: breaking change info in Impact section is extracted."""
+    spec = """# Breaking — Spec
 
-IMPACT ASSESSMENT
-Cascading effects: None.
-Breaking change: API response format changed from XML to JSON.
-CONFIDENCE: HIGH
+**Confidence: HIGH** | **Impact: HIGH**
 
+## 3. Impact
+
+API response format changed from XML to JSON. All consumers must update.
+
+## 4. What Changed
+
+- `src/api/format.py` **(MODIFIED)**: Switch from XML to JSON serialization
 """
     result = panel.extract_pr_sections(spec, "Breaking")
     assert "Breaking" in result
     assert "XML" in result or "JSON" in result
 
+
 def test_lines_estimation(panel):
-    spec = """Position: Fix.
+    """Modern format: line count in Impact is preserved."""
+    spec = """# Lines — Spec
 
-IMPACT ASSESSMENT
-Est. Lines: +120
-Area: src/x.py
-Change: Updated something.
-CONFIDENCE: HIGH
+**Confidence: HIGH** | **Impact: LOW**
 
+## 3. Impact
+
+Updated something. Estimated +120 lines.
+
+## 4. What Changed
+
+- `src/x.py` **(MODIFIED)**: Updated something
 """
     result = panel.extract_pr_sections(spec, "Lines")
     assert "120" in result or "lines" in result.lower()
+
 
 def test_empty_spec(panel):
     result = panel.extract_pr_sections("", "Empty")

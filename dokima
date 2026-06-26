@@ -179,14 +179,15 @@ def slugify(text):
 
 def extract_pr_sections(spec_text: str, feature: str) -> str:
     """Extract Why, Impact, and What Changed from the strategist's spec.
-    Returns markdown sections: ## Why, ## Impact, ## What Changed."""
+    Returns markdown sections: ## Why, ## Impact, ## What Changed.
+    Handles both modern (## N. Section) and legacy (Field:) formats."""
 
-    # 1. ## Why — feature description + Position context
+    # 1. ## Why — feature purpose
     why = f"## Why\n\n{feature}"
+    # Legacy: Position: <text>
     pos_m = re.search(
         r'Position:\s*(.+?)(?=\n\s*\n\s*(?:\d\.\s*DECISION|DECISION|IMPACT|CONFIDENCE|### Task|Task \d|\Z))',
-        spec_text, re.DOTALL | re.IGNORECASE
-    )
+        spec_text, re.DOTALL | re.IGNORECASE)
     if pos_m:
         pos = pos_m.group(1).strip()
         pos = re.sub(r'\s+', ' ', pos)
@@ -194,23 +195,39 @@ def extract_pr_sections(spec_text: str, feature: str) -> str:
             pos = pos[:397] + "..."
         why += f"\n\n{pos}"
 
-    # 2. ## Impact — one sentence from strategist, plain English
+    # 2. ## Impact — what's affected (paragraph under ## N. Impact header)
     impact = ""
+    # Modern: ^## N. Impact (section header, not **Impact:** metadata)
     imp_m = re.search(
-        r'Impact:\s*(.+?)(?=\n\s*\n|\n(?:What Changed|Confidence|### Task|\Z))',
-        spec_text, re.DOTALL | re.IGNORECASE
-    )
+        r'^##\s*\d*\.?\s*Impact\s*\n+(.+?)(?=\n##\s|\n###\s|\n\*\*Confidence|\Z)',
+        spec_text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
     if imp_m:
-        impact = f"## Impact\n\n{imp_m.group(1).strip()}"
+        impact_text = imp_m.group(1).strip()
+        if impact_text:
+            impact = f"## Impact\n\n{impact_text}"
+    if not impact:
+        # Legacy: Impact: <text> (colon format)
+        imp_m = re.search(
+            r'Impact:\s*(.+?)(?=\n\s*\n|\n(?:What Changed|Confidence|### Task|\Z))',
+            spec_text, re.DOTALL | re.IGNORECASE)
+        if imp_m and imp_m.group(1).strip():
+            impact = f"## Impact\n\n{imp_m.group(1).strip()}"
 
-    # 3. ## What Changed — bullet list from strategist
+    # 3. ## What Changed — bullet list under ## N. What Changed header
     what_changed = ""
+    # Modern: ^## N. What Changed (bullet list until next ## or EOF)
     wc_m = re.search(
-        r'What Changed:\s*\n((?:\s*[-*]\s*.+\n?)+)',
-        spec_text, re.IGNORECASE
-    )
+        r'^##\s*\d*\.?\s*What\s+Changed\s*\n+((?:\s*[-*]\s*.+(?:\n|$))+)',
+        spec_text, re.IGNORECASE | re.MULTILINE)
     if wc_m:
         what_changed = f"## What Changed\n{wc_m.group(1).strip()}"
+    if not what_changed:
+        # Legacy: What Changed: <bullet list>
+        wc_m = re.search(
+            r'What Changed:\s*\n((?:\s*[-*]\s*.+\n?)+)',
+            spec_text, re.IGNORECASE)
+        if wc_m:
+            what_changed = f"## What Changed\n{wc_m.group(1).strip()}"
 
     parts = [why]
     if impact:
