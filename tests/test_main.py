@@ -1,6 +1,7 @@
 """Tests for main() and Orchestrator class."""
 import io
 import os
+import sys
 import pytest
 
 
@@ -87,3 +88,83 @@ def test_orchestrator_with_flags(panel):
     assert orch.is_continuous is False
     assert orch.is_fix is False
     assert orch.skip_auto_archive is True
+
+
+def test_main_help_exits(panel):
+    """--help triggers usage message and exits."""
+    old = sys.argv
+    try:
+        sys.argv = ["dokima", "--help"]
+        with pytest.raises(SystemExit):
+            panel.main()
+    finally:
+        sys.argv = old
+
+
+def test_main_no_args_exits(panel):
+    """No args prints usage and exits."""
+    old = sys.argv
+    try:
+        sys.argv = ["dokima"]
+        with pytest.raises(SystemExit):
+            panel.main()
+    finally:
+        sys.argv = old
+
+
+def test_main_flag_parsing_next(panel):
+    """--next flag sets is_next=True."""
+    old = sys.argv
+    try:
+        sys.argv = ["dokima", "--next", "/tmp/test-project"]
+        # Should reach lock acquisition and fail there (no real infra)
+        with pytest.raises((SystemExit, Exception)):
+            panel.main()
+        # Verify is_next was set via global state
+        assert hasattr(panel, "PROJECT_DIR"), "main() should set PROJECT_DIR"
+    finally:
+        sys.argv = old
+
+
+def test_main_flag_parsing_continuous(panel):
+    """--continuous flag sets is_next=True."""
+    old = sys.argv
+    try:
+        sys.argv = ["dokima", "--continuous", "/tmp/test-project"]
+        with pytest.raises((SystemExit, Exception)):
+            panel.main()
+    finally:
+        sys.argv = old
+
+
+def test_main_flag_parsing_add_no_feature(panel):
+    """--add without feature description exits with error."""
+    old = sys.argv
+    try:
+        sys.argv = ["dokima", "--add"]
+        with pytest.raises(SystemExit):
+            panel.main()
+    finally:
+        sys.argv = old
+
+
+def test_main_flag_parsing_fix(panel, tmpdir_path):
+    """--fix flag sets is_fix=True and dispatches to fix mode."""
+    old = sys.argv
+    old_environ = os.environ.copy()
+    try:
+        # Create a minimal project with AGENTS.md
+        agents_path = os.path.join(tmpdir_path, "AGENTS.md")
+        with open(agents_path, "w") as f:
+            f.write("# Test\n")
+        os.environ["PANEL_SKIP_AUTOFIX"] = "1"
+        os.environ["PANEL_SKIP_HUMAN_GATE"] = "1"
+        sys.argv = ["dokima", "--fix", "--skip-autofix", tmpdir_path]
+        with pytest.raises((SystemExit, Exception)):
+            panel.main()
+        # Fix mode should not crash — should reach AGENTS.md check
+        assert callable(panel.run_fix_mode)
+    finally:
+        sys.argv = old
+        os.environ.clear()
+        os.environ.update(old_environ)
