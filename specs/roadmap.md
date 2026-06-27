@@ -5,7 +5,7 @@
 ### F002: Pipeline Integration Tests
 **Priority:** P0
 **Dependencies:** None
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a contributor, I run one command and a full pipeline executes against a test repo — strategist reads AGENTS.md, produces a spec, coder implements it, vet runs the build, nm reviews, TL delivers verdict. All 5 phases verified end-to-end. Failures at any phase produce clear diagnostics, not silent exits.
 
 ### F003: Edge Case & Robustness Tests
