@@ -82,3 +82,67 @@ def fake_agents_md(tmpdir_path):
             f.write(content)
         return p
     return _create
+
+
+@pytest.fixture
+def test_repo(tmpdir_path):
+    """Create a minimal git repo with AGENTS.md, a .py file, and an initial commit.
+
+    Returns the path to the repo root.
+    """
+    import subprocess
+
+    # AGENTS.md with test/build/lint commands
+    agents_content = """# Test Project
+
+A minimal test project for pipeline integration tests.
+
+## Commands
+- Test: python3 -m pytest -q
+- Build: python3 -c "compile(open('main.py').read(), 'main.py', 'exec')"
+- Lint: python3 -m py_compile main.py
+
+## Tech
+Python 3.10+
+"""
+    agents_path = os.path.join(tmpdir_path, "AGENTS.md")
+    with open(agents_path, "w") as f:
+        f.write(agents_content)
+
+    # Python module with a function and test
+    main_py = '''"""Main module."""
+def add(a, b):
+    return a + b
+
+
+def subtract(a, b):
+    return a - b
+'''
+    main_path = os.path.join(tmpdir_path, "main.py")
+    with open(main_path, "w") as f:
+        f.write(main_py)
+
+    # Test file
+    test_py = '''"""Tests for main module."""
+from main import add, subtract
+
+
+def test_add():
+    assert add(1, 2) == 3
+
+
+def test_subtract():
+    assert subtract(5, 3) == 2
+'''
+    test_path = os.path.join(tmpdir_path, "test_main.py")
+    with open(test_path, "w") as f:
+        f.write(test_py)
+
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=tmpdir_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir_path, capture_output=True)
+    subprocess.run(["git", "add", "."], cwd=tmpdir_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=tmpdir_path, capture_output=True)
+
+    return tmpdir_path
