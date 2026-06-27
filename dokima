@@ -160,13 +160,22 @@ def gh(*args, **kwargs):
 
 def _safe_run(cmd_str: str, cwd: str, timeout: int = 300):
     """Safely run a command string without shell injection.
-    Uses shlex.split to parse into argument list."""
+    Uses shlex.split to parse into argument list.
+    Returns a CompletedProcess-like object. On timeout, returns object
+    with returncode=124 and timeout error message in stdout."""
+    import subprocess as _sp
     try:
         args = shlex.split(cmd_str)
-        return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              universal_newlines=True, timeout=timeout, cwd=cwd)
+        return _sp.run(args, stdout=_sp.PIPE, stderr=_sp.STDOUT,
+                       universal_newlines=True, timeout=timeout, cwd=cwd)
+    except _sp.TimeoutExpired as e:
+        # Return a synthetic CompletedProcess so callers can check returncode
+        result = _sp.CompletedProcess(args=shlex.split(cmd_str), returncode=124)
+        result.stdout = f"TIMEOUT: {e}"
+        result.stderr = ""
+        return result
     except Exception as e:
-        print(f"  _safe_run: shlex.split failed for '{cmd_str[:100]}': {e}")
+        print(f"  _safe_run: failed for '{cmd_str[:100]}': {e}")
         raise
 
 def slugify(text):
