@@ -4343,7 +4343,10 @@ class Orchestrator:
                 self.cleanup_lock_fn()
 
     def _run_internal(self):
-        """Internal pipeline dispatch (placeholder — subclasses override for testing)."""
+        """Internal pipeline dispatch. Handles setup, lock, fix mode, archive, next-mode, stop."""
+        # Currently a placeholder — core dispatch logic will be extracted from
+        # main() into here. For now, just completes without side effects so
+        # clients using mock I/O don't hang.
         pass
 
 
