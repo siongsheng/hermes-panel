@@ -28,8 +28,9 @@ def test_unsplittable_falls_back_to_bash(panel):
         panel._safe_run("echo \"unclosed", cwd="/tmp", timeout=10)
 
 def test_timeout(panel):
-    with pytest.raises(subprocess.TimeoutExpired):
-        panel._safe_run("sleep 10", cwd="/tmp", timeout=1)
+    result = panel._safe_run("sleep 10", cwd="/tmp", timeout=1)
+    assert result.returncode == 124
+    assert "TIMEOUT" in result.stdout
 
 def test_cwd_respected(panel):
     result = panel._safe_run("pwd", cwd="/tmp", timeout=10)
