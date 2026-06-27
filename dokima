@@ -342,6 +342,55 @@ def detect_commands():
                 lint_cmd = lint_m.group(1).strip()
     return test_cmd, build_cmd, lint_cmd
 
+
+def _detect_referenced_repo(agents_path: str) -> str:
+    """If this project documents an external system (e.g. dokima-docs documents dokima),
+    parse AGENTS.md first line for a GitHub link, check if that repo exists locally,
+    and return its AGENTS.md content + key architecture facts. Returns empty string
+    if no referenced repo is found or accessible."""
+    if not os.path.exists(agents_path):
+        return ""
+    with open(agents_path) as f:
+        # Read first 10 lines — the reference is usually in the opening description
+        header = "".join([f.readline() for _ in range(10)])
+    # Match "Documentation site for [Name](https://github.com/owner/repo)"
+    # or any markdown link with a github.com URL in the header
+    gh_matches = list(re.finditer(
+        r'https?://github\.com/([^/\s)]+)/([^/\s)]+?)(?:\.git)?(?:\)|[\s/#])',
+        header[:3000]))
+    if not gh_matches:
+        return ""
+    ref_context = ""
+    for m in gh_matches:
+        owner, repo = m.group(1), m.group(2)
+        repo_name = repo.rstrip(')').rstrip('/')
+        # Common local paths: ~/<repo>, ~/Projects/<repo>, /home/opc/<repo>
+        candidates = [
+            os.path.expanduser(f"~/{repo_name}"),
+            os.path.expanduser(f"~/Projects/{repo_name}"),
+        ]
+        found = None
+        for cand in candidates:
+            if os.path.isdir(cand) and os.path.exists(os.path.join(cand, "AGENTS.md")):
+                found = cand
+                break
+        if not found:
+            continue
+        try:
+            with open(os.path.join(found, "AGENTS.md")) as ref_f:
+                ref_agents = ref_f.read()[:4000]
+            ref_context += ("\n\nEXTERNAL REFERENCE — This project documents {0}/{1}. "
+                            "The REFERENCED SYSTEM lives at {2}. "
+                            "Its AGENTS.md (below) is THE TRUTH — verify every claim against it. "
+                            "If this reference contradicts what the project being documented says, "
+                            "the reference wins.\n\n"
+                            "REFERENCED AGENTS.md:\n{3}\n--- END EXTERNAL REFERENCE ---\n"
+                            ).format(owner, repo_name, found, ref_agents)
+        except Exception as e:
+            ref_context += ("\n\nNOTE: Could not read AGENTS.md from {0}: {1}\n").format(found, e)
+    return ref_context
+
+
 # ── infrastructure classes ────────────────────────
 
 class WorktreeManager:
@@ -3335,18 +3384,45 @@ def run_phase1_strategist(feature, user_answers_prefill):
                 f.write(_new_yaml)
             print(f"  PANEL_REASONING={_strat_reasoning} (override, was {_orig_reasoning})", flush=True)
 
-    # Existing spec refinement (for --next mode)
-    _existing_spec = os.environ.get("PANEL_EXISTING_SPEC", "")
+    # Check for existing spec at standard path BEFORE spawning strategist.
+    # If a human or prior pipeline already wrote a spec, it is the AUTHORITATIVE SOURCE —
+    # the strategist must validate and refine it, not replace it.
+    _spec_slug = slugify(feature)
+    _standard_spec = os.path.join(PROJECT_DIR, "specs", f"{_spec_slug}-spec.md")
     _refine_note = ""
-    if _existing_spec and os.path.exists(_existing_spec):
+    if os.path.exists(_standard_spec):
+        _spec_size = os.path.getsize(_standard_spec)
+        _refine_note = f"""CRITICAL: A spec already exists at {_standard_spec} ({_spec_size} bytes).
+This spec was written by a human or a prior pipeline run. IT IS THE AUTHORITATIVE SOURCE.
+
+Your job is to VALIDATE, ENHANCE, and FORMAT — NOT rewrite from scratch:
+1. Read the existing spec FIRST — it defines the feature scope, approach, and task breakdown.
+2. Verify it against the current codebase state — has anything changed? Are the assumptions still valid?
+3. Fill gaps — missing sections, unclear task descriptions, missing dependency declarations.
+4. Convert tasks to DAG format (### Task N: headers) if they aren't already.
+5. Keep ALL sections from the original spec UNLESS they are factually wrong vs the codebase.
+   If a section is correct, preserve it verbatim.
+DO NOT: redesign the feature, change scope, add unmentioned features, or rewrite from scratch.
+The existing spec is TRUTH unless it contradicts the current codebase state.
+
+"""
+    # PANEL_EXISTING_SPEC override (internal, from --fix mode)
+    _existing_spec = os.environ.get("PANEL_EXISTING_SPEC", "")
+    if _existing_spec and os.path.exists(_existing_spec) and not _refine_note:
         _refine_note = f"""NOTE: A spec already exists at {_existing_spec}. This feature was previously designed.
         Read the existing spec FIRST. REFINE — do not start from scratch. Identify gaps vs the current
         codebase state, address them, improve the design. Keep what's good. The existing spec is
         authoritative context — you are enhancing it, not replacing it.
 
         """
-    strat_prompt = f"""You are the Strategist for a software project at {PROJECT_DIR}.
 
+    # Detect if this project documents an external system (e.g. docs site for the panel itself)
+    _ref_context = _detect_referenced_repo(os.path.join(PROJECT_DIR, "AGENTS.md"))
+    if _ref_context:
+        print(f"  Detected external reference — injecting {len(_ref_context)} chars of context", flush=True)
+
+    strat_prompt = f"""You are the Strategist for a software project at {PROJECT_DIR}.
+{_ref_context}
     {_refine_note}FIRST — understand the project's PURPOSE, ARCHITECTURE, and RECENT HISTORY:
     1. Read specs/mission.md, specs/tech-stack.md, specs/roadmap.md, specs/conventions.md (if missing, work from AGENTS.md).
     2. Read AGENTS.md at {PROJECT_DIR}/AGENTS.md — exact commands, non-standard tooling, permission boundaries.
