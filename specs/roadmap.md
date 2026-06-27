@@ -29,7 +29,7 @@
 ### F001: Security Hardening
 **Priority:** P0
 **Dependencies:** None
-**Status:** [ ] Pending
+**Status:** [~] In Progress
 **User Story:** As a panel operator, I trust that shell injection, hardcoded secrets, and agent prompt injection are systematically blocked.
 
 ### F006: Error Recovery & Resume
