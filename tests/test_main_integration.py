@@ -190,3 +190,58 @@ class TestPipelineExecution:
                     assert "[x] Done" not in f.read()
         finally:
             sys.argv = old
+
+
+class TestVetPhase:
+    """Phase 3: vet — runs build and test commands from AGENTS.md."""
+
+    def test_vet_runs_commands_from_agents_md(self, tmpdir):
+        """Vet checks out branch, runs TEST_CMD and BUILD_CMD, reports pass/fail.
+        Verifies test_pass and build_pass booleans are set from real command output.
+        """
+        panel = _load()
+        project_dir = _setup_test_project(panel, str(tmpdir))
+
+        with patch.object(panel, 'git', return_value=("", "", 0)):
+            with patch.object(panel, 'gh', return_value=("https://pr.url", "", 0)):
+                with patch.object(panel, 'spawn_agent', return_value="ok"):
+                    with patch.object(panel, 'halt_and_revert'):
+                        result = panel.run_phase3_vet(
+                            feature="Test Feature",
+                            branch="feat/test-feat",
+                            pr_sections="## What Changed\nTest",
+                            impact="MEDIUM",
+                            spec_path=""
+                        )
+
+        # Commands from AGENTS.md were actually run — results set from real output
+        assert result["test_pass"] is True, f"Expected test_pass=True, got {result}"
+        assert result["coder_failed"] is False
+        assert result["build_pass"] is True
+        assert "PASS" in result["nm_output"]
+
+    def test_vet_detects_build_failure(self, tmpdir):
+        """Vet detects build failure, retries, and returns VET_FAILED."""
+        panel = _load()
+        project_dir = _setup_test_project(panel, str(tmpdir))
+
+        # Override AGENTS.md with a failing build command
+        agents_path = os.path.join(project_dir, "AGENTS.md")
+        with open(agents_path, "w") as f:
+            f.write("# Test Project\n\n## Commands\n- Test: `echo tests-pass`\n- Build: `false`\n")
+
+        with patch.object(panel, 'git', return_value=("", "", 0)):
+            with patch.object(panel, 'gh', return_value=("", "", 0)):
+                with patch.object(panel, 'spawn_agent', return_value="ok"):
+                    with patch.object(panel, 'halt_and_revert'):
+                        result = panel.run_phase3_vet(
+                            feature="Test Feature",
+                            branch="feat/test-feat",
+                            pr_sections="## What Changed\nTest",
+                            impact="MEDIUM",
+                            spec_path=""
+                        )
+
+        assert result["coder_failed"] is True
+        assert result["verdict"] == "VET_FAILED"
+        assert "FAIL" in result["nm_output"]
