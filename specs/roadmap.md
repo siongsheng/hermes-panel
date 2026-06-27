@@ -2,12 +2,6 @@
 
 ## Phase 1: Core Stability & Test Coverage
 
-### F001: Security Hardening
-**Priority:** P0
-**Dependencies:** None
-**Status:** [ ] Pending
-**User Story:** As a panel operator, I trust that shell injection, hardcoded secrets, and agent prompt injection are systematically blocked.
-
 ### F002: Pipeline Integration Tests
 **Priority:** P0
 **Dependencies:** None
@@ -32,6 +26,12 @@
 **Status:** [ ] Pending
 **User Story:** As a panel operator, if the primary model provider is down, the panel auto-falls-back to a configured alternative (e.g. deepseek → openrouter → anthropic).
 
+### F001: Security Hardening
+**Priority:** P0
+**Dependencies:** None
+**Status:** [ ] Pending
+**User Story:** As a panel operator, I trust that shell injection, hardcoded secrets, and agent prompt injection are systematically blocked.
+
 ### F006: Error Recovery & Resume
 **Priority:** P1
 **Dependencies:** F002
@@ -42,17 +42,17 @@
 
 ## Phase 2: Pipeline Intelligence
 
-### F007: Strategist Read the Actual Product
-**Priority:** P0
-**Dependencies:** None
-**Status:** [x] Done
-**User Story:** As a panel operator, the strategist reads the AGENTS.md header for GitHub links to the product being documented, finds the local repo, and treats its AGENTS.md as truth — never deriving architecture from the docs site itself.
-
 ### F008: Strategist Respects Existing Specs
 **Priority:** P0
 **Dependencies:** None
 **Status:** [x] Done
 **User Story:** As a panel operator, if I write a spec at `specs/<feature>-spec.md` before running the panel, the strategist uses it as the authoritative source — validating and enhancing, not rewriting from scratch.
+
+### F007: Strategist Read the Actual Product
+**Priority:** P0
+**Dependencies:** None
+**Status:** [x] Done
+**User Story:** As a panel operator, the strategist reads the AGENTS.md header for GitHub links to the product being documented, finds the local repo, and treats its AGENTS.md as truth — never deriving architecture from the docs site itself.
 
 ### F009: Depth Gating Tuning
 **Priority:** P1

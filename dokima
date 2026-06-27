@@ -945,8 +945,9 @@ def pick_next_feature(features: list) -> object:
         print("All pending features are blocked by incomplete dependencies.")
         return None
 
-    # 4. Sort: P0 first, then P1, then P2. Within same priority, file order (by ID).
-    priority_order = {"P0": 0, "P1": 1, "P2": 2}
+    # 4. Sort: by execution priority (P0 first, then P1, P2, P3).
+    # Within same priority, file order — which is already execution-priority order.
+    priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
     unblocked.sort(key=lambda f: (priority_order.get(f.priority, 2), f.id))
 
     return unblocked[0]
@@ -1631,8 +1632,9 @@ def handle_list_crons():
 
 def run_add_to_roadmap(feature_desc, project_dir, priority_hint=None):
     """Add a feature to roadmap.md with auto-determined priority, dependencies,
-    and section placement. Uses keyword heuristics to decide where the new
-    feature belongs in the roadmap structure."""
+    and section placement. Orders features by execution priority within each
+    section: infrastructure/tests first, then critical bugs, resilience,
+    security, features, docs, distribution, icebox."""
 
     roadmap_path = os.path.join(project_dir, "specs", "roadmap.md")
     if not os.path.exists(roadmap_path):
@@ -1650,8 +1652,45 @@ def run_add_to_roadmap(feature_desc, project_dir, priority_hint=None):
         next_num = max(nums) + 1
     new_fid = f"F{next_num:03d}"
 
-    # Determine priority from keywords
     desc_lower = feature_desc.lower()
+
+    # ── Execution priority scoring ──
+    # Domain score (lower = execute first): infrastructure (10) < critical bugs (20)
+    # < resilience (30) < security (40) < features (50) < docs (60) < distribution
+    # (70) < icebox (80). Combined with P-level: score = (P_level * 100) + domain.
+    def _execution_score(fdesc: str, fpriority: str) -> int:
+        """Compute execution priority score for ordering. Lower = execute sooner."""
+        fd = fdesc.lower()
+        # Domain classification
+        if any(w in fd for w in ("test", "integration test", "edge case", "quality gate",
+                                  "deterministic", "ci ", "pipeline test", "spec test")):
+            domain = 10  # Infrastructure/tests — needed first
+        elif any(w in fd for w in ("broken", "blocker", "critical bug", "dead code",
+                                    "cosmetic", "defeated", "wrong command", "hardcode",
+                                    "same model", "fake", "fictional")):
+            domain = 20  # Critical bugs/blockers — broken today
+        elif any(w in fd for w in ("fallback", "recovery", "resume", "retry",
+                                    "timeout", "lock file", "error handl")):
+            domain = 30  # Resilience — prevents catastrophic failure
+        elif any(w in fd for w in ("security", "injection", "vulnerability",
+                                    "auth", "secret", "xss", "csrf")):
+            domain = 40  # Security
+        elif any(w in fd for w in ("docs", "documentation", "readme", "guide",
+                                    "tutorial", "changelog")):
+            domain = 60  # Documentation
+        elif any(w in fd for w in ("installer", "portability", "template", "quickstart",
+                                    "doctor", "config valid", "profile templ",
+                                    "vendor agnostic", "package")):
+            domain = 70  # Distribution/portability
+        elif any(w in fd for w in ("someday", "icebox", "future", "post-stable",
+                                    "nice to have", "maybe")):
+            domain = 80  # Icebox
+        else:
+            domain = 50  # Features (default)
+        p_level = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}.get(fpriority, 1)
+        return p_level * 100 + domain
+
+    # Determine priority from keywords (same logic, but now also used for scoring)
     priority = priority_hint or ""
     if not priority:
         p0_words = ["security", "crash", "data loss", "injection", "vulnerability",
@@ -1668,6 +1707,8 @@ def run_add_to_roadmap(feature_desc, project_dir, priority_hint=None):
         else:
             priority = "P1"
 
+    new_score = _execution_score(feature_desc, priority)
+
     # Determine dependencies from keyword overlap with existing features
     existing_features = {}
     for m in re.finditer(r'^###\s+(F\d{3}):\s*(.+?)$\n(.*?)(?=^###\s+F\d{3}:|^##\s|\Z)',
@@ -1676,27 +1717,6 @@ def run_add_to_roadmap(feature_desc, project_dir, priority_hint=None):
         ftitle = m.group(2).strip()
         fbody = m.group(3)
         existing_features[fid] = {"title": ftitle, "body": fbody}
-
-    # Find section headers
-    sections = []
-    section_pattern = re.compile(r'^##\s+(.+?)$', re.MULTILINE)
-    for sm in section_pattern.finditer(content):
-        sec_start = sm.start()
-        sec_title = sm.group(1).strip()
-        next_sec = section_pattern.search(content, sm.end())
-        sec_end = next_sec.start() if next_sec else len(content)
-        sections.append({"title": sec_title, "start": sec_start, "end": sec_end})
-
-    # Decide section: match priority band
-    target_section = None
-    priority_band = {"P0": "Phase 1", "P1": "Phase 2", "P2": "Phase 3", "P3": "Icebox"}
-    band_key = priority_band.get(priority, "Phase 2")
-    for sec in sections:
-        if sec["title"].startswith(band_key) or band_key.lower() in sec["title"].lower():
-            target_section = sec
-            break
-    if not target_section:
-        target_section = sections[-1] if sections else None
 
     # Find dependencies based on keyword overlap (min 4-char words)
     deps = []
@@ -1719,20 +1739,67 @@ def run_add_to_roadmap(feature_desc, project_dir, priority_hint=None):
 **User Story:** As a user, I can {feature_desc.lower().strip('.')}.
 """
 
-    # Insert into roadmap
-    if target_section:
-        insert_pos = target_section["end"]
-        last_feat = None
-        for fm in re.finditer(r'^###\s+F\d{3}:', content[target_section["start"]:target_section["end"]],
+    # ── Insert at execution-priority position within correct section ──
+    # Find all features in each section with their execution scores
+    section_features = {}  # {section_title: [(start_pos, end_pos, fid, score), ...]}
+    section_pattern = re.compile(r'^##\s+(.+?)$', re.MULTILINE)
+    for sm in section_pattern.finditer(content):
+        sec_title = sm.group(1).strip()
+        sec_start = sm.start()
+        next_sec = section_pattern.search(content, sm.end())
+        sec_end = next_sec.start() if next_sec else len(content)
+        section_features[sec_title] = []
+
+        # Collect features in this section
+        for fm in re.finditer(r'^###\s+(F\d{3}):\s*(.+?)$', content[sec_start:sec_end],
                               re.MULTILINE):
-            last_feat = fm
-        if last_feat:
-            feat_start = target_section["start"] + last_feat.start()
-            next_block = re.search(r'^###\s+F\d{3}:|^##\s', content[feat_start + 1:], re.MULTILINE)
-            if next_block:
-                insert_pos = feat_start + 1 + next_block.start()
-            else:
-                insert_pos = target_section["end"]
+            fid = fm.group(1)
+            ftitle = fm.group(2).strip()
+            abs_start = sec_start + fm.start()
+            # Find end of this feature's block
+            next_feat = re.search(r'^###\s+F\d{3}:|^##\s',
+                                  content[abs_start + 1:sec_end], re.MULTILINE)
+            feat_end = (abs_start + 1 + next_feat.start()
+                       if next_feat else sec_end)
+            # Determine this feature's priority from its body
+            feat_body = content[abs_start:feat_end]
+            prio_m = re.search(r'\*\*Priority:\*\*\s*(P[0-3])', feat_body)
+            feat_priority = prio_m.group(1) if prio_m else "P1"
+            score = _execution_score(ftitle, feat_priority)
+            section_features[sec_title].append((abs_start, feat_end, fid, score))
+
+    # Decide target section
+    target_section = None
+    priority_band = {"P0": "Phase 1", "P1": "Phase 2", "P2": "Phase 3", "P3": "Icebox"}
+    band_key = priority_band.get(priority, "Phase 2")
+    for sec_title in section_features:
+        if sec_title.startswith(band_key) or band_key.lower() in sec_title.lower():
+            target_section = sec_title
+            break
+    if not target_section:
+        target_section = list(section_features.keys())[-1] if section_features else None
+
+    # Insert at execution-priority position
+    if target_section and target_section in section_features:
+        feats = section_features[target_section]
+        # Find insertion point: after the last feature with score <= new_score
+        insert_pos = None
+        for feat_start, feat_end, fid, score in feats:
+            if score > new_score:
+                # Insert before this feature (it has lower execution priority)
+                insert_pos = feat_start
+                break
+        if insert_pos is None:
+            # Append to end of section
+            # Find the end of the section (before next ## or end of file)
+            sec_start = None
+            for sm in section_pattern.finditer(content):
+                if sm.group(1).strip() == target_section:
+                    sec_start = sm.start()
+                    next_sec = section_pattern.search(content, sm.end())
+                    sec_end = next_sec.start() if next_sec else len(content)
+                    insert_pos = sec_end
+                    break
         new_content = content[:insert_pos] + feature_block + "\n" + content[insert_pos:]
     else:
         new_content = content + feature_block
@@ -1744,6 +1811,7 @@ def run_add_to_roadmap(feature_desc, project_dir, priority_hint=None):
     print(f"    Title: {feature_desc}")
     phase_map = {"P0": "Phase 1", "P1": "Phase 2", "P2": "Phase 3", "P3": "Icebox"}
     print(f"    Section: {phase_map.get(priority, 'Phase 2')}")
+    print(f"    Execution score: {new_score} (lower = execute first)")
     return new_fid
 
 
@@ -1954,13 +2022,14 @@ Create {PROJECT_DIR}/specs/roadmap.md using EXACTLY this format for every featur
 
 RULES:
 - Feature IDs: F001, F002, F003... sequential order.
-- Priority: P0 (critical path), P1 (important), P2 (nice to have).
+- Priority: P0 (critical path), P1 (important), P2 (nice to have), P3 (icebox).
 - Dependencies: comma-separated feature IDs that must be [x] Done first. Write "None" if no deps.
 - Status: ALWAYS start with "[ ] Pending". The panel auto-updates these.
 - User Story: standard "As a... I want... so that..." format.
 - Acceptance Criteria: concrete, testable bullets.
-- Group features under ## P0, ## P1, ## P2 headers.
+- Group features under ## Phase headers (Phase 1: Core Stability, Phase 2: Pipeline Intelligence, Phase 3: Distribution, Icebox).
 - Each feature must trace to a user need in mission.md.
+- EXECUTION ORDER (CRITICAL): Within each Phase, order features by what must be built FIRST — not by F-number. The execution order is: infrastructure/tests → critical bugs → resilience → security → features → docs → distribution → icebox. A P0 integration test framework (F002) comes before a P0 security hardening (F001) because you cannot verify security without tests. The panel's `dokima --next` picks the first pending feature in order — make that order correct.
 
 Create {PROJECT_DIR}/specs/conventions.md:
 - Code style, patterns, anti-patterns, boundaries
