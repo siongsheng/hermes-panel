@@ -1,5 +1,6 @@
 """Tests for acquire_lock() — fcntl advisory locking."""
 import os
+import signal
 import sys
 import pytest
 import subprocess
@@ -104,3 +105,42 @@ def test_max_attempts_exhausted(panel, tmpdir_path):
         os.remove(lp)
     except OSError:
         pass
+
+
+def test_signal_handler_calls_cleanup(panel, tmpdir_path):
+    """_signal_handler calls _cleanup_lock on SIGINT."""
+    panel.PROJECT_DIR = tmpdir_path
+    cleanup_called = []
+    original_cleanup = panel._cleanup_lock
+    panel._cleanup_lock = lambda: cleanup_called.append(True)
+    try:
+        panel._signal_handler(signal.SIGINT, None)
+    except SystemExit:
+        pass
+    assert len(cleanup_called) == 1, f"Cleanup not called: {cleanup_called}"
+    panel._cleanup_lock = original_cleanup
+
+
+def test_signal_handler_exits_with_code_1(panel, tmpdir_path):
+    """_signal_handler exits with code 1."""
+    panel.PROJECT_DIR = tmpdir_path
+    original_cleanup = panel._cleanup_lock
+    panel._cleanup_lock = lambda: None
+    try:
+        panel._signal_handler(signal.SIGINT, None)
+        assert False, "Should have raised SystemExit"
+    except SystemExit as e:
+        assert e.code == 1
+    finally:
+        panel._cleanup_lock = original_cleanup
+
+
+def test_cleanup_lock_no_files(panel, tmpdir_path):
+    """_cleanup_lock() handles case where no lock file exists."""
+    panel.PROJECT_DIR = tmpdir_path
+    lp = panel._lock_path()
+    # Ensure no lock file
+    if os.path.exists(lp):
+        os.remove(lp)
+    # Should not crash
+    panel._cleanup_lock()
