@@ -3433,6 +3433,7 @@ def run_phase1_strategist(feature, user_answers_prefill):
     print(f"\n✓ Strategist finished ({len(strat_output)} chars)", flush=True)
 
     # ── DAG format enforcement ──
+    orig_strat_output = strat_output  # save in case re-prompt produces garbage
     if not re.search(r'### Task \d+:', strat_output):
         print("  ⚠ No DAG-format tasks (### Task N:) found — re-prompting strategist...", flush=True)
         # Truncate first output to keep re-prompt tokens reasonable (first 4K chars)
@@ -3450,10 +3451,11 @@ def run_phase1_strategist(feature, user_answers_prefill):
             f"**Dependencies:** [none] or [Task N]\n"
             f"**Parallelizable:** yes or no\n"
             f"**Description:** What this task accomplishes.\n\n"
-            f"DO NOT change the spec content. DO NOT write a new spec. DO NOT change\n"
-            f"the feature, project, or approach. Only add ### Task N: headers above\n"
-            f"each task in the task breakdown section.\n\n"
-            f"── YOUR EXISTING SPEC (preserve this) ──\n\n"
+            f"CRITICAL: Return the COMPLETE spec in your response — every section, every\n"
+            f"field, every line. Do NOT output a summary of changes. Do NOT say 'Done'\n"
+            f"or 'Format fixes applied'. Output the ENTIRE corrected spec as your message.\n"
+            f"Do NOT use write_file — the panel reads your message as the spec.\n\n"
+            f"── YOUR EXISTING SPEC (preserve this, only fix task headers) ──\n\n"
             f"{truncated}"
         )
         strat_output = spawn_agent("strategist", ["spec-strategist-lite", "ponytail-guard"],
@@ -3576,8 +3578,20 @@ def run_phase1_strategist(feature, user_answers_prefill):
     spec = clean_spec_content(spec)
     print(f"  Spec extracted: {len(spec)} chars (from {len(strat_output)} raw)", flush=True)
 
-    # Fallback: if chat spec is suspiciously short, look for write_file output
-    if len(spec) < 500 and len(strat_output) > 2000:
+    # Garbage detection: if spec looks like format-fix chatter, not a real spec
+    _garbage_markers = [
+        r'Done\.\s*Spec\s+saved\s+to', r'Format\s+fixes\s+applied',
+        r'Let\s+me\s+verify', r'I\s+found\s+the\s+full\s+spec',
+        r'Now\s+I\s+understand\s+the\s+full\s+picture',
+    ]
+    _looks_like_garbage = any(
+        re.search(m, spec, re.IGNORECASE) for m in _garbage_markers
+    ) or (len(spec) < 500 and len(strat_output) > 2000)
+
+    # Fallback chain: write_file recovery → original pre-re-prompt spec
+    if _looks_like_garbage:
+        # 1. Try to recover from write_file paths in transcript
+        recovered = False
         wf_matches = re.findall(
             r'(?:write_file|wrote to)\s+(\S+spec\S*\.md)',
             strat_output, re.IGNORECASE)
@@ -3587,13 +3601,27 @@ def run_phase1_strategist(feature, user_answers_prefill):
                     with open(wf_path) as wf:
                         wf_content = wf.read()
                     if len(wf_content) > len(spec):
-                        spec = wf_content
+                        spec = clean_spec_content(wf_content)
                         print(f"  ⚡ Recovered spec from write_file: {wf_path} ({len(spec)} chars)", flush=True)
-                        # Clean the recovered spec too
-                        spec = clean_spec_content(spec)
+                        recovered = True
                 except Exception:
                     pass
-                break  # Use the first valid one found
+                if recovered:
+                    break
+
+        # 2. Fall back to original spec (pre-DAG-re-prompt) if re-prompt happened
+        if not recovered and orig_strat_output and orig_strat_output != strat_output:
+            orig_spec = extract_agent_messages(orig_strat_output, last_only=True)
+            if len(orig_spec) < 100 and len(orig_strat_output) > 500:
+                orig_spec = orig_strat_output
+            orig_spec = clean_spec_content(orig_spec)
+            if len(orig_spec) > len(spec):
+                spec = orig_spec
+                print(f"  ⚡ Recovered spec from original output ({len(spec)} chars)", flush=True)
+                recovered = True
+
+        if not recovered:
+            print(f"  ⚠ Spec may be degraded — garbage markers detected", flush=True)
 
     spec_dir = os.path.join(PROJECT_DIR, "specs")
     os.makedirs(spec_dir, exist_ok=True)
