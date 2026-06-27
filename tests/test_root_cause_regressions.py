@@ -276,7 +276,7 @@ class TestCoderPromptAntiCreep:
         # Within that section, extract_agent_messages must appear before re.search
         dag_section = source[dag_section_start:]
         extract_pos = dag_section.find("extract_agent_messages")
-        regex_pos = dag_section.find("re.search(r'### Task")
+        regex_pos = dag_section.find("re.search(r'^\\s*(?:###\\s*)?Task")
 
         assert extract_pos > 0, "extract_agent_messages not found in DAG section"
         assert regex_pos > 0, "DAG regex check not found in DAG section"
@@ -302,8 +302,142 @@ class TestCoderPromptAntiCreep:
             'if "VERDICT: APPROVED"' in source.replace(' ', '').replace("'", '"') or
             'if "VERDICT: APPROVED"' in source
         )
-        # This test documents the bug. After fix, should use re.findall + [-1]
-        if has_if_elif_chain:
-            # BUG EXISTS — confirmed
-            pass
-        # DESIRED: after fix, uses findall + last index
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Bug 6: DeepSeek outputs "    Task 1:" not "### Task 1:"
+# ═══════════════════════════════════════════════════════════════════
+
+DEEPSEEK_TASK_FORMAT = """    Task 1: Phase 1 — Strategist produces valid spec
+    Files: tests/test_main_integration.py
+    Dependencies: none
+    Parallelizable: yes
+    Description: Test that the strategist phase works.
+
+    Task 2: Phase 1 — Strategist respects existing spec
+    Files: tests/test_main_integration.py
+    Dependencies: none
+    Parallelizable: yes
+    Description: Test spec detection.
+"""
+
+STANDARD_TASK_FORMAT = """### Task 1: Phase 1 — Strategist produces valid spec
+**Files:** tests/test_main_integration.py
+**Dependencies:** [none]
+**Parallelizable:** yes
+**Description:** Test that the strategist phase works.
+
+### Task 2: Phase 1 — Strategist respects existing spec
+**Files:** tests/test_main_integration.py
+**Dependencies:** [none]
+**Parallelizable:** yes
+**Description:** Test spec detection.
+"""
+
+# Real-world output from 2026-06-28 F002 strategist run (DeepSeek v4-pro)
+REAL_DEEPSEEK_OUTPUT = """    Task 1: Phase 1 — Strategist produces valid spec and exits interview mode
+    Files: tests/test_main_integration.py
+    Dependencies: none
+    Parallelizable: yes
+    Description: Test that the strategist phase produces a spec file with required sections.
+
+    Task 3: Phase 2 — Coder produces RED commit then GREEN commit
+    Files: tests/test_main_integration.py
+    Dependencies: none
+    Parallelizable: yes
+    Description: Test that the coder phase produces two commits on the feature branch.
+
+    Task 10: End-to-end — All 5 phases execute in correct order
+    Files: tests/test_main_integration.py
+    Dependencies: none
+    Parallelizable: yes
+    Description: Full pipeline smoke test.
+"""
+
+
+class TestDeepSeekTaskFormat:
+    """Line 552-556, 3734: DAG regex requires '### Task N:' but DeepSeek
+    outputs '    Task N:' (indented, no ### prefix). This causes zero
+    tasks parsed → sequential mode → coder timeout.
+
+    RED tests: call actual dokima functions, verify they FAIL on DeepSeek format."""
+
+    DAG_HEADER = re.compile(r'^\s*(?:###\s*)?Task\s*(\d+)[:\s]', re.MULTILINE)
+
+    def test_dag_parser_rejects_deepseek_format(self, panel):
+        """RED: DAGParser.parse() should find 2 tasks in DeepSeek format.
+        With current strict '### Task N:' regex, it finds ZERO → RED failure."""
+        dag = panel.TaskDAG()
+        dag.parse(DEEPSEEK_TASK_FORMAT, "test-feature")
+        assert len(dag.tasks) == 2, (
+            f"RED: DAGParser found {len(dag.tasks)} tasks, expected 2. "
+            f"DeepSeek format '    Task N:' is invisible to current regex. "
+            f"Fix: make '###' optional in DAGParser regex (line 552-556)."
+        )
+
+    def test_dag_check_now_accepts_deepseek_format(self):
+        """GREEN: Fixed DAG check (line 3734) now detects DeepSeek format.
+        Uses the new regex with optional ### prefix."""
+        agent_text = DEEPSEEK_TASK_FORMAT
+        FIXED_REGEX = r'^\s*(?:###\s*)?Task\s*\d+:'
+        has_dag = bool(re.search(FIXED_REGEX, agent_text, re.MULTILINE))
+        assert has_dag is True, (
+            f"GREEN failure: Fixed regex still doesn't match DeepSeek format. "
+            f"Pattern: {FIXED_REGEX}"
+        )
+
+    def test_deepseek_format_has_task_headers(self):
+        """DESIRED: '    Task 1:' (DeepSeek format) should be detected as DAG."""
+        matches = self.DAG_HEADER.findall(DEEPSEEK_TASK_FORMAT)
+        assert matches == ['1', '2'], (
+            f"FAIL: DeepSeek format not detected. "
+            f"Found {matches}, expected ['1', '2']. "
+            f"Fix: make ### optional in DAG regex."
+        )
+
+    def test_standard_format_still_works(self, panel):
+        """Standard '### Task 1:' format should still be detected after fix."""
+        dag = panel.TaskDAG()
+        dag.parse(STANDARD_TASK_FORMAT, "test-feature")
+        assert len(dag.tasks) == 2, (
+            f"Standard format broken: found {len(dag.tasks)} tasks, expected 2."
+        )
+
+    def test_real_f002_output_parsed(self):
+        """Real DeepSeek output from 2026-06-28 must parse correctly."""
+        matches = self.DAG_HEADER.findall(REAL_DEEPSEEK_OUTPUT)
+        assert matches == ['1', '3', '10'], (
+            f"FAIL: Real F002 strategist output not parsed. "
+            f"Found {matches}, expected ['1', '3', '10']."
+        )
+
+    def test_task_in_prose_not_matched(self):
+        """'Task 13' inside a description should NOT match as a header."""
+        prose = "Description: Test that Task 13 re-prompt fires on missing headers."
+        matches = self.DAG_HEADER.findall(prose)
+        assert matches == [], (
+            f"FAIL: Prose 'Task 13' matched as header. Found {matches}."
+        )
+
+    def test_field_extraction_now_works_without_bold(self):
+        """GREEN: Fixed field regex (lines 563, 568, 575) now extracts
+        '    Files:' without ** markers — DeepSeek's native format."""
+        body = "    Files: tests/a.py, tests/b.py\n    Dependencies: none\n    Parallelizable: yes\n    Description: Do it.\n"
+        FIXED_REGEX = r'^\s*(?:\*\*)?Files?:?(?:\*\*)?\s*(.+)'
+        files_m = re.search(FIXED_REGEX, body, re.MULTILINE)
+        assert files_m is not None, (
+            "GREEN failure: Fixed regex still doesn't match '    Files:'."
+        )
+        assert files_m.group(1).strip() == "tests/a.py, tests/b.py"
+
+        deps_m = re.search(r'^\s*(?:\*\*)?Dependencies?:?(?:\*\*)?\s*(.+)', body, re.MULTILINE)
+        assert deps_m is not None
+
+        par_m = re.search(r'^\s*(?:\*\*)?Parallelizable?:?(?:\*\*)?\s*(.+)', body, re.MULTILINE)
+        assert par_m is not None
+
+    def test_field_extraction_with_bold_still_works(self):
+        """Standard format: '**Files:**' with ** must still extract."""
+        body = "**Files:** tests/a.py\n**Dependencies:** [Task 1]\n**Parallelizable:** yes\n**Description:** Do it.\n"
+        files_m = re.search(r'^\s*(?:\*\*)?Files?:?(?:\*\*)?\s*(.+)', body, re.MULTILINE)
+        assert files_m is not None and files_m.group(1).strip() == "tests/a.py"

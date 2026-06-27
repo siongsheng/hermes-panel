@@ -548,11 +548,12 @@ class TaskDAG:
 
     def parse(self, strategist_output: str, feature_slug: str) -> None:
         """Extract tasks with dependency markers from strategist output."""
-        # Match task blocks: ### Task N: ... with Files/Dependencies/Parallelizable fields
+        # Match task blocks: ### Task N: or Task N: (DeepSeek strips ###)
+        # Anchored to line start, accepts leading whitespace
         task_pattern = re.compile(
-            r'###\s*Task\s*(\d+)[:\s]+(.+?)\n'
-            r'(.*?)(?=###\s*Task\s*\d+|####\s|\Z)',
-            re.DOTALL
+            r'^\s*(?:###\s*)?Task\s*(\d+)[:\s]+(.+?)\n'
+            r'(.*?)(?=^\s*(?:###\s*)?Task\s*\d+|^\s*####\s|\Z)',
+            re.DOTALL | re.MULTILINE
         )
         for m in task_pattern.finditer(strategist_output):
             tid = m.group(1)
@@ -560,19 +561,19 @@ class TaskDAG:
             body = m.group(3)
 
             files = []
-            files_m = re.search(r'\*\*Files?:?\*\*\s*(.+)', body)
+            files_m = re.search(r'^\s*(?:\*\*)?Files?:?(?:\*\*)?\s*(.+)', body, re.MULTILINE)
             if files_m:
                 files = [f.strip() for f in files_m.group(1).split(",")]
 
             deps = []
-            deps_m = re.search(r'\*\*Dependencies?:?\*\*\s*(.+)', body)
+            deps_m = re.search(r'^\s*(?:\*\*)?Dependencies?:?(?:\*\*)?\s*(.+)', body, re.MULTILINE)
             if deps_m:
                 dep_text = deps_m.group(1).strip()
                 if dep_text.lower() not in ("none", "[]", "n/a", ""):
                     deps = re.findall(r'(\d+)', dep_text)
 
             parallel = False
-            par_m = re.search(r'\*\*Parallelizable?:?\*\*\s*(.+)', body)
+            par_m = re.search(r'^\s*(?:\*\*)?Parallelizable?:?(?:\*\*)?\s*(.+)', body, re.MULTILINE)
             if par_m and par_m.group(1).strip().lower() == "yes":
                 parallel = True
 
@@ -3731,7 +3732,7 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
     orig_strat_output = strat_output  # save in case re-prompt produces garbage
     # Check DAG on extracted agent messages, not raw output (which has <thinking> blocks)
     agent_text_for_dag = extract_agent_messages(strat_output)
-    if not re.search(r'### Task \d+:', agent_text_for_dag):
+    if not re.search(r'^\s*(?:###\s*)?Task\s*\d+:', agent_text_for_dag, re.MULTILINE):
         print("  ⚠ No DAG-format tasks (### Task N:) found — re-prompting strategist...", flush=True)
         # Truncate first output to keep re-prompt tokens reasonable (first 4K chars)
         truncated = strat_output[:4096] + ("...[truncated]" if len(strat_output) > 4096 else "")
@@ -3760,7 +3761,7 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
         print(f"  ✓ Strategist re-run finished ({len(strat_output)} chars)", flush=True)
         # Verify re-prompt output
         agent_text_recheck = extract_agent_messages(strat_output)
-        if not re.search(r'### Task \d+:', agent_text_recheck):
+        if not re.search(r'^\s*(?:###\s*)?Task\s*\d+:', agent_text_recheck, re.MULTILINE):
             print("  ⚠ Re-prompt also lacks DAG format — proceeding with degraded (sequential) mode", flush=True)
 
     if _orig_reasoning and os.path.exists(_strat_config):
