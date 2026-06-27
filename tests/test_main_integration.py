@@ -150,7 +150,6 @@ class TestPipelineExecution:
         finally:
             sys.argv = old
 
-    @pytest.mark.skip(reason="Integration test — needs main() refactored to isolate lock/flock from pipeline logic")
     def test_lock_held_and_released(self, tmpdir):
         """Lock is held during pipeline, released after."""
         panel = _load()
@@ -170,7 +169,6 @@ class TestPipelineExecution:
         finally:
             sys.argv = old
 
-    @pytest.mark.skip(reason="Integration test — hangs due to retry loop in unrefactored main()")
     def test_coder_failure_not_marked_done(self, tmpdir):
         """Failed coder should not mark feature as done."""
         panel = _load()

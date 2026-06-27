@@ -366,7 +366,6 @@ Build: clean
 """
 
 class TestClarificationGate:
-    @pytest.mark.skip(reason="select imported locally in main(), not patchable as module attr — needs main() refactor")
     def test_clarification_triggers_questions(self, tmpdir):
         """CLARIFICATION NEEDED in coder output → prompts user."""
         panel = _load()
@@ -398,10 +397,10 @@ class TestClarificationGate:
                  patch("dokima._safe_run", return_value=mock_run), \
                  patch("dokima.subprocess.run", return_value=mock_run), \
                  patch("dokima.time.sleep"), \
-                 patch.object(panel, "sys") as mock_sys, \
-                 patch.object(panel, "select") as mock_sel:
-                mock_sys.stdin.isatty.return_value = False
-                mock_sel.select.side_effect = OSError("no stdin")
+                 patch("dokima.acquire_lock", return_value=(True, None)), \
+                 patch("dokima._cleanup_lock"), \
+                 patch("dokima.sys.stdin.isatty", return_value=False), \
+                 patch.object(panel, "_read_stdin_with_timeout", return_value=""):
                 try:
                     panel.main()
                 except SystemExit:

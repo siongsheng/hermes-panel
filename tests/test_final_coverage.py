@@ -74,6 +74,8 @@ def _run_pipeline(panel, project_dir, spawn_mock, extra_patches=None, is_continu
             patch("dokima._safe_run", return_value=mock_run),
             patch("dokima.subprocess.run", return_value=mock_run),
             patch("dokima.time.sleep"),
+            patch("dokima.acquire_lock", return_value=(True, None)),
+            patch("dokima._cleanup_lock"),
         ]
         if extra_patches:
             patches.extend(extra_patches)
@@ -113,7 +115,6 @@ CLARIFICATION 2: REST or GraphQL?
 """
 
 class TestInterviewGate:
-    @pytest.mark.skip(reason="select.select on mocked sys.stdin fails — needs main() refactor to inject stdin")
     def test_interview_mode_triggers_clarification(self, tmpdir):
         """Strategist in INTERVIEW MODE → non-interactive → skips gracefully."""
         panel = _load()
@@ -128,8 +129,8 @@ class TestInterviewGate:
                 return "RED: a1\nGREEN: b2\nTests: 5 pass\nBuild: clean"
             return "Mock"
 
-        with patch.object(panel, "sys") as mock_sys:
-            mock_sys.stdin.isatty.return_value = False
+        with patch("dokima.sys.stdin.isatty", return_value=False), \
+             patch.object(panel, "_read_stdin_with_timeout", return_value=""):
             _run_pipeline(panel, project_dir, mock)
 
 
