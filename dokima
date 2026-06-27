@@ -3154,7 +3154,7 @@ def run_phase3_vet(feature, branch, pr_sections, impact, spec_path):
         halt_and_revert(f"nm: cannot checkout {branch}", "PHASE 3 (vet)", branch)
         coder_failed = True
         verdict = "VET_FAILED"
-        return {"nm_output": "", "pr_url": None, "coder_failed": True, "verdict": "VET_FAILED"}
+        return {"nm_output": "Checkout: FAILED", "pr_url": None, "coder_failed": True, "verdict": "VET_FAILED", "test_pass": False, "build_pass": False}
 
     # Refresh detect_commands after checkout to use feature branch's AGENTS.md
     global TEST_CMD, BUILD_CMD, LINT_CMD
@@ -3227,7 +3227,13 @@ Report: what was broken, what you fixed, commit hash."""
             print(f"\n  🔴 BLOCKED — Verification failed after {MAX_VERIFY_RETRIES} retries", flush=True)
             print(f"  Coder pushed code that doesn't pass. Must be fixed manually.", flush=True)
             halt_and_revert("nm: verification failed after max retries", "PHASE 3 (Verification)", branch)
-            return {"nm_output": "", "pr_url": None, "coder_failed": True, "verdict": "VET_FAILED"}
+            nm_output = (
+                f"Tests: {tests_passed} passed, {tests_failed} failed\n"
+                f"Build: {'PASS' if build_pass else 'FAIL'}\n"
+                f"PR: N/A\n"
+                f"Risk: {impact}"
+            )
+            return {"nm_output": nm_output, "pr_url": None, "coder_failed": True, "verdict": "VET_FAILED", "test_pass": test_pass, "build_pass": build_pass}
 
     # 4. Create PR (verification passed)
     print("  ⏳ Creating PR...", flush=True)
@@ -3284,7 +3290,7 @@ Report: what was broken, what you fixed, commit hash."""
     )
     print(f"✓ Verification passed ({len(nm_output)} chars)", flush=True)
 
-    return {"nm_output": nm_output, "pr_url": pr_url, "coder_failed": coder_failed, "verdict": verdict, "tests_passed": tests_passed, "tests_failed": tests_failed, "build_pass": build_pass}
+    return {"nm_output": nm_output, "pr_url": pr_url, "coder_failed": coder_failed, "verdict": verdict, "tests_passed": tests_passed, "tests_failed": tests_failed, "test_pass": test_pass, "build_pass": build_pass}
 
 
 def run_phase4_nm(feature, branch, impact, pr_url_in):
