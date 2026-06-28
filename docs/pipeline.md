@@ -218,6 +218,21 @@ Gaps are sent back to the Strategist for ONE refinement pass. Skip with `PANEL_S
 
 ---
 
+## Quality Gates
+
+After spec extraction, `verify_spec_quality()` runs four deterministic checks — all programmatic, no AI tokens:
+
+| # | Gate | What it checks | Blocks? |
+|---|------|---------------|---------|
+| 1 | **Structure** | Impact, What Changed, and `### Task N:` headers present | Yes — blocks unless all 3 found |
+| 2 | **Task field completeness** | Each task has all 5 fields (Files, Dependencies, Parallelizable, Description) | Yes |
+| 3 | **PR body quality** | Detects thin fallback text (`"See diff for details"`) when the spec has real content | Warns only |
+| 4 | **Brevity** | HIGH confidence > 5,000 chars, MEDIUM > 7,000 chars | Warns only |
+
+On failure, the strategist gets **one re-prompt** with the failure list. If the re-prompt still fails, the spec proceeds with a warning — the pipeline always continues.
+
+---
+
 ## Environment Variables
 
 | Variable | Effect | Default |

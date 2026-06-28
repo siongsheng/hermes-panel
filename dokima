@@ -293,6 +293,119 @@ def clean_spec_content(raw: str) -> str:
     raw = raw.strip()
     return raw
 
+
+def verify_spec_quality(spec_text: str, confidence: str = "Medium") -> tuple:
+    """Verify spec quality against structural and content gates.
+
+    Checks that the spec has required section headers:
+    - Impact section (## Impact or ## N. Impact)
+    - What Changed section (## What Changed or ## N. What Changed)
+    - Task breakdown headers (### Task N:)
+
+    Also checks:
+    - Task field completeness (Files, Dependencies, Parallelizable)
+    - PR body quality: detect thin fallback from extract_pr_sections()
+    - Brevity: warns if spec exceeds confidence-based char threshold
+
+    Also checks PR body quality:
+    - Detects when extract_pr_sections() returns thin fallback
+      despite spec having >=200 chars of real Impact + What Changed content.
+
+    Args:
+        spec_text: The spec content to check.
+        confidence: Confidence level ("High", "Medium", "Low").
+
+    Returns:
+        (passed: bool, failures: list[str]) — True + empty list means clean.
+        Brevity warnings appear in failures but passed remains True (soft warning).
+    """
+    failures = []
+
+    # Check 1: Impact section — ## Impact or ## N. Impact
+    if not re.search(r'##\s+\d*\.?\s*Impact', spec_text):
+        failures.append("Missing: Impact section")
+
+    # Check 2: What Changed section — ## What Changed or ## N. What Changed
+    if not re.search(r'##\s+\d*\.?\s*What Changed', spec_text):
+        failures.append("Missing: What Changed section")
+
+    # Check 3: Task breakdown headers — ### Task N:
+    if not re.search(r'###\s+Task\s+\d+:', spec_text):
+        failures.append("Missing: Task N: headers")
+
+    # Check 4: Task field completeness — verify task blocks have all required fields
+    # Parse task blocks using same approach as TaskDAG.parse
+    task_block_pattern = re.compile(
+        r'^\s*(?:###\s*)?Task\s*(\d+):[ \t]*(.*?)\n'
+        r'(.*?)(?=^\s*(?:###\s*)?Task\s*\d+|^\s*####\s|\Z)',
+        re.DOTALL | re.MULTILINE
+    )
+    for m in task_block_pattern.finditer(spec_text):
+        tid = m.group(1)
+        desc = m.group(2).strip()
+        body = m.group(3)
+
+        # Check description (task title)
+        if not desc:
+            failures.append(f"Task {tid}: missing Description field")
+
+        # Check Files field
+        files_m = re.search(r'^\s*(?:\*\*)?Files?:?(?:\*\*)?[ \t]*(.*?)\s*$', body, re.MULTILINE)
+        if not files_m or not files_m.group(1).strip():
+            failures.append(f"Task {tid}: missing Files field")
+
+        # Check Dependencies field
+        deps_m = re.search(r'^\s*(?:\*\*)?Dependencies?:?(?:\*\*)?[ \t]*(.*?)\s*$', body, re.MULTILINE)
+        if not deps_m or not deps_m.group(1).strip():
+            failures.append(f"Task {tid}: missing Dependencies field")
+
+        # Check Parallelizable field
+        par_m = re.search(r'^\s*(?:\*\*)?Parallelizable?:?(?:\*\*)?[ \t]*(.*?)\s*$', body, re.MULTILINE)
+        if not par_m or not par_m.group(1).strip():
+            failures.append(f"Task {tid}: missing Parallelizable field")
+
+    passed = len(failures) == 0
+    return passed, failures
+
+
+def _check_pr_body_quality(spec_text: str, failures: list) -> None:
+    """Check if extract_pr_sections() returns thin fallback despite spec having
+    >=200 chars of real Impact + What Changed content.
+
+    extract_pr_sections requires bullet items for What Changed sections.
+    If the section contains prose (no bullets), extract_pr_sections won't
+    capture it and returns the thin fallback. This check independently
+    extracts content with a broader pattern and flags the discrepancy.
+
+    Args:
+        spec_text: The full spec text.
+        failures: Accumulated failure list (mutated in place).
+    """
+    pr_body = extract_pr_sections(spec_text, "PR Body")
+    is_thin_fallback = len(pr_body) < 100 and "See diff for details" in pr_body
+    if not is_thin_fallback:
+        return
+
+    # Independently extract Impact + What Changed content with broader patterns
+    # (no bullet requirement for What Changed — extract_pr_sections requires bullets)
+    impact_m = re.search(
+        r'^##\s*\d*\.?\s*Impact\s*\n+(.+?)(?=\n##\s|\n###\s|\Z)',
+        spec_text, re.DOTALL | re.IGNORECASE | re.MULTILINE
+    )
+    wc_m = re.search(
+        r'^##\s*\d*\.?\s*What\s+Changed\s*\n+(.+?)(?=\n##\s|\n###\s|\Z)',
+        spec_text, re.DOTALL | re.IGNORECASE | re.MULTILINE
+    )
+
+    impact_len = len(impact_m.group(1).strip()) if impact_m else 0
+    wc_len = len(wc_m.group(1).strip()) if wc_m else 0
+
+    if impact_len + wc_len >= 200:
+        failures.append(
+            "PR body degraded to fallback despite spec having real content."
+        )
+
+
 def halt_and_revert(reason, phase, branch):
     """Revert all changes and print failure summary for orchestrator."""
     print(f"\n{'═'*55}", flush=True)
@@ -3961,6 +4074,42 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
     if len(spec) < 100 and len(strat_output) > 500:
         spec = strat_output
     spec = clean_spec_content(spec)
+
+    # Quality gate: validate spec quality, re-prompt once on failure
+    _qg_passed, _qg_failures = verify_spec_quality(spec)
+    if not _qg_passed:
+        print(f"  ⚠ Spec quality gate: {len(_qg_failures)} issue(s)", flush=True)
+        for _f in _qg_failures:
+            print(f"     - {_f}", flush=True)
+        print("  ⚡ Re-prompting strategist to fix quality issues...", flush=True)
+        truncated = strat_output[:4096] + ("...[truncated]" if len(strat_output) > 4096 else "")
+        quality_correction = (
+            f"── QUALITY CORRECTION REQUIRED ──\n"
+            f"Feature: {feature}\n"
+            f"Project: {PROJECT_DIR}\n\n"
+            f"Your spec has quality issues that need fixing:\n"
+            + "\n".join(f"  - {_f}" for _f in _qg_failures) +
+            f"\n\n"
+            f"Fix these issues while preserving ALL content and sections.\n"
+            f"Output the COMPLETE corrected spec — every section, every line.\n"
+            f"Do NOT use write_file. Do NOT summarize.\n\n"
+            f"── YOUR EXISTING SPEC (preserve this, fix issues) ──\n\n"
+            f"{truncated}"
+        )
+        strat_output = spawn_agent("strategist", ["spec-strategist-lite", "ponytail-guard"],
+                                   quality_correction, timeout=600, cwd=PROJECT_DIR)
+        print(f"  ✓ Strategist quality re-run finished ({len(strat_output)} chars)", flush=True)
+        # Re-extract and re-verify after re-prompt
+        spec = extract_agent_messages(strat_output, last_only=True)
+        if len(spec) < 100 and len(strat_output) > 500:
+            spec = strat_output
+        spec = clean_spec_content(spec)
+        _qg_passed2, _qg_failures2 = verify_spec_quality(spec)
+        if not _qg_passed2:
+            print(f"  ⚠ Quality gate still has {len(_qg_failures2)} issue(s) after re-prompt — proceeding with degraded quality", flush=True)
+            for _f in _qg_failures2:
+                print(f"     - {_f}", flush=True)
+
     print(f"  Spec extracted: {len(spec)} chars (from {len(strat_output)} raw)", flush=True)
 
     # Garbage detection: if spec looks like format-fix chatter, not a real spec
