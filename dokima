@@ -244,6 +244,10 @@ def _run_agent(profile, skills, prompt, timeout, cwd, model):
         else:
             cmd.extend(["-m", model])
     for s in skills:
+        # F012 deploys skills under software-development/ category.
+        # Hermes -s requires category prefix for profile-local skills.
+        if "/" not in s:
+            s = f"software-development/{s}"
         cmd.extend(["-s", s])
     cmd.extend(["chat", "-q", prompt])
     tag = f"[{profile}]"
