@@ -2823,9 +2823,85 @@ def extract_file_paths(text):
         files_line = match.group(1)
         for part in re.split(r'[,;]\s*', files_line):
             part = part.strip()
-            if '/' in part and not part.startswith('http') and not part.startswith('git '):
+            # Strip "(NEW)" suffix
+            part = re.sub(r'\s*\(NEW\)', '', part).strip()
+            if not part.startswith('http') and not part.startswith('git '):
                 paths.add(part)
     return sorted(paths)
+
+
+def _extract_code_context(spec_text, task_text, project_dir):
+    """Extract relevant code snippets from line-range references in spec/task text.
+    
+    Parses patterns like:
+    - "lines 4583–4594 in dokima"
+    - "dokima:4583-4594"
+    - "line 4584 of src/foo.py"
+    
+    Reads the target files and returns a code-context string for the coder prompt.
+    Returns empty string if no line references found or files unreadable.
+    """
+    snippets = []
+    # Pattern: "lines N–M" or "line N" with optional filename mention
+    line_refs = re.findall(
+        r'(?:lines?\s+|:)(\d{2,6})\s*(?:[–\-—]|\s*to\s*)\s*(\d{2,6})',
+        spec_text + '\n' + task_text, re.IGNORECASE
+    )
+    if not line_refs:
+        return ""
+    
+    # Build a set of (filename, start, end) to read — up to 5 snippets
+    seen = set()
+    for start, end in line_refs[:5]:
+        start_i, end_i = int(start), int(end)
+        if start_i > end_i:
+            start_i, end_i = end_i, start_i
+        # Expand context window: 3 lines before and after
+        read_start = max(1, start_i - 3)
+        read_end = end_i + 3
+        
+        # Try to find which file this refers to from task Files: fields
+        files_m = re.findall(r'\*\*Files:\*\*\s*(.+)', task_text)
+        target_files = []
+        for fl in files_m:
+            for f in re.split(r'[,;]\s*', fl):
+                f = re.sub(r'\s*\(NEW\)', '', f).strip()
+                if f and not f.startswith('http'):
+                    target_files.append(f)
+        
+        for fname in target_files[:3]:
+            key = (fname, read_start, read_end)
+            if key in seen:
+                continue
+            seen.add(key)
+            fpath = os.path.join(project_dir, fname)
+            if not os.path.isfile(fpath):
+                continue
+            try:
+                with open(fpath) as f:
+                    lines = f.readlines()
+                if read_start > len(lines):
+                    continue
+                actual_end = min(read_end, len(lines))
+                chunk = ''.join(
+                    f"{i}:{lines[i-1]}" 
+                    for i in range(read_start, actual_end + 1)
+                )
+                if chunk.strip():
+                    snippets.append(
+                        f"```{fname}:{read_start}-{actual_end}\n{chunk}```"
+                    )
+            except Exception:
+                pass
+    
+    if not snippets:
+        return ""
+    
+    return (
+        "\n### ⚡ Relevant Code (read ONLY these snippets — no full-file exploration)\n"
+        + "\n".join(snippets)
+        + "\n⚡ These are the EXACT lines to modify. Start here.\n"
+    )
 
 
 def generate_codebase_map(project_dir, full=False):
@@ -3403,7 +3479,23 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
                 except Exception:
                     pass
 
-            coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).{map_hint}{file_hints}
+            # Extract relevant code snippets from spec line references
+            code_context = ""
+            try:
+                spec_text = ""
+                task_text = ""
+                if spec_path and os.path.exists(spec_path):
+                    with open(spec_path) as f:
+                        spec_text = f.read()
+                if tasks_extract_path and os.path.exists(tasks_extract_path):
+                    with open(tasks_extract_path) as f:
+                        task_text = f.read()
+                if spec_text or task_text:
+                    code_context = _extract_code_context(spec_text, task_text, PROJECT_DIR)
+            except Exception:
+                pass  # Best-effort — not critical
+
+            coder_prompt = f"""Read the task breakdown at {tasks_extract_path} (full spec: {spec_ref}).{map_hint}{file_hints}{code_context}
 FIRST: Create and switch to branch '{branch}':
   git checkout -b {branch} 2>/dev/null || git checkout {branch}
   git push -u origin {branch}

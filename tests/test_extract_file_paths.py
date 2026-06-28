@@ -130,9 +130,9 @@ class TestExtractFilePathsTaskExtract:
         assert result == ["src/local/file.ts"]
 
     def test_files_line_without_slash_skipped(self, panel):
-        """Bare filenames without directory context are ambiguous — skip."""
+        """Bare filenames in **Files:** lines are now accepted (explicit from task extract)."""
         result = panel.extract_file_paths("**Files:** page.mdx, layout.tsx\n")
-        assert result == []
+        assert result == ["layout.tsx", "page.mdx"]
 
 
 class TestExtractFilePathsCombined:
@@ -175,6 +175,6 @@ class TestExtractFilePathsCombined:
         assert "src/app/(docs)/guides/cli/page.mdx" in result
         assert "src/__tests__/guides/cli-reference.test.ts" in result
         assert "src/config/sidebar.ts" in result
-        # README.md has no slash — skipped
-        assert "README.md" not in result
-        assert len(result) == 3
+        # README.md now accepted (bare filenames from **Files:** lines are explicit)
+        assert "README.md" in result
+        assert len(result) == 4
