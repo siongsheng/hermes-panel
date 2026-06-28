@@ -383,3 +383,64 @@ class TestPathDetection:
         assert os.path.isfile(zshrc), "Expected ~/.zshrc to be created"
         content = open(zshrc).read()
         assert "$HOME/.local/bin" in content or home in content
+
+
+class TestEndToEnd:
+    """Comprehensive verification: idempotency, re-run, git pull path."""
+
+    def test_idempotent_full_rerun(self, tmp_path):
+        """Running installer twice produces identical state without errors."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        env = {"PANEL_REPO": repo_path}
+
+        # First run
+        result1 = _run_installer_full(home, env_extra=env)
+        assert result1.returncode == 0, "First run failed: {}".format(result1.stderr)
+
+        # Verify dokima symlink exists
+        dokima_link = os.path.join(home, ".local", "bin", "dokima")
+        assert os.path.islink(dokima_link)
+
+        # Second run — should succeed without errors
+        result2 = _run_installer_full(home, env_extra=env)
+        assert result2.returncode == 0, "Second run failed: {}".format(result2.stderr)
+
+        # Verify state is still intact
+        assert os.path.islink(dokima_link)
+        assert os.path.isdir(os.path.join(home, ".local", "share", "dokima"))
+
+    def test_git_pull_on_existing_clone(self, tmp_path):
+        """When repo already cloned, installer runs git pull instead of clone."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        # Pre-create the clone directory as if already installed
+        clone_dir = os.path.join(home, ".local", "share", "dokima")
+        os.makedirs(clone_dir, exist_ok=True)
+
+        # Manually clone the mock repo there first
+        subprocess.run(["git", "clone", repo_path, clone_dir],
+                       capture_output=True, check=True)
+
+        env = {"PANEL_REPO": repo_path}
+        result = _run_installer_full(home, env_extra=env)
+        assert result.returncode == 0
+        output = result.stdout + result.stderr
+
+        # Should indicate it pulled rather than cloned
+        assert "pull" in output.lower() or "exists" in output.lower() or "already" in output.lower()
+
