@@ -24,6 +24,25 @@ def _make_fake_cmd(bindir, name):
     return path
 
 
+def _make_fake_hermes(bindir):
+    """Create a fake hermes that handles 'profile create <name>' by making a marker dir."""
+    path = os.path.join(bindir, "hermes")
+    with open(path, "w") as f:
+        f.write("""#!/usr/bin/env bash
+# Fake hermes for testing
+if [[ "$1" == "profile" && "$2" == "create" ]]; then
+    mkdir -p "$HOME/.hermes/profiles/$3"
+    echo "profile $3 created"
+elif [[ "$1" == "--version" ]]; then
+    echo "hermes v1.0.0"
+else
+    echo "fake hermes: $*"
+fi
+""")
+    os.chmod(path, 0o755)
+    return path
+
+
 def _make_git_repo(path):
     """Create a minimal git repo at path containing dokima, bin/nm, and bin/vet."""
     os.makedirs(path, exist_ok=True)
@@ -191,3 +210,64 @@ class TestNmAndVet:
         output = result.stdout + result.stderr
         assert "nm" in output.lower()
         assert "vet" in output.lower()
+
+
+class TestWithProfiles:
+    """--with-profiles flag creates Hermes agent profiles."""
+
+    def test_without_flag_no_profiles(self, tmp_path):
+        """Without --with-profiles, no hermes profiles are created."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_hermes("{}/fake-bin".format(home))
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        result = _run_installer_full(home, env_extra={"PANEL_REPO": repo_path})
+        assert result.returncode == 0
+
+        profiles_dir = os.path.join(home, ".hermes", "profiles")
+        for profile in ("strategist", "coder", "tech-lead", "nm"):
+            profile_dir = os.path.join(profiles_dir, profile)
+            assert not os.path.isdir(profile_dir), \
+                "Profile {} should not exist without --with-profiles".format(profile)
+
+    def test_with_profiles_creates_all(self, tmp_path):
+        """--with-profiles creates all 4 agent profiles."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_hermes("{}/fake-bin".format(home))
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        result = _run_installer_full(home, args="--with-profiles",
+                                     env_extra={"PANEL_REPO": repo_path})
+        assert result.returncode == 0, "installer failed: {}".format(result.stderr)
+
+        profiles_dir = os.path.join(home, ".hermes", "profiles")
+        for profile in ("strategist", "coder", "tech-lead", "nm"):
+            profile_dir = os.path.join(profiles_dir, profile)
+            assert os.path.isdir(profile_dir), \
+                "Expected profile {} to be created".format(profile)
+
+    def test_with_profiles_prints_profile_info(self, tmp_path):
+        """--with-profiles output mentions profile creation."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_hermes("{}/fake-bin".format(home))
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        result = _run_installer_full(home, args="--with-profiles",
+                                     env_extra={"PANEL_REPO": repo_path})
+        output = result.stdout + result.stderr
+        assert "profile" in output.lower()
