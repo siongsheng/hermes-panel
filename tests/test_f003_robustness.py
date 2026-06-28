@@ -15,7 +15,6 @@ Covers:
 """
 
 import os
-import sys
 import subprocess
 import pytest
 from unittest.mock import patch
@@ -34,22 +33,12 @@ def _make_result(returncode=0, stdout=""):
 class TestRedOnlyCommits:
     """Task 1: RED-only commits — vet detects missing GREEN via test/build failure."""
 
-    def test_red_only_triggers_vet_failure(self, tmpdir):
+    def test_red_only_triggers_vet_failure(self, panel, test_repo):
         """RED-only commits cause test failures (no impl) → coder_failed=True, VET_FAILED."""
-        panel = _load()
-        project_dir = os.path.join(str(tmpdir), "test-project")
-        os.makedirs(os.path.join(project_dir, "specs"), exist_ok=True)
-        with open(os.path.join(project_dir, "AGENTS.md"), "w") as f:
+        # Override AGENTS.md so detect_commands picks up the right test/build commands
+        ag_path = os.path.join(test_repo, "AGENTS.md")
+        with open(ag_path, "w") as f:
             f.write("# Test Project\n\n## Commands\n- Test: `echo running-tests`\n- Build: `echo building`\n")
-        subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "-C", project_dir, "config", "user.email", "t@t.com"])
-        subprocess.run(["git", "-C", project_dir, "config", "user.name", "T"])
-        subprocess.run(["git", "-C", project_dir, "add", "-A"])
-        subprocess.run(["git", "-C", project_dir, "commit", "-m", "init"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        panel.PROJECT_DIR = project_dir
-        panel.DEFAULT_BRANCH = "master"
-        # Override TEST_CMD and BUILD_CMD to match AGENTS.md
         panel.TEST_CMD = panel.detect_commands()[0]
         panel.BUILD_CMD = panel.detect_commands()[1]
 
@@ -74,21 +63,14 @@ class TestRedOnlyCommits:
 class TestEmptyCoderOutput:
     """Task 2: Coder produces empty/no output — no RED, no GREEN, no branch."""
 
-    def test_empty_output_prevents_checkout(self, tmpdir):
+    def test_empty_output_prevents_checkout(self, panel, test_repo):
         """Coder produced no output → branch does not exist → checkout fails → vet fails."""
-        panel = _load()
-        project_dir = os.path.join(str(tmpdir), "test-project")
-        os.makedirs(os.path.join(project_dir, "specs"), exist_ok=True)
-        with open(os.path.join(project_dir, "AGENTS.md"), "w") as f:
+        # Override AGENTS.md for detect_commands
+        ag_path = os.path.join(test_repo, "AGENTS.md")
+        with open(ag_path, "w") as f:
             f.write("# Test Project\n\n## Commands\n- Test: `echo ok`\n- Build: `echo ok`\n")
-        subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "-C", project_dir, "config", "user.email", "t@t.com"])
-        subprocess.run(["git", "-C", project_dir, "config", "user.name", "T"])
-        subprocess.run(["git", "-C", project_dir, "add", "-A"])
-        subprocess.run(["git", "-C", project_dir, "commit", "-m", "init"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        panel.PROJECT_DIR = project_dir
-        panel.DEFAULT_BRANCH = "master"
+        panel.TEST_CMD = panel.detect_commands()[0]
+        panel.BUILD_CMD = panel.detect_commands()[1]
 
         # Checkout fails — branch doesn't exist (empty coder output = no branch created)
         with patch.object(panel, "git", return_value=("", "fatal: path not found", 1)):
@@ -110,22 +92,8 @@ class TestEmptyCoderOutput:
 class TestNmTimeout:
     """Task 3: nm script timeout — pipeline recovers gracefully."""
 
-    def test_nm_timeout_returns_gracefully(self, tmpdir):
+    def test_nm_timeout_returns_gracefully(self, panel, test_repo):
         """_safe_run returns TIMEOUT (returncode 124) — nm_ok=True, pr_url preserved."""
-        panel = _load()
-        project_dir = os.path.join(str(tmpdir), "test-project")
-        os.makedirs(os.path.join(project_dir, "specs"), exist_ok=True)
-        with open(os.path.join(project_dir, "AGENTS.md"), "w") as f:
-            f.write("# Test\n\n## Commands\n- Test: `echo ok`\n- Build: `echo ok`\n")
-        subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "-C", project_dir, "config", "user.email", "t@t.com"])
-        subprocess.run(["git", "-C", project_dir, "config", "user.name", "T"])
-        subprocess.run(["git", "-C", project_dir, "add", "-A"])
-        subprocess.run(["git", "-C", project_dir, "commit", "-m", "init"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        panel.PROJECT_DIR = project_dir
-        panel.REPO = "test-owner/test-repo"
-
         pr_url_in = "https://github.com/test-owner/test-repo/pull/1"
 
         with patch.object(panel, "gh", return_value=("", "", 0)):
@@ -146,22 +114,8 @@ class TestNmTimeout:
 class TestNmNonZero:
     """Task 4: nm script returns non-zero exit — pipeline proceeds with fallback."""
 
-    def test_nm_non_zero_falls_back(self, tmpdir):
+    def test_nm_non_zero_falls_back(self, panel, test_repo):
         """nm exits with code 1, empty stdout — pr_url preserved, risk=impact."""
-        panel = _load()
-        project_dir = os.path.join(str(tmpdir), "test-project")
-        os.makedirs(os.path.join(project_dir, "specs"), exist_ok=True)
-        with open(os.path.join(project_dir, "AGENTS.md"), "w") as f:
-            f.write("# Test\n\n## Commands\n- Test: `echo ok`\n- Build: `echo ok`\n")
-        subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "-C", project_dir, "config", "user.email", "t@t.com"])
-        subprocess.run(["git", "-C", project_dir, "config", "user.name", "T"])
-        subprocess.run(["git", "-C", project_dir, "add", "-A"])
-        subprocess.run(["git", "-C", project_dir, "commit", "-m", "init"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        panel.PROJECT_DIR = project_dir
-        panel.REPO = "test-owner/test-repo"
-
         pr_url_in = "https://github.com/test-owner/test-repo/pull/42"
 
         with patch.object(panel, "gh", return_value=("", "", 0)):
@@ -181,21 +135,12 @@ class TestNmNonZero:
 class TestVetRetryExhaustion:
     """Task 5: Vet verification retry exhaustion — BLOCKED after max retries."""
 
-    def test_vet_exhausts_retries_and_blocks(self, tmpdir):
+    def test_vet_exhausts_retries_and_blocks(self, panel, test_repo):
         """All retry attempts fail → halt_and_revert called, coder_failed=True, VET_FAILED."""
-        panel = _load()
-        project_dir = os.path.join(str(tmpdir), "test-project")
-        os.makedirs(os.path.join(project_dir, "specs"), exist_ok=True)
-        with open(os.path.join(project_dir, "AGENTS.md"), "w") as f:
+        # Override AGENTS.md so tests always fail
+        ag_path = os.path.join(test_repo, "AGENTS.md")
+        with open(ag_path, "w") as f:
             f.write("# Test\n\n## Commands\n- Test: `echo fail`\n- Build: `echo fail`\n")
-        subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "-C", project_dir, "config", "user.email", "t@t.com"])
-        subprocess.run(["git", "-C", project_dir, "config", "user.name", "T"])
-        subprocess.run(["git", "-C", project_dir, "add", "-A"])
-        subprocess.run(["git", "-C", project_dir, "commit", "-m", "init"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        panel.PROJECT_DIR = project_dir
-        panel.DEFAULT_BRANCH = "master"
         panel.TEST_CMD = panel.detect_commands()[0]
         panel.BUILD_CMD = panel.detect_commands()[1]
 
@@ -258,12 +203,9 @@ class TestSpecialCharacters:
         assert "-" in result, f"Expected hash separator in long slug: {result!r}"
         assert len(result) <= 49  # 40 base + 1 dash + 8 hash
 
-    def test_pipeline_with_special_char_feature(self, tmpdir):
-        """Full pipeline survives feature with special characters — _patch_and_run pattern."""
-        panel = _load()
-        project_dir = os.path.join(str(tmpdir), "test-project")
-        os.makedirs(os.path.join(project_dir, "specs"), exist_ok=True)
-        # Put the feature description with special chars directly in the project
+    def test_pipeline_with_special_char_feature(self, panel, test_repo):
+        """Full pipeline survives feature with special characters — uses test_repo fixture."""
+        # Overwrite specs/roadmap.md with special-char feature
         spec_text = (
             "## F999: Fix OAuth2 — login (urgent!!) 🚀\n"
             "**Priority:** P0\n"
@@ -271,24 +213,11 @@ class TestSpecialCharacters:
             "**Status:** [ ] Pending\n"
             "**User Story:** Pipeline verification.\n"
         )
-        with open(os.path.join(project_dir, "specs", "roadmap.md"), "w") as f:
+        roadmap_path = os.path.join(test_repo, "specs", "roadmap.md")
+        with open(roadmap_path, "w") as f:
             f.write(f"# Roadmap\n\n## Phase 1\n\n{spec_text}")
-        with open(os.path.join(project_dir, "AGENTS.md"), "w") as f:
-            f.write("# Test Project\n\n## Commands\n- Test: `echo ok`\n- Build: `echo ok`\n")
-
-        import subprocess as _sp
-        _sp.run(["git", "init", project_dir], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
-        _sp.run(["git", "-C", project_dir, "config", "user.email", "t@t.com"])
-        _sp.run(["git", "-C", project_dir, "config", "user.name", "T"])
-        _sp.run(["git", "-C", project_dir, "add", "-A"])
-        _sp.run(["git", "-C", project_dir, "commit", "-m", "init"],
-                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
-        panel.PROJECT_DIR = project_dir
-        panel.REPO = "test-owner/test-repo"
-        panel.DEFAULT_BRANCH = "master"
 
         # Simulate the branch name being created from slugify — verify safe
-        # Use the same slugify the panel would use
         branch = "feat/" + panel.slugify("Fix: OAuth2 — login (urgent!!) 🚀")
         assert all(c in "abcdefghijklmnopqrstuvwxyz0123456789-/" for c in branch), \
             f"Branch has invalid chars: {branch!r}"
@@ -297,21 +226,9 @@ class TestSpecialCharacters:
 class TestStaleWorktreeCleanup:
     """Task 7: Stale worktree cleanup on crashed run recovery."""
 
-    def test_stale_worktree_removed_before_create(self, tmpdir):
+    def test_stale_worktree_removed_before_create(self, panel, test_repo):
         """WorktreeManager.create() removes stale worktree before creating fresh one."""
-        panel = _load()
-        project_dir = os.path.join(str(tmpdir), "test-project")
-        os.makedirs(os.path.join(project_dir, "specs"), exist_ok=True)
-        with open(os.path.join(project_dir, "AGENTS.md"), "w") as f:
-            f.write("# Test\n\n## Commands\n- Test: `echo ok`\n- Build: `echo ok`\n")
-        subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "-C", project_dir, "config", "user.email", "t@t.com"])
-        subprocess.run(["git", "-C", project_dir, "config", "user.name", "T"])
-        subprocess.run(["git", "-C", project_dir, "add", "-A"])
-        subprocess.run(["git", "-C", project_dir, "commit", "-m", "init"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        wm = panel.WorktreeManager(project_dir)
+        wm = panel.WorktreeManager(test_repo)
         # Do NOT create stale dir on disk — WorktreeManager.create() checks isdir() first
         # and would short-circuit. Instead, mock git worktree list to show the stale entry.
 
@@ -320,7 +237,7 @@ class TestStaleWorktreeCleanup:
         # Mock subprocess.run to:
         # 1. Show stale worktree in git worktree list --porcelain output
         # 2. Accept remove and add commands
-        # Need to track calls so we can verify stale removal
+        # Track calls so we can verify stale removal
         stale_removed = []
 
         def _mock_run(args, **kwargs):
@@ -346,7 +263,7 @@ class TestStaleWorktreeCleanup:
                 return result
             # Regular worktree add
             if "worktree" in cmd and "add" in cmd:
-                os.makedirs(os.path.join(project_dir, ".dokima", "worktrees", "task-stale"),
+                os.makedirs(os.path.join(test_repo, ".dokima", "worktrees", "task-stale"),
                             exist_ok=True)
                 result = subprocess.CompletedProcess(args=args, returncode=0)
                 result.stdout = ""
