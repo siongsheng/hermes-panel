@@ -42,6 +42,40 @@ def _sanitize_prompt(text):
     return text
 
 
+def _redact_secrets(text):
+    """Strip GH_TOKEN, GITHUB_TOKEN, and API_SERVER_KEY values from text.
+    Looks up current values from the environment at call time (not cached).
+    Redacts with [REDACTED]. Returns the redacted text unmodified if no tokens found."""
+    if not text:
+        return text
+    tokens = []
+    for env_name in ("GH_TOKEN", "GITHUB_TOKEN", "API_SERVER_KEY"):
+        val = os.environ.get(env_name, "")
+        if val:
+            tokens.append(val)
+    if not tokens:
+        return text
+    result = text
+    for tok in tokens:
+        result = result.replace(tok, "[REDACTED]")
+    return result
+
+
+_LOG_FILE_HANDLE = None
+
+
+def _write_log_line(text):
+    """Append a redacted line to OUTPUT_LOG. Creates the file if it doesn't exist."""
+    global _LOG_FILE_HANDLE
+    try:
+        if _LOG_FILE_HANDLE is None:
+            _LOG_FILE_HANDLE = open(OUTPUT_LOG, "a")
+        _LOG_FILE_HANDLE.write(text + "\n")
+        _LOG_FILE_HANDLE.flush()
+    except Exception:
+        pass
+
+
 # ── helpers ──────────────────────────────────────
 
 def load_key():
@@ -122,8 +156,14 @@ def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None):
     timed_out = False
     try:
         for line in proc.stdout:
-            print(f"{tag} {line.rstrip()}", flush=True)
+            redacted = _redact_secrets(line.rstrip())
+            print(f"{tag} {redacted}", flush=True)
             output.append(line)
+            # Also write redacted output to log file
+            try:
+                _write_log_line(f"{tag} {redacted}")
+            except Exception:
+                pass
     except Exception:
         pass
     try:
@@ -860,7 +900,7 @@ _STDOUT_ORIG = None
 
 def _cleanup_lock():
     """Release lock and restore stdout on interrupt or normal exit."""
-    global _LOCK_FD, _LOG_FILE, _STDOUT_ORIG
+    global _LOCK_FD, _LOG_FILE, _STDOUT_ORIG, _LOG_FILE_HANDLE
     if _LOCK_FD:
         try:
             _LOCK_FD.close()
