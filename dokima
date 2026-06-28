@@ -1339,13 +1339,15 @@ def pick_next_feature(features: list) -> object:
         return None
 
     # 4. Sort: by execution priority (P0 first, then P1, P2, P3).
-    #    Within same priority, in_progress beats pending, then by id.
+    #    Within same priority, in_progress beats pending, then by roadmap order
+    #    (features earlier in the file — higher phases — take precedence).
     priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
     status_order = {"in_progress": 0, "pending": 1}
+    pos_map = {f.id: i for i, f in enumerate(features)}
     unblocked.sort(key=lambda f: (
         priority_order.get(f.priority, 2),
         status_order.get(f.status, 1),
-        f.id
+        pos_map.get(f.id, 999)
     ))
 
     return unblocked[0]

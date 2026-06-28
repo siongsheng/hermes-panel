@@ -60,13 +60,13 @@ class TestPickNextFeature:
         result = panel.pick_next_feature([f_dep, f_unblocked, f_p1])
         assert result.id == "F003"
 
-    def test_tiebreaker_by_id_when_same_priority(self):
-        """Same priority + same status → lower ID wins."""
+    def test_tiebreaker_by_position_when_same_priority(self):
+        """Same priority + same status → earlier in list (roadmap order) wins."""
         panel = _load()
         f1 = _f("F005", "P1")
         f2 = _f("F001", "P1")
         result = panel.pick_next_feature([f1, f2])
-        assert result.id == "F001"
+        assert result.id == "F005"  # F005 at position 0, F001 at position 1
 
 
 class TestInProgressInclusion:

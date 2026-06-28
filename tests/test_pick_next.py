@@ -53,7 +53,7 @@ def test_same_priority_file_order(panel):
         make_feat(panel, "F002", priority="P1"),
     ]
     result = panel.pick_next_feature(feats)
-    assert result.id == "F001"  # lowest ID wins
+    assert result.id == "F003"  # first in list (roadmap order) wins
 
 def test_all_blocked(panel):
     feats = [
