@@ -14,6 +14,7 @@
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
 - **F006: Error Recovery & Resume** — in progress since 2026-06-28 23:56, branch `feat/f006-error-recovery--resume` [panel]
+- **F010: Parallel Coder Robustness** — in progress since 2026-06-29 01:31, branch `feat/f010-parallel-coder-robustness` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
