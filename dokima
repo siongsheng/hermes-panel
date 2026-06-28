@@ -2416,6 +2416,47 @@ def ensure_profiles():
         print(f"  WARNING: Profiles still missing after creation attempt: {', '.join(missing_after)}", flush=True)
 
 
+def deploy_profile_skills():
+    """Deploy panel skills from PANEL_DIR/skills/ to profile skill directories.
+    Idempotent — skips existing skill directories.
+    nm's 'no-mistakes' skill goes to the global skills dir (~/.hermes/skills/)."""
+    import shutil
+
+    skills_dir = os.path.join(PANEL_DIR, "skills")
+    software_dev = "software-development"
+
+    # (profile, skill, is_global) — is_global=True deploys to HERMES/skills/
+    _SKILL_MAPPINGS = [
+        ("strategist", "spec-strategist-lite", False),
+        ("strategist", "ponytail-guard", False),
+        ("coder", "ai-coding-best-practices-lite", False),
+        ("tech-lead", "adversarial-review-lite", False),
+        ("tech-lead", "ponytail-guard", False),
+        ("nm", "no-mistakes", True),
+    ]
+
+    for profile, skill, is_global in _SKILL_MAPPINGS:
+        src = os.path.join(skills_dir, skill)
+
+        if is_global:
+            dest_parent = os.path.join(HERMES, "skills", software_dev)
+        else:
+            dest_parent = os.path.join(PROFILES, profile, "skills", software_dev)
+        dest = os.path.join(dest_parent, skill)
+
+        if not os.path.isdir(src):
+            print(f"  WARNING: Source skill not found: {skill} — skipping", flush=True)
+            continue
+
+        if os.path.isdir(dest):
+            print(f"  Skill '{skill}' already deployed for {profile} — skipping", flush=True)
+            continue
+
+        os.makedirs(dest_parent, exist_ok=True)
+        shutil.copytree(src, dest)
+        print(f"  Deployed skill '{skill}' → {profile}", flush=True)
+
+
 def run_init(description, project_dir):
     """Discovery & constitution phase. Strategist produces spec-kit docs, no pipeline."""
     global API_KEY, PROJECT_DIR, REPO
