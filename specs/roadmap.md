@@ -66,6 +66,12 @@
 **Status:** [ ] Pending
 **User Story:** As a panel operator, parallel coders never conflict on the same file, worktree cleanup is reliable, and timeout/dead agents don't block the wave.
 
+### F019: Data-Driven Execution Mode (Orchestrator Computes)
+**Priority:** P1
+**Dependencies:** None
+**Status:** [ ] Pending
+**User Story:** As a panel operator, the orchestrator auto-selects batch coder (single session, no worktrees) for small additive features and per-task spawn for complex/refactor features — derived from existing DAG signals (task count, file count, parallelizability). No strategist changes needed.
+
 ---
 
 ## Phase 3: Distribution & Portability
