@@ -3336,7 +3336,27 @@ def run_phase4_nm(feature, branch, impact, pr_url_in):
     nm_cmd = os.path.expanduser("~/bin/nm") + " --skip-tests"
     nm_result = _safe_run(nm_cmd, cwd=PROJECT_DIR, timeout=600)
     nm_stdout = nm_result.stdout or ""
-    print(f"  ✓ nm finished ({len(nm_stdout)} chars)", flush=True)
+
+    # ── nm fallback: provider down → use call_agent with different model ──
+    if nm_result.returncode != 0 or not nm_stdout.strip():
+        print("  ⚠ nm provider unavailable — falling back to call_agent",
+              flush=True)
+        fallback_prompt = (
+            f"Feature: {feature}\nBranch: {branch}\nImpact: {impact}\n\n"
+            f"Review this PR and provide feedback."
+        )
+        fallback = call_agent(
+            PANEL_PORT.get("nm", 8648),
+            "You are an adversarial code reviewer.",
+            fallback_prompt,
+            model="deepseek-v4-flash"
+        )
+        nm_stdout = (fallback.get("content", "") or
+                     fallback.get("error", "nm fallback also failed"))
+        print(f"  ✓ nm fallback finished ({len(nm_stdout)} chars)",
+              flush=True)
+    else:
+        print(f"  ✓ nm finished ({len(nm_stdout)} chars)", flush=True)
 
     pr_url = pr_url_in
 
