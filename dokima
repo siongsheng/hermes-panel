@@ -247,7 +247,9 @@ def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None):
     # ── Model-family fallback retry ──────────────────────────
     # If FALLBACK_MODEL is configured and the output looks like a provider failure,
     # retry once with the fallback model to recover from transient provider outages.
-    if FALLBACK_MODEL and _detect_provider_failure(result) and not timed_out:
+    # Guard: only fallback if we're not already using FALLBACK_MODEL (prevents
+    # infinite recursion when the fallback model also fails).
+    if FALLBACK_MODEL and _detect_provider_failure(result) and not timed_out and model != FALLBACK_MODEL:
         print(f"\n{tag} ⚠ FALLBACK: retrying with {FALLBACK_MODEL}...", flush=True)
         # Re-invoke spawn_agent with the fallback model (same profile, skills, prompt)
         result = spawn_agent(profile, skills, prompt, timeout=timeout, cwd=cwd, model=FALLBACK_MODEL)
