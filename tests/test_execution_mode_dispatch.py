@@ -498,3 +498,11 @@ class TestDepthMatrixCells:
         """(Low, HIGH) → full — low confidence but high impact gets full pipeline."""
         depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("Low", "HIGH"))
         assert depth == "full", f"Expected 'full', got '{depth}'"
+
+    def test_confidence_parser_rejects_substring_false_positive(self, panel):
+        """Confidence 'Higher' must NOT match marker 'High' — defaults to Medium."""
+        spec = _make_spec_with_confidence_impact("Higher", "MEDIUM")
+        # "Confidence: Higher" should NOT match "High";
+        # default is "Medium" → (Medium, MEDIUM) = "full"
+        depth = self._run_and_get_depth(panel, spec)
+        assert depth == "full", f"Expected 'full' (default Medium), got '{depth}'"
