@@ -116,7 +116,7 @@
     "desc": ""
   },
   "tests/test_f001_security.py": {
-    "hash": "a4b5f9e8a954aa2d66e7c9d75b4a1fac",
+    "hash": "8ac64d69a7d03b1f4e9aee846645e35c",
     "desc": "Exports: _load_panel, TestPromptSanitizer"
   },
   "tests/test_f002_closure.py": {

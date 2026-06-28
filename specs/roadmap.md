@@ -87,7 +87,7 @@
 ### F020: Structured CLI Output (`--help-json`)
 **Priority:** P2
 **Dependencies:** None
-**Status:** [~] In Progress Progress
+**Status:** [ ] Pending Progress Progress
 **User Story:** As a docs maintainer, `dokima --help-json` outputs all commands, flags, and env vars as structured JSON — consumed by the docs site to auto-generate the CLI reference page. No more manual sync between code and docs.
 
 ### F021: Semantic Versioning + GitHub Releases

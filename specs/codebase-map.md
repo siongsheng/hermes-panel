@@ -1,6 +1,6 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-29 02:46:49 (incremental | 63 files)
+## Generated: 2026-06-29 02:54:37 (incremental | 63 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
