@@ -118,3 +118,11 @@ Fallback does NOT fire on:
 - A `⚠ FALLBACK` log line is printed to stderr when fallback fires
 - The fallback call reuses the same profile, skills, prompt, and timeout
 - Timeouts are NOT retried — a timed-out agent produces a `[TIMEOUT]` result without fallback
+
+### Verification
+
+To verify that the fallback mechanism is working:
+
+- **Check pipeline output**: grep stderr output for the `⚠ FALLBACK` marker — a line reading `⚠ FALLBACK: retrying with <model>...` is printed when a provider failure is detected and the fallback fires.
+- **Check fallback model worked**: look for the `[coder]` (or other profile) output that follows the `⚠ FALLBACK` line — if the fallback model responds successfully, the pipeline continues with that output.
+- **If fallback is missing**: confirm `PANEL_FALLBACK_MODEL` is set in the environment and the configured provider/model is valid. No fallback fires when the env var is unset (existing behavior is preserved).
