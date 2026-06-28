@@ -4889,7 +4889,7 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill, resume=N
             print("── Phase 4+5: nm+TL — SKIPPED (depth=vet) ──", flush=True)
             verdict = "APPROVED" if not coder_failed else "CODER_FAILED"
             # Save checkpoint after coder (parallel)
-            if cp is not None or resume:
+            if resume is not False:
                 save_checkpoint(feature_slug, {
                     "version": 1, "feature": feature, "branch": branch,
                     "spec_path": spec_path, "tasks_extract_path": tasks_extract_path or "",
@@ -4909,7 +4909,7 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill, resume=N
         pr_url = coder_result["pr_url"]
         verdict = coder_result["verdict"]
         # Save checkpoint after coder
-        if cp is not None or resume:
+        if resume is not False:
             cp_data = {
                 "version": 1, "feature": feature, "branch": branch,
                 "spec_path": spec_path, "tasks_extract_path": tasks_extract_path or "",
@@ -4929,7 +4929,7 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill, resume=N
             coder_failed = True
             verdict = "VET_FAILED"
         # Save checkpoint after vet
-        if cp is not None or resume:
+        if resume is not False:
             cp_data = {
                 "version": 1, "feature": feature, "branch": branch,
                 "spec_path": spec_path, "tasks_extract_path": tasks_extract_path or "",
@@ -4949,7 +4949,7 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill, resume=N
         nm_result = run_phase4_nm(feature, branch, impact, pr_url)
         pr_url = nm_result["pr_url"]
         # Save checkpoint after nm
-        if cp is not None or resume:
+        if resume is not False:
             cp_data = {
                 "version": 1, "feature": feature, "branch": branch,
                 "spec_path": spec_path, "tasks_extract_path": tasks_extract_path or "",
