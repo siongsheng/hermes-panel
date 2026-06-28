@@ -1,6 +1,6 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-28 22:11:18 (incremental | 57 files)
+## Generated: 2026-06-28 23:15:22 (incremental | 58 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
@@ -43,7 +43,7 @@
 ├── test_f001_security.py  — Exports: _load_panel, TestPromptSanitizer
 ├── test_f002_closure.py  — Exports: test_f002_marked_done_in_roadmap, test_f002_recorded_in_status
 ├── test_f003_robustness.py  — Exports: _make_result, TestRedOnlyCommits
-├── test_f005_fallback.py  — Exports: TestFallbackModelConstant, TestDetectProviderFailure
+├── test_f005_fallback.py  — Exports: TestDetectProviderFailure
 ├── test_final_coverage.py  — Exports: _setup
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════
@@ -65,6 +65,7 @@
 ├── test_spec_quality_gates.py  — Sample well-formed spec with all required sections
 ├── test_status_md.py  — Exports: test_empty_status_file, test_single_active_entry, test_update_existing_entry, test_new_entry_appended, test_timestamp_auto_generated
 ├── test_task_dag.py  — Exports: panel, _make_dag, test_all_parallel_3tasks_2files_single_session, test_non_parallelizable_task_returns_single_session
+├── test_tl_extraction.py  — Exports: panel
 ├── test_triple_bug_fix.py  — ── Bug 1: Spec archive ──────────────────────────────────────
 └── test_unit_helpers.py  — ═══════════════════════════════════════════════════════════════════
 │   ├── htmlcov/

@@ -13,7 +13,6 @@
 | F004: Deterministic Quality Gates | [x] Done | #12 | 2026-06-28 |
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
-- **F005: Model Family Fallback** — in progress since 2026-06-28 22:52, branch `feat/f005-model-family-fallback` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
@@ -21,3 +20,4 @@
 | F004 | [x] Done | #12 | 2026-06-28 |
 | F003 | [x] Done | #13 | 2026-06-28 |
 - **F001: Security Hardening** — done 2026-06-28 20:08, PR [#14](https://github.com/siongsheng/dokima/pull/14) [panel]
+- **F005: Model Family Fallback** — done 2026-06-28 23:15, PR [#17](https://github.com/siongsheng/dokima/pull/17) [panel]

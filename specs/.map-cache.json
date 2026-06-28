@@ -48,7 +48,7 @@
     "desc": "Spec Strategist (Lite \u2014 Panel Edition)"
   },
   "tests/conftest.py": {
-    "hash": "210f4fca9107f06ef6a0a90cd92a3582",
+    "hash": "770f53a6a6a21e5d1cb1d7f48945cb53",
     "desc": "Exports: _load_panel, _reload_panel"
   },
   "tests/test_acquire_lock.py": {
@@ -72,7 +72,7 @@
     "desc": "Exports: TestTestRepoFixture, TestMockOrchestratorFixture"
   },
   "tests/test_continuous.py": {
-    "hash": "fd75b5b62d66717290572bf0f9d8c39e",
+    "hash": "236058ce2cdc86499a720b4c02b3f2e4",
     "desc": "Exports: _setup_two_features, test_continuous_loop_two_features"
   },
   "tests/test_control_panel.py": {
@@ -88,7 +88,7 @@
     "desc": "Exports: test_first_acquisition_succeeds, test_second_acquisition_blocked, test_stale_lock_dead_pid"
   },
   "tests/test_edge_cases.py": {
-    "hash": "70717243374cb2e54d00484cbe148016",
+    "hash": "aae598910adc93da057fe14979ffafe2",
     "desc": "Exports: _setup"
   },
   "tests/test_execution_mode_dispatch.py": {
@@ -120,15 +120,15 @@
     "desc": "Exports: _make_result, TestRedOnlyCommits"
   },
   "tests/test_f005_fallback.py": {
-    "hash": "6bf16711cb7606d35d5ae0563578fc6f",
-    "desc": "Exports: TestFallbackModelConstant, TestDetectProviderFailure"
+    "hash": "032108bab34d246ca3424112f094b3ed",
+    "desc": "Exports: TestDetectProviderFailure"
   },
   "tests/test_final_coverage.py": {
-    "hash": "6a9ce7477d55adf6659a739eb25a0bf0",
+    "hash": "9c55d9df730c6d3d0983f8bbdbed9ebf",
     "desc": "Exports: _setup"
   },
   "tests/test_final_edge.py": {
-    "hash": "37861b1e4d95df4dec8b6ade23ce6ae7",
+    "hash": "be69fd3971e166c1dbd22211710a37fa",
     "desc": "Exports: _setup"
   },
   "tests/test_fix_mode.py": {
@@ -152,7 +152,7 @@
     "desc": "Exports: test_explicit_project_dir_lock, test_explicit_project_dir_stop, test_implicit_from_global, test_trailing_slash_normalized, test_no_project_dir_no_arg"
   },
   "tests/test_main_integration.py": {
-    "hash": "fe249444ab211030caa9dd545117958f",
+    "hash": "eab8521dd897924fbd25bc2681702f3c",
     "desc": "Exports: _make_safe_run_result, _setup_test_project, _mock_spawn"
   },
   "tests/test_pick_next.py": {
@@ -168,11 +168,11 @@
     "desc": "Exports: test_check_live_pid, test_check_dead_pid, test_check_non_numeric, test_check_empty_string, test_verify_owner_on_self"
   },
   "tests/test_pipeline_integration.py": {
-    "hash": "65d593879a29815728e5a37b506daa97",
+    "hash": "aca4a2c0d86db25cdc74ee1ab726aa52",
     "desc": "Exports: _setup_test_project"
   },
   "tests/test_rich_pipeline.py": {
-    "hash": "a730bd228011714c5791ff79dee226ed",
+    "hash": "774920992898755fffcae480cbf52c2f",
     "desc": "Exports: _setup_project"
   },
   "tests/test_roadmap_parse.py": {
@@ -196,7 +196,7 @@
     "desc": "Exports: test_clean_input_no_change, test_spaces_to_hyphens, test_special_chars_removed, test_exactly_40_chars_no_hash, test_41_chars_appends_hash"
   },
   "tests/test_spec_quality_gates.py": {
-    "hash": "c63dcde4bad605f25a7ba0215594be08",
+    "hash": "dd8a9d5a4c10724380a4e9bfa6dca805",
     "desc": "Sample well-formed spec with all required sections"
   },
   "tests/test_status_md.py": {
@@ -206,6 +206,10 @@
   "tests/test_task_dag.py": {
     "hash": "08ef00dd67cc27fd8b0540e75f8adda4",
     "desc": "Exports: panel, _make_dag, test_all_parallel_3tasks_2files_single_session, test_non_parallelizable_task_returns_single_session"
+  },
+  "tests/test_tl_extraction.py": {
+    "hash": "7d2a6602d2aa6cbadf171b092b7d8083",
+    "desc": "Exports: panel"
   },
   "tests/test_triple_bug_fix.py": {
     "hash": "c0318354b36716babd21c996fb8618a5",

@@ -23,7 +23,7 @@
 ### F005: Model Family Fallback
 **Priority:** P1
 **Dependencies:** None
-**Status:** [~] In Progress Progress Progress Progress
+**Status:** [x] Done Progress Progress Progress Progress
 **User Story:** As a panel operator, if the primary model provider is down, the panel auto-falls-back to a configured alternative (e.g. deepseek → openrouter → anthropic).
 
 ### F001: Security Hardening
