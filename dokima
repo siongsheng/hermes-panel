@@ -273,7 +273,22 @@ def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None):
             except subprocess.TimeoutExpired:
                 fb_proc.terminate()
         _write_log_line(f"{tag} ⚠ Fallback used: FALLBACK_MODEL={FALLBACK_MODEL}")
-        result = "".join(fb_output)
+
+        # Collect stderr from fallback (mirroring primary path lines 232-238)
+        try:
+            fb_stderr = fb_proc.stderr.read()
+            if fb_stderr and fb_stderr.strip():
+                print(f"{tag} [stderr] {fb_stderr.strip()[:500]}", flush=True)
+                fb_output.append(f"\n[stderr]\n{fb_stderr}")
+        except Exception:
+            pass
+
+        fb_result = "".join(fb_output)
+        # Only replace result if fallback SUCCEEDED (no provider failure in fallback output).
+        # If fallback also failed, preserve the original error — discarding it is worse.
+        if not _detect_provider_failure(fb_result):
+            result = fb_result
+        # else: keep original result with primary error intact
 
     if timed_out:
         result += f"\n\n[TIMEOUT: agent exceeded {timeout}s. Partial output above.]"
