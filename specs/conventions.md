@@ -85,3 +85,36 @@ The panel validates PROJECT_DIR before any operation:
 - Path must contain a `.git` subdirectory
 - Non-repo directories, files, and nonexistent paths are rejected with a clear error message
 - Validation prevents path-traversal and symlink-attack vectors
+
+## Model Fallback
+
+The panel supports automatic provider fallback via the `PANEL_FALLBACK_MODEL` environment variable. When configured, `spawn_agent` detects provider failures (rate limits, HTTP 503s, connection refused, model not found, provider errors) in agent output and retries once with the fallback model.
+
+### Configuration
+
+```bash
+export PANEL_FALLBACK_MODEL=openrouter/anthropic/claude-sonnet-4
+```
+
+Format: `provider/model_name` (same format as the `-m` flag in Hermes CLI). If unset, no fallback occurs — existing behavior is preserved.
+
+### Failure Detection
+
+The following patterns in combined stdout+stderr trigger a fallback retry:
+- `rate limit`
+- `503`
+- `service unavailable`
+- `provider.error`
+- `model.*not.*(?:found|available)`
+- `connection refused`
+
+Fallback does NOT fire on:
+- Legitimate output containing words like "error" or "rate" in normal context
+- Agent timeouts (timeout is handled separately, not as a provider failure)
+
+### Retry Behavior
+
+- Fallback is **one-shot**: if the fallback model also fails, the original error output is returned
+- A `⚠ FALLBACK` log line is printed to stderr when fallback fires
+- The fallback call reuses the same profile, skills, prompt, and timeout
+- Timeouts are NOT retried — a timed-out agent produces a `[TIMEOUT]` result without fallback
