@@ -1184,6 +1184,51 @@ EXAMPLES:
   dokima --continuous ~/huat
   dokima --fix ~/huat
   dokima --status ~/huat"""
+# KEEP IN SYNC with HELP_TEXT — add any new command/flag/env_var here too
+CLI_METADATA = {
+    "tool": "dokima",
+    "commands": [
+        {"name": "run", "syntax": "dokima \"Feature description\" [dir]", "description": "Run full pipeline for a feature"},
+        {"name": "init", "syntax": "dokima init \"description\" [dir]", "description": "Project discovery & constitution"},
+        {"name": "--add", "syntax": "dokima --add \"Feature\" [--priority=P1] [dir]", "description": "Add feature to roadmap (auto-priority, auto-deps)"},
+        {"name": "--next", "syntax": "dokima --next [dir]", "description": "Build next feature from roadmap"},
+        {"name": "--continuous", "syntax": "dokima --continuous [dir]", "description": "Full sprint: build + auto-merge + loop"},
+        {"name": "--fix", "syntax": "dokima --fix [dir]", "description": "Fix BLOCKED PR: detect blockers, fix, verify"},
+        {"name": "--status", "syntax": "dokima --status [dir]", "description": "Show pipeline state"},
+        {"name": "--stop", "syntax": "dokima --stop [dir]", "description": "Graceful stop after current feature"},
+        {"name": "--kill", "syntax": "dokima --kill [dir]", "description": "Emergency kill (SIGTERM then SIGKILL)"},
+        {"name": "--list-crons", "syntax": "dokima --list-crons", "description": "List all scheduled pipelines"},
+    ],
+    "flags": [
+        {"flag": "--interactive", "args": None, "env_var": None, "description": "Show human gate (with --next/--continuous)"},
+        {"flag": "--answers", "args": "<file>", "env_var": None, "description": "Resume from saved interview state"},
+        {"flag": "--fix-all", "args": None, "env_var": "PANEL_FIX_ALL", "description": "Include SHOULD FIX items (with --fix)"},
+        {"flag": "--skip-autofix", "args": None, "env_var": "PANEL_SKIP_AUTOFIX", "description": "Disable auto-fix loopback (nm + TL phases)"},
+        {"flag": "--force-full", "args": None, "env_var": "PANEL_FORCE_FULL", "description": "Run all 5 phases regardless of depth gating"},
+        {"flag": "--skip-auto-archive", "args": None, "env_var": "PANEL_SKIP_AUTO_ARCHIVE", "description": "Don't auto-archive merged specs"},
+        {"flag": "--skip-human-gate", "args": None, "env_var": "PANEL_SKIP_HUMAN_GATE", "description": "Skip Human Gate prompt (for automation)"},
+        {"flag": "--resume", "args": None, "env_var": "PANEL_RESUME", "description": "Resume from last checkpoint (re-runs incomplete phases only)"},
+        {"flag": "--no-resume", "args": None, "env_var": "PANEL_NO_RESUME", "description": "Ignore any existing checkpoint and start fresh"},
+        {"flag": "--max-parallel", "args": "N", "env_var": "PANEL_MAX_PARALLEL", "description": "Max parallel coder agents (default: 5)"},
+        {"flag": "--base-branch", "args": "<b>", "env_var": "PANEL_BASE_BRANCH", "description": "Override default branch for PR base"},
+    ],
+    "env_vars": [
+        {"name": "PANEL_FIX_ALL", "description": "Include SHOULD FIX items", "related_flag": "--fix-all"},
+        {"name": "PANEL_SKIP_AUTOFIX", "description": "Disable auto-fix loopback", "related_flag": "--skip-autofix"},
+        {"name": "PANEL_FORCE_FULL", "description": "Run all 5 phases regardless of depth gating", "related_flag": "--force-full"},
+        {"name": "PANEL_SKIP_AUTO_ARCHIVE", "description": "Don't auto-archive merged specs", "related_flag": "--skip-auto-archive"},
+        {"name": "PANEL_SKIP_HUMAN_GATE", "description": "Skip Human Gate prompt", "related_flag": "--skip-human-gate"},
+        {"name": "PANEL_RESUME", "description": "Resume from last checkpoint", "related_flag": "--resume"},
+        {"name": "PANEL_NO_RESUME", "description": "Ignore existing checkpoint and start fresh", "related_flag": "--no-resume"},
+        {"name": "PANEL_MAX_PARALLEL", "description": "Max parallel coder agents", "related_flag": "--max-parallel"},
+        {"name": "PANEL_BASE_BRANCH", "description": "Override default branch for PR base", "related_flag": "--base-branch"},
+        {"name": "PANEL_FALLBACK_STRATEGIST", "description": "Fallback model for strategist role", "related_flag": None},
+        {"name": "PANEL_FALLBACK_CODER", "description": "Fallback model for coder role", "related_flag": None},
+        {"name": "PANEL_FALLBACK_TECH_LEAD", "description": "Fallback model for tech-lead role", "related_flag": None},
+    ],
+}
+
+
 
 
 
@@ -1229,6 +1274,12 @@ def _set_gh_token():
 def show_help():
     print(HELP_TEXT)
     sys.exit(0)
+
+def show_help_json():
+    """Print CLI_METADATA as formatted JSON and exit."""
+    print(json.dumps(CLI_METADATA, indent=2))
+    sys.exit(0)
+
 
 
 def parse_roadmap(roadmap_path: str) -> list:
@@ -5240,6 +5291,7 @@ def main():
     is_continuous = False
     is_interactive = False
     is_help = False
+    is_help_json = False
     is_stop = False
     is_kill = False
     is_status = False
@@ -5266,6 +5318,9 @@ def main():
             continue
         if arg in ("--help", "-h"):
             is_help = True
+            continue
+        if arg == "--help-json":
+            is_help_json = True
             continue
         if arg == "--next":
             is_next = True
@@ -5425,7 +5480,7 @@ def main():
                 PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
-        if len(filtered_argv) < 1 and not is_help and not is_list_crons:
+        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons:
             print("ERROR: Feature description required")
             sys.exit(1)
         feature = filtered_argv[0] if filtered_argv else ""
@@ -5437,6 +5492,8 @@ def main():
             PROJECT_DIR = os.path.abspath(filtered_argv[1]) if len(filtered_argv) >= 2 else os.getcwd()
 
     # ── CONTROL FLAGS: early exit (priority order) ──
+    if is_help_json:
+        show_help_json()
     if is_help:
         show_help()
     if is_kill:
