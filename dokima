@@ -5291,6 +5291,7 @@ def main():
     is_continuous = False
     is_interactive = False
     is_help = False
+    is_help_json = False
     is_stop = False
     is_kill = False
     is_status = False
@@ -5317,6 +5318,9 @@ def main():
             continue
         if arg in ("--help", "-h"):
             is_help = True
+            continue
+        if arg == "--help-json":
+            is_help_json = True
             continue
         if arg == "--next":
             is_next = True
@@ -5476,7 +5480,7 @@ def main():
                 PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
-        if len(filtered_argv) < 1 and not is_help and not is_list_crons:
+        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons:
             print("ERROR: Feature description required")
             sys.exit(1)
         feature = filtered_argv[0] if filtered_argv else ""
@@ -5488,6 +5492,8 @@ def main():
             PROJECT_DIR = os.path.abspath(filtered_argv[1]) if len(filtered_argv) >= 2 else os.getcwd()
 
     # ── CONTROL FLAGS: early exit (priority order) ──
+    if is_help_json:
+        show_help_json()
     if is_help:
         show_help()
     if is_kill:
