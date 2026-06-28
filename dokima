@@ -581,10 +581,12 @@ class TaskDAG:
                 if dep_text.lower() not in ("none", "[]", "n/a", ""):
                     deps = re.findall(r'(\d+)', dep_text)
 
-            parallel = False
+            parallel = True  # default: most tasks are parallelizable; file-collision check catches conflicts
             par_m = re.search(r'^\s*(?:\*\*)?Parallelizable?:?(?:\*\*)?\s*(.+)', body, re.MULTILINE)
-            if par_m and par_m.group(1).strip().lower() == "yes":
-                parallel = True
+            if par_m:
+                par_val = par_m.group(1).strip().lower()
+                if par_val == "no":
+                    parallel = False
 
             self.tasks[tid] = Task(
                 tid=tid, description=desc, files=files,
