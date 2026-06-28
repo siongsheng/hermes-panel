@@ -14,7 +14,7 @@
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
 - **F006: Error Recovery & Resume** — in progress since 2026-06-28 23:56, branch `feat/f006-error-recovery--resume` [panel]
-- **F020: Structured CLI Output (`--help-json`)** — in progress since 2026-06-29 02:50, branch `feat/f020-structured-cli-output---help-json-f9e9c943` [panel]
+- **F020: Structured CLI Output (`--help-json`)** — in progress since 2026-06-29 02:59, branch `feat/f020-structured-cli-output---help-json-f9e9c943` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
