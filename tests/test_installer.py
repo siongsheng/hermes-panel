@@ -271,3 +271,115 @@ class TestWithProfiles:
                                      env_extra={"PANEL_REPO": repo_path})
         output = result.stdout + result.stderr
         assert "profile" in output.lower()
+
+
+class TestPathDetection:
+    """install.sh detects if ~/.local/bin is in PATH and updates shell config."""
+
+    def test_adds_to_bashrc_when_not_in_path(self, tmp_path):
+        """When ~/.local/bin is not in PATH, installer appends to ~/.bashrc."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        # PATH intentionally excludes ~/.local/bin
+        result = _run_installer_full(
+            home,
+            env_extra={
+                "PANEL_REPO": repo_path,
+                "SHELL": "/bin/bash",
+                "PATH": "{}/fake-bin:/usr/bin:/bin".format(home),
+            },
+        )
+        assert result.returncode == 0
+
+        bashrc = os.path.join(home, ".bashrc")
+        assert os.path.isfile(bashrc), "Expected ~/.bashrc to be created"
+        content = open(bashrc).read()
+        assert "$HOME/.local/bin" in content or home in content
+        assert "PATH" in content
+
+    def test_idempotent_no_duplicate_entries(self, tmp_path):
+        """Running installer twice doesn't add duplicate PATH entries."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        env = {
+            "PANEL_REPO": repo_path,
+            "SHELL": "/bin/bash",
+            "PATH": "{}/fake-bin:/usr/bin:/bin".format(home),
+        }
+
+        # First run
+        result1 = _run_installer_full(home, env_extra=env)
+        assert result1.returncode == 0
+
+        # Second run with PATH now containing ~/.local/bin
+        env2 = dict(env)
+        env2["PATH"] = "{}/.local/bin:{}/fake-bin:/usr/bin:/bin".format(home, home)
+        result2 = _run_installer_full(home, env_extra=env2)
+        assert result2.returncode == 0
+
+        bashrc = os.path.join(home, ".bashrc")
+        content = open(bashrc).read()
+        # PATH export should appear at most once
+        assert content.count("export PATH=") <= 1
+
+    def test_prints_source_instruction(self, tmp_path):
+        """When PATH is modified, installer prints 'source ~/.bashrc' instruction."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        result = _run_installer_full(
+            home,
+            env_extra={
+                "PANEL_REPO": repo_path,
+                "SHELL": "/bin/bash",
+                "PATH": "{}/fake-bin:/usr/bin:/bin".format(home),
+            },
+        )
+        output = result.stdout + result.stderr
+        assert "source" in output.lower()
+
+    def test_zsh_detects_zshrc(self, tmp_path):
+        """When SHELL is zsh, installer modifies ~/.zshrc."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        result = _run_installer_full(
+            home,
+            env_extra={
+                "PANEL_REPO": repo_path,
+                "SHELL": "/usr/bin/zsh",
+                "PATH": "{}/fake-bin:/usr/bin:/bin".format(home),
+            },
+        )
+        assert result.returncode == 0
+
+        zshrc = os.path.join(home, ".zshrc")
+        assert os.path.isfile(zshrc), "Expected ~/.zshrc to be created"
+        content = open(zshrc).read()
+        assert "$HOME/.local/bin" in content or home in content
