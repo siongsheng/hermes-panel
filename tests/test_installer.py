@@ -25,17 +25,26 @@ def _make_fake_cmd(bindir, name):
 
 
 def _make_git_repo(path):
-    """Create a minimal git repo at path containing a 'dokima' file."""
+    """Create a minimal git repo at path containing dokima, bin/nm, and bin/vet."""
     os.makedirs(path, exist_ok=True)
     subprocess.run(["git", "init", "-b", "main", path], capture_output=True, check=True)
+    # Create a minimal dokima script
     dokima_path = os.path.join(path, "dokima")
     with open(dokima_path, "w") as f:
         f.write("#!/usr/bin/env python3\nprint('dokima')\n")
     os.chmod(dokima_path, 0o755)
-    subprocess.run(["git", "-C", path, "add", "dokima"], capture_output=True, check=True)
+    # Create bin/nm and bin/vet
+    bin_dir = os.path.join(path, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    for name in ("nm", "vet"):
+        script_path = os.path.join(bin_dir, name)
+        with open(script_path, "w") as f:
+            f.write("#!/usr/bin/env bash\necho '{} ok'\n".format(name))
+        os.chmod(script_path, 0o755)
+    subprocess.run(["git", "-C", path, "add", "."], capture_output=True, check=True)
     subprocess.run(
         ["git", "-C", path, "-c", "user.name=test", "-c", "user.email=test@test",
-         "commit", "-m", "init"], capture_output=True, check=True
+         "commit", "-m", "add bin scripts"], capture_output=True, check=True
     )
     return path
 
@@ -142,3 +151,43 @@ class TestHappyPath:
         result = _run_installer_full(home, env_extra={"PANEL_REPO": repo_path})
         assert result.returncode == 0
         assert os.path.isdir(bin_dir)
+
+
+class TestNmAndVet:
+    """install.sh symlinks bin/nm and bin/vet into ~/.local/bin."""
+
+    def test_symlinks_nm_and_vet(self, tmp_path):
+        """After install, nm and vet are symlinked into ~/.local/bin."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        result = _run_installer_full(home, env_extra={"PANEL_REPO": repo_path})
+        assert result.returncode == 0, "installer failed: {}".format(result.stderr)
+
+        clone_dir = os.path.join(home, ".local", "share", "dokima")
+        for script in ("nm", "vet"):
+            symlink = os.path.join(home, ".local", "bin", script)
+            assert os.path.islink(symlink), "Expected symlink for {}".format(script)
+            assert os.path.realpath(symlink) == os.path.join(clone_dir, "bin", script)
+
+    def test_nm_vet_availability_printed(self, tmp_path):
+        """install.sh prints that nm and vet are available."""
+        home = str(tmp_path / "home")
+        os.makedirs("{}/fake-bin".format(home), exist_ok=True)
+        _make_fake_cmd("{}/fake-bin".format(home), "python3")
+        _make_fake_cmd("{}/fake-bin".format(home), "gh")
+        _make_fake_cmd("{}/fake-bin".format(home), "hermes")
+
+        repo_path = str(tmp_path / "mock-repo")
+        _make_git_repo(repo_path)
+
+        result = _run_installer_full(home, env_extra={"PANEL_REPO": repo_path})
+        output = result.stdout + result.stderr
+        assert "nm" in output.lower()
+        assert "vet" in output.lower()
