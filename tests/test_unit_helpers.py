@@ -268,3 +268,98 @@ class TestModuleLevelImports:
             "select should be a module-level import. "
             "Currently it's imported inside functions."
         )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# _read_stdin_with_timeout
+# ═══════════════════════════════════════════════════════════════════
+
+class TestStdInTimeout:
+    """Tests for _read_stdin_with_timeout() helper."""
+
+    def test_function_exists(self, panel):
+        """Helper function is defined on the panel module."""
+        assert hasattr(panel, "_read_stdin_with_timeout"), (
+            "_read_stdin_with_timeout should be a module-level function."
+        )
+
+    def test_returns_string_on_input(self, panel):
+        """Returns stripped input when data is available."""
+        import io
+        mock_stdin = io.StringIO("my answer\n")
+        with patch.object(panel, "select") as mock_select:
+            mock_select.select.return_value = ([mock_stdin], [], [])
+            result = panel._read_stdin_with_timeout(
+                prompt="", timeout=60, stdin=mock_stdin
+            )
+        assert result == ("my answer", False)
+
+    def test_returns_empty_tuple_on_timeout(self, panel):
+        """Returns ('', True) when select times out."""
+        import io
+        mock_stdin = io.StringIO()
+        with patch.object(panel, "select") as mock_select:
+            mock_select.select.return_value = ([], [], [])
+            result = panel._read_stdin_with_timeout(
+                prompt="", timeout=60, stdin=mock_stdin
+            )
+        assert result == ("", True)
+
+    def test_returns_empty_on_eof(self, panel):
+        """Returns ('', False) when readline returns empty (EOF)."""
+        import io
+        mock_stdin = io.StringIO("")
+        with patch.object(panel, "select") as mock_select:
+            mock_select.select.return_value = ([mock_stdin], [], [])
+            result = panel._read_stdin_with_timeout(
+                prompt="", timeout=60, stdin=mock_stdin
+            )
+        assert result == ("", False)
+
+    def test_prints_prompt_when_given(self, panel):
+        """Prints prompt before waiting for input."""
+        import io
+        from unittest.mock import patch as mp
+        mock_stdin = io.StringIO("yes\n")
+        captured = []
+        def fake_print(*args, **kwargs):
+            captured.append(args)
+        with mp("builtins.print") as mock_print:
+            mock_print.side_effect = fake_print
+            with mp.object(panel, "select") as mock_select:
+                mock_select.select.return_value = ([mock_stdin], [], [])
+                panel._read_stdin_with_timeout(prompt="Answer: ", stdin=mock_stdin)
+        assert any("Answer:" in str(a) for a in captured)
+
+    def test_strips_whitespace(self, panel):
+        """Returned answer has leading/trailing whitespace stripped."""
+        import io
+        mock_stdin = io.StringIO("  hello world  \n")
+        with patch.object(panel, "select") as mock_select:
+            mock_select.select.return_value = ([mock_stdin], [], [])
+            result = panel._read_stdin_with_timeout(
+                prompt="", stdin=mock_stdin
+            )
+        assert result == ("hello world", False)
+
+    def test_custom_timeout_passed_to_select(self, panel):
+        """custom timeout value is passed to select.select."""
+        import io
+        mock_stdin = io.StringIO("x\n")
+        with patch.object(panel, "select") as mock_select:
+            mock_select.select.return_value = ([mock_stdin], [], [])
+            panel._read_stdin_with_timeout(
+                prompt="", timeout=120, stdin=mock_stdin
+            )
+        mock_select.select.assert_called_with([mock_stdin], [], [], 120.0)
+
+    def test_defaults_to_sys_stdin(self, panel):
+        """Uses sys.stdin when no stdin arg provided."""
+        import io
+        mock_stdin = io.StringIO("data\n")
+        with patch.object(panel, "select") as mock_select, \
+             patch.object(panel, "sys") as mock_sys:
+            mock_sys.stdin = mock_stdin
+            mock_select.select.return_value = ([mock_stdin], [], [])
+            result = panel._read_stdin_with_timeout(prompt="")
+        assert result == ("data", False)
