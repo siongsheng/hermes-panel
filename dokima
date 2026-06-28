@@ -3286,7 +3286,14 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
 
         if mode == "fix" and spec:
             # Fix mode: spec IS the fix prompt (blockers + constraints inline)
-            coder_prompt = spec + map_hint
+            coder_prompt = (
+                spec + "\n\n"
+                f"### Branch Setup\n"
+                f"FIRST: Switch to the existing branch — do NOT create a new one:\n"
+                f"  git checkout {branch} && git pull origin {branch}\n"
+                f"All fixes go on this branch. Do NOT create a new branch.\n"
+                + map_hint
+            )
         else:
             # Extract target file hints from task extract for faster codebase navigation
             file_hints = ""
