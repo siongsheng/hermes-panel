@@ -538,3 +538,42 @@ Test impact.
         # default is "MEDIUM" → (High, MEDIUM) = "vet+nm"
         depth = self._run_and_get_depth(panel, spec)
         assert depth == "vet+nm", f"Expected 'vet+nm' (default MEDIUM), got '{depth}'"
+
+    def test_impact_unknown_value_defaults_to_medium(self, panel):
+        """Impact: CRITICAL (unknown value) → defaults to MEDIUM → (High, MEDIUM) = vet+nm.
+
+        The impact parser only recognizes HIGH, MEDIUM, LOW — any other
+        value (CRITICAL, UNKNOWN, empty) falls through to the MEDIUM default.
+        """
+        spec = _make_spec_with_confidence_impact("High", "CRITICAL")
+        depth = self._run_and_get_depth(panel, spec)
+        assert depth == "vet+nm", f"Expected 'vet+nm' (impact default MEDIUM), got '{depth}'"
+
+    def test_confidence_missing_value_defaults_to_medium(self, panel):
+        """Confidence: (no value after colon) → defaults to Medium → (Medium, LOW) = vet+nm.
+
+        The confidence parser's regex requires a value matching High/Medium/Low
+        immediately after 'confidence:'.  An empty value or a missing line does not
+        match any marker, so the default Medium is used.
+        """
+        spec = """# Test Feature
+
+## Impact
+Test impact.
+
+## What Changed
+- Nothing.
+
+### Confidence:
+### Impact: LOW
+
+## Task Breakdown
+
+### Task 1: Single task
+**Files:** a.py
+**Dependencies:** [none]
+**Parallelizable:** no
+**Description:** Do thing.
+"""
+        depth = self._run_and_get_depth(panel, spec)
+        assert depth == "vet+nm", f"Expected 'vet+nm' (confidence default Medium), got '{depth}'"
