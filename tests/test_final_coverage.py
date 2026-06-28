@@ -211,7 +211,7 @@ class TestCoderPrExtraction:
         def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
-                return "Confidence: High\nImpact: LOW\n\nSpec."  # Impact LOW → depth="coder"
+                return "Confidence: High\nImpact: LOW\n\nSpec."  # Impact LOW -> depth="vet"
             if profile == "coder":
                 return CODER_WITH_PR
             return "Mock"

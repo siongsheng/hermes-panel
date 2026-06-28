@@ -4971,8 +4971,12 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill, resume=N
                                "--title", f"feat: {feature}",
                                "--body", pr_body)
             if rc == 0:
-                pr_url = stdout.strip().split()[-1]
-                print(f"  PR created: {pr_url}", flush=True)
+                parts = stdout.strip().split()
+                pr_url = parts[-1] if parts else None
+                if pr_url:
+                    print(f"  PR created: {pr_url}", flush=True)
+                else:
+                    print("  PR created (no URL returned)", flush=True)
             else:
                 print(f"  ⚠ PR creation failed: unknown", flush=True)
 
