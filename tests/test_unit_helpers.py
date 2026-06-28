@@ -255,3 +255,16 @@ class TestSignalHandler:
             with pytest.raises(SystemExit) as exc:
                 panel._signal_handler(15, None)
             assert exc.value.code == 1
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Module-level imports
+# ═══════════════════════════════════════════════════════════════════
+
+class TestModuleLevelImports:
+    def test_select_imported_at_module_level(self, panel):
+        """import select must be at module level, not inside functions."""
+        assert hasattr(panel, "select"), (
+            "select should be a module-level import. "
+            "Currently it's imported inside functions."
+        )
