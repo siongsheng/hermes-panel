@@ -959,6 +959,66 @@ def _stop_path(project_dir=None):
         except NameError:
             slug = "unknown"
     return f"/tmp/dokima-{slug or 'unknown'}.stop"
+
+
+# ── checkpoint helpers (F006: Error Recovery & Resume) ──────────
+
+
+def _checkpoint_path(slug):
+    """Return the checkpoint file path for a given feature slug."""
+    return f"/tmp/dokima-{slug}-checkpoint.json"
+
+
+def save_checkpoint(slug, data):
+    """Save checkpoint data to disk. If data is None, delete the checkpoint."""
+    if data is None:
+        delete_checkpoint(slug)
+        return
+    cpath = _checkpoint_path(slug)
+    with open(cpath, "w") as f:
+        json.dump(data, f)
+    os.chmod(cpath, 0o600)
+
+
+def load_checkpoint(slug):
+    """Load checkpoint data from disk. Returns None if not found or invalid."""
+    cpath = _checkpoint_path(slug)
+    if not os.path.exists(cpath):
+        return None
+    try:
+        with open(cpath) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError, ValueError):
+        return None
+
+
+def delete_checkpoint(slug):
+    """Delete checkpoint file if it exists. No error if missing."""
+    cpath = _checkpoint_path(slug)
+    if os.path.exists(cpath):
+        os.remove(cpath)
+
+
+def validate_checkpoint(slug):
+    """Validate a stored checkpoint: branch exists, spec file exists.
+    Returns True if valid, False otherwise."""
+    data = load_checkpoint(slug)
+    if not data:
+        return False
+    # Check spec file exists
+    spec_path = data.get("spec_path", "")
+    if not spec_path or not os.path.exists(spec_path):
+        return False
+    # Check branch exists via git
+    branch = data.get("branch", "")
+    if not branch:
+        return False
+    _, _, rc = _safe_run(["git", "rev-parse", "--verify", branch])
+    if rc != 0:
+        return False
+    return True
+
+
 MAX_CONTINUOUS = 20
 
 def acquire_lock():
