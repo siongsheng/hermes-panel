@@ -1,4 +1,4 @@
-"""Tests for _detect_provider_failure helper (F005: Model Family Fallback)."""
+"""Tests for _detect_provider_failure helper and fallback retry (F005: Model Family Fallback)."""
 import sys
 import os
 import types
@@ -78,6 +78,30 @@ class TestDetectProviderFailure:
         """Words like 'rate' in normal output should not trigger."""
         module = _load_panel()
         output = "The success rate of tests is 100%"
+        assert module._detect_provider_failure(output) is False
+
+    def test_503_in_number_does_not_false_positive(self):
+        """Number containing '503' as substring (e.g., 15039) should not trigger."""
+        module = _load_panel()
+        output = "15039 tests passed, 48 failed"
+        assert module._detect_provider_failure(output) is False
+
+    def test_503_in_port_number_does_not_false_positive(self):
+        """Port number containing 503 should not trigger."""
+        module = _load_panel()
+        output = "Listening on port 25030"
+        assert module._detect_provider_failure(output) is False
+
+    def test_rate_as_word_in_non_limit_context_does_not_false_positive(self):
+        """The word 'rate' in normal context should not trigger 'rate limit' pattern."""
+        module = _load_panel()
+        output = "The error rate decreased by 50% this sprint"
+        assert module._detect_provider_failure(output) is False
+
+    def test_model_as_topic_not_false_positive(self):
+        """'model' used as a topic word should not trigger if not followed by 'not found/available'."""
+        module = _load_panel()
+        output = "The new model was deployed to production"
         assert module._detect_provider_failure(output) is False
 
 
@@ -236,4 +260,172 @@ class TestSpawnAgentFallbackRetry:
         assert "--provider" in fallback_cmd, f"Expected --provider in fallback cmd: {fallback_cmd}"
         assert "openrouter" in fallback_cmd
         assert "-m" in fallback_cmd or "--model" in fallback_cmd
-        assert "claude-sonnet-4" in fallback_cmd
+        assert "anthropic/claude-sonnet-4" in fallback_cmd
+
+
+class TestFallbackNotFiredOnLegitimateOutput:
+    """Task 6: Verify fallback does NOT fire on legitimate agent output."""
+
+    def _make_mock_proc(self, lines, returncode=0, stderr=""):
+        """Create a mock Popen instance."""
+        class MockProc:
+            def __init__(self, lines, returncode, stderr):
+                self._lines = lines
+                self.returncode = returncode
+                self._stderr = stderr
+
+            @property
+            def stdout(self):
+                class StdoutIter:
+                    def __init__(self, lines):
+                        self._lines = lines
+                        self._idx = 0
+                    def __iter__(self):
+                        return self
+                    def __next__(self):
+                        if self._idx >= len(self._lines):
+                            raise StopIteration
+                        self._idx += 1
+                        return self._lines[self._idx - 1]
+                return StdoutIter(self._lines)
+
+            @property
+            def stderr(self):
+                class StderrReader:
+                    def __init__(self, text):
+                        self._text = text
+                    def read(self):
+                        return self._text
+                return StderrReader(self._stderr)
+
+            def wait(self, timeout=None):
+                return None
+
+            def kill(self):
+                pass
+
+            def terminate(self):
+                pass
+
+            def communicate(self, timeout=None):
+                return (None, self._stderr)
+
+        return MockProc(lines, returncode, stderr)
+
+    def test_number_503_in_output_does_not_trigger_fallback(self):
+        """Output containing '503' embedded in a larger number should not trigger fallback.
+        Current pattern re.compile(r'503') matches '503' anywhere, including inside 15039.
+        This test proves the bug exists and guards against regression."""
+        import subprocess
+        calls = []
+
+        def mock_popen(cmd, **kwargs):
+            calls.append(cmd)
+            return self._make_mock_proc(
+                ["15039 tests passed, 0 failed\n"],
+                returncode=0
+            )
+
+        module = _load_panel()
+        module.FALLBACK_MODEL = "openrouter/anthropic/claude-sonnet-4"
+        module.HERMES_BIN = "/usr/bin/hermes"
+
+        with unittest.mock.patch("subprocess.Popen", mock_popen):
+            result = module.spawn_agent("coder", ["test-skill"], "test prompt", timeout=30)
+
+        assert "15039 tests passed" in result
+        # Should be exactly 1 call — fallback fired if >1
+        assert len(calls) == 1, f"Expected 1 call (no fallback), got {len(calls)}. Fallback incorrectly fired on legitimate output containing '503' as substring."
+
+    def test_app_error_nonzero_exit_does_not_trigger_fallback(self):
+        """Non-zero exit with application error in stderr should not trigger fallback."""
+        import subprocess
+        calls = []
+
+        def mock_popen(cmd, **kwargs):
+            calls.append(cmd)
+            return self._make_mock_proc(
+                ["Task failed: file not found\n"],
+                returncode=2,
+                stderr="ModuleNotFoundError: No module named 'requests'\n"
+            )
+
+        module = _load_panel()
+        module.FALLBACK_MODEL = "openrouter/anthropic/claude-sonnet-4"
+        module.HERMES_BIN = "/usr/bin/hermes"
+
+        with unittest.mock.patch("subprocess.Popen", mock_popen):
+            result = module.spawn_agent("coder", ["test-skill"], "test prompt", timeout=30)
+
+        assert "Task failed: file not found" in result
+        assert len(calls) == 1, f"Expected 1 call (no fallback), got {len(calls)}"
+
+    def test_stderr_with_generic_error_does_not_trigger_fallback(self):
+        """Stderr with generic system errors should not trigger fallback."""
+        import subprocess
+        calls = []
+
+        def mock_popen(cmd, **kwargs):
+            calls.append(cmd)
+            return self._make_mock_proc(
+                ["Done\n"],
+                returncode=0,
+                stderr="warning: deprecated function called\n"
+            )
+
+        module = _load_panel()
+        module.FALLBACK_MODEL = "openrouter/anthropic/claude-sonnet-4"
+        module.HERMES_BIN = "/usr/bin/hermes"
+
+        with unittest.mock.patch("subprocess.Popen", mock_popen):
+            result = module.spawn_agent("coder", ["test-skill"], "test prompt", timeout=30)
+
+        assert "Done" in result
+        assert len(calls) == 1, f"Expected 1 call (no fallback), got {len(calls)}"
+
+    def test_model_discussion_does_not_trigger_fallback(self):
+        """Agent output discussing a model as a topic should not trigger fallback."""
+        import subprocess
+        calls = []
+
+        def mock_popen(cmd, **kwargs):
+            calls.append(cmd)
+            return self._make_mock_proc(
+                ["I recommend using the GPT-4 model for this task\n"],
+                returncode=0
+            )
+
+        module = _load_panel()
+        module.FALLBACK_MODEL = "openrouter/anthropic/claude-sonnet-4"
+        module.HERMES_BIN = "/usr/bin/hermes"
+
+        with unittest.mock.patch("subprocess.Popen", mock_popen):
+            result = module.spawn_agent("coder", ["test-skill"], "test prompt", timeout=30)
+
+        assert "GPT-4 model" in result
+        assert len(calls) == 1, f"Expected 1 call (no fallback), got {len(calls)}"
+
+    def test_multi_line_agent_code_output_does_not_trigger_fallback(self):
+        """Multi-line legitimate code output should not trigger fallback."""
+        import subprocess
+        calls = []
+
+        def mock_popen(cmd, **kwargs):
+            calls.append(cmd)
+            return self._make_mock_proc(
+                ["Here is the implementation:\n",
+                 "def hello():\n",
+                 "    print('Hello, world!')\n",
+                 "returncode: 0\n"],
+                returncode=0
+            )
+
+        module = _load_panel()
+        module.FALLBACK_MODEL = "openrouter/anthropic/claude-sonnet-4"
+        module.HERMES_BIN = "/usr/bin/hermes"
+
+        with unittest.mock.patch("subprocess.Popen", mock_popen):
+            result = module.spawn_agent("coder", ["test-skill"], "test prompt", timeout=30)
+
+        assert "Hello, world!" in result
+        assert len(calls) == 1, f"Expected 1 call (no fallback), got {len(calls)}"
