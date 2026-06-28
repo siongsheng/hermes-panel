@@ -146,6 +146,42 @@ def call_agent(port, system_prompt, user_prompt, model="deepseek-v4-pro", max_to
     return {"content": resp["choices"][0]["message"]["content"],
             "tokens": resp["usage"]["completion_tokens"]}
 
+# ── provider failure detection ────────────────
+
+_PROVIDER_FAILURE_PATTERNS = [
+    re.compile(r'TIMEOUT[:\s]', re.IGNORECASE),
+    re.compile(r'HTTP\s+[45]\d{2}', re.IGNORECASE),
+    re.compile(r'5\d{2}\s+(Service Unavailable|Internal Server Error|Bad Gateway)', re.IGNORECASE),
+    re.compile(r'429\s+Too Many Requests', re.IGNORECASE),
+    re.compile(r'(40[13])\s+(Unauthorized|Forbidden)', re.IGNORECASE),
+    re.compile(r'connection\s+refused', re.IGNORECASE),
+    re.compile(r'upstream connect error|disconnect/reset before headers', re.IGNORECASE),
+    re.compile(r'provider\.error', re.IGNORECASE),
+    re.compile(r'model\s+not\s+(found|available)', re.IGNORECASE),
+    re.compile(r'model\.not\.available', re.IGNORECASE),
+    re.compile(r'service\s+unavailable', re.IGNORECASE),
+]
+
+
+def _detect_provider_failure(output, returncode=0):
+    """Scan combined stdout+stderr for known provider failure patterns.
+    Returns True if the provider is definitively down — non-zero returncode
+    AND/OR matching a known error pattern. Returns False for valid output
+    or output that merely contains the word 'error' in non-provider context.
+    Used by spawn_agent to decide whether to trigger model-family fallback."""
+    if output is None:
+        return False
+    output = str(output)
+    if not output and returncode != 0:
+        return True
+    if not output:
+        return False
+    for pattern in _PROVIDER_FAILURE_PATTERNS:
+        if pattern.search(output):
+            return True
+    return False
+
+
 def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None):
     """Spawn a Hermes agent as a subprocess. Returns stdout or raises on failure.
     If model is specified (e.g. 'deepseek-v4-pro'), passes -m/--provider to override the profile default."""
