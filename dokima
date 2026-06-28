@@ -626,16 +626,13 @@ class TaskDAG:
         return True
 
     def compute_execution_mode(self) -> str:
-        """Derive execution mode from DAG signals. Returns 'single_session' or 'per_task_spawn'.
+        """Derive execution mode from DAG signals.
 
-        Triggers per_task_spawn when:
-          - Any task is non-parallelizable (refactor, same-file dependency)
-          - More than 10 tasks (context window overflow)
-          - More than 3 distinct files (context window too wide)
-        Otherwise returns single_session (batch mode).
+        Returns 'single_session' or 'per_task_spawn' based on task count,
+        distinct file count, and parallelizability.
         """
         tasks = list(self.tasks.values())
-        all_files = set()
+        all_files: set[str] = set()
         all_parallelizable = True
         for t in tasks:
             for f in t.files:
@@ -644,16 +641,20 @@ class TaskDAG:
                 all_parallelizable = False
 
         # --- per_task_spawn triggers ---
+        # Any task is non-parallelizable (refactor, same-file dependency)
         if not all_parallelizable:
             return "per_task_spawn"
 
+        # Too many tasks for one coder context window
         if len(tasks) > 10:
             return "per_task_spawn"
 
+        # Too many distinct files for one coder to hold
         if len(all_files) > 3:
             return "per_task_spawn"
 
         # --- single_session triggers ---
+        # Every task is parallelizable, ≤10 tasks, ≤3 files → batch
         return "single_session"
 
 
