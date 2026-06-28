@@ -94,6 +94,30 @@ def _write_log_line(text):
         pass
 
 
+# ── provider failure detection ─────────────────
+
+_PROVIDER_FAILURE_PATTERNS = [
+    re.compile(r'rate limit', re.IGNORECASE),
+    re.compile(r'503'),
+    re.compile(r'service unavailable', re.IGNORECASE),
+    re.compile(r'provider\.error', re.IGNORECASE),
+    re.compile(r'model.*not.*(?:found|available)', re.IGNORECASE | re.DOTALL),
+    re.compile(r'connection refused', re.IGNORECASE),
+]
+
+
+def _detect_provider_failure(output):
+    """Scan combined stdout+stderr for known provider failure patterns.
+    Returns True if any failure pattern is matched, False otherwise.
+    Used by spawn_agent to decide whether to trigger model-family fallback."""
+    if not output:
+        return False
+    for pattern in _PROVIDER_FAILURE_PATTERNS:
+        if pattern.search(str(output)):
+            return True
+    return False
+
+
 # ── helpers ──────────────────────────────────────
 
 def load_key():
