@@ -109,7 +109,7 @@
 ### F012: Profile Templates
 **Priority:** P2
 **Dependencies:** F011
-**Status:** [x] Done Progress
+**Status:** [x] Done
 **User Story:** As a new developer, `dokima init` creates agent profiles (`strategist`, `coder`, `tech-lead`, `nm`) with sensible defaults — I only need to add my API keys.
 
 ### F013: Vendor-Agnostic Model Config
