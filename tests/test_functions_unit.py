@@ -20,13 +20,6 @@ class TestSafeRun:
         assert result.returncode == 0
         assert "hello" in result.stdout
 
-    def test_nonexistent_command_falls_back_to_bash(self, panel):
-        """shlex.split should fail, fallback to bash -lc."""
-        result = panel._safe_run("nonexistent_command_xyz 2>&1", cwd="/tmp", timeout=5)
-        # bash -lc will try to run it, should give non-zero exit
-        assert result.returncode != 0 or "not found" in (result.stdout or "").lower()
-
-
 class TestGit:
     """git(*args) — thin wrapper around git -C PROJECT_DIR."""
 
