@@ -78,3 +78,46 @@ class TestDetectProviderFailure:
         module = _load_panel()
         output = "The success rate of tests is 100%"
         assert module._detect_provider_failure(output) is False
+
+
+class TestSelectFallbackModel:
+    """Task 4: _select_fallback_model picks the right fallback model on failure."""
+
+    def test_selects_fallback_when_provider_failure(self):
+        module = _load_panel()
+        result = module._select_fallback_model(
+            "deepseek/deepseek-chat", "rate limit exceeded"
+        )
+        assert result is not None
+        assert isinstance(result, str)
+
+    def test_returns_correct_fallback_model(self):
+        module = _load_panel()
+        result = module._select_fallback_model(
+            "deepseek/deepseek-chat", "HTTP 503 Service Unavailable"
+        )
+        assert result == "openrouter/anthropic/claude-sonnet-4-20250514"
+
+    def test_no_fallback_when_output_valid(self):
+        module = _load_panel()
+        result = module._select_fallback_model(
+            "deepseek/deepseek-chat", "Task completed successfully"
+        )
+        assert result is None
+
+    def test_no_fallback_for_unknown_model(self):
+        module = _load_panel()
+        result = module._select_fallback_model(
+            "unknown/model", "rate limit exceeded"
+        )
+        assert result is None
+
+    def test_no_fallback_for_empty_output(self):
+        module = _load_panel()
+        result = module._select_fallback_model("deepseek/deepseek-chat", "")
+        assert result is None
+
+    def test_no_fallback_for_none_output(self):
+        module = _load_panel()
+        result = module._select_fallback_model("deepseek/deepseek-chat", None)
+        assert result is None
