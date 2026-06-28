@@ -1,9 +1,10 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-28 23:15:22 (incremental | 58 files)
+## Generated: 2026-06-29 01:30:44 (incremental | 60 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
+├── MAINTAINERS.md  — Dokima — Maintainer's Reference
 └── README.md  — Dokima
 ├── docs/
 ├── pipeline.md  — Dokima — Pipeline Reference
@@ -36,7 +37,7 @@
 ├── test_dag_format.py  — Exports: panel, test_dag_regex_matches_valid, test_dag_regex_rejects_invalid, test_dag_regex_matches_multiple
 ├── test_detect_commands.py  — Exports: test_first_acquisition_succeeds, test_second_acquisition_blocked, test_stale_lock_dead_pid
 ├── test_edge_cases.py  — Exports: _setup
-├── test_execution_mode_dispatch.py  — Exports: _reset_called, _mock_run_phase2_coder, _mock_run_parallel_coders, _mock_halt_and_revert, _mock_merge_worktree_branches
+├── test_execution_mode_dispatch.py  — Exports: _reset_called, _mock_run_phase2_coder, _mock_run_phase2_coder_capture, _mock_run_parallel_coders, _mock_halt_and_revert
 ├── test_extract_agent.py  — Exports: test_hermes_box_format, test_no_box_markers_fallback, test_multiple_boxes, test_empty_box_skipped, test_partial_box_no_match
 ├── test_extract_file_paths.py  — Exports: TestExtractFilePathsBacktick
 ├── test_extract_pr.py
@@ -44,6 +45,7 @@
 ├── test_f002_closure.py  — Exports: test_f002_marked_done_in_roadmap, test_f002_recorded_in_status
 ├── test_f003_robustness.py  — Exports: _make_result, TestRedOnlyCommits
 ├── test_f005_fallback.py  — Exports: TestDetectProviderFailure
+├── test_f006_recovery.py  — Exports: TestCheckpointPath, TestSaveCheckpoint
 ├── test_final_coverage.py  — Exports: _setup
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════

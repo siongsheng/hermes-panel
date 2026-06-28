@@ -3,20 +3,24 @@
     "hash": "9b0248debd0172d61b97abf182dbfe3b",
     "desc": "Dokima \u2014 Multi-Agent Orchestration Engine"
   },
+  "MAINTAINERS.md": {
+    "hash": "68117ed2910b34df36b2f2510a6ebba1",
+    "desc": "Dokima \u2014 Maintainer's Reference"
+  },
   "README.md": {
-    "hash": "dca34e9eefd4479296aa7f20ae0d6fe8",
+    "hash": "f1eb0723512622b9bc55280001e7bbc1",
     "desc": "Dokima"
   },
   "docs/pipeline.md": {
-    "hash": "81b3b4502ed36fe1f5bbaf709bfe040d",
+    "hash": "50595743d76b954c390e95e6fd3da97c",
     "desc": "Dokima \u2014 Pipeline Reference"
   },
   "docs/setup.md": {
-    "hash": "dcc71a1ccb9c071a95a14a29dc56bcb9",
+    "hash": "bf3fb1b8bcf53f9820a0c73cfb36d5e4",
     "desc": "Dokima \u2014 Deployment & Setup Guide"
   },
   "scripts/setup-linux.sh": {
-    "hash": "7f8282d5cf077979672bbc3442d5d94c",
+    "hash": "3f15d47ade01635b482bf5ac7192f6e3",
     "desc": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
   },
   "skills/adversarial-review-lite/SKILL.md": {
@@ -92,15 +96,15 @@
     "desc": "Exports: _setup"
   },
   "tests/test_execution_mode_dispatch.py": {
-    "hash": "4a948034dd1c7a1fed84b12ca3954252",
-    "desc": "Exports: _reset_called, _mock_run_phase2_coder, _mock_run_parallel_coders, _mock_halt_and_revert, _mock_merge_worktree_branches"
+    "hash": "e7eeda917719c4d02e033245c2ba1144",
+    "desc": "Exports: _reset_called, _mock_run_phase2_coder, _mock_run_phase2_coder_capture, _mock_run_parallel_coders, _mock_halt_and_revert"
   },
   "tests/test_extract_agent.py": {
     "hash": "c66ec7368ca0fec7438770f28a96b972",
     "desc": "Exports: test_hermes_box_format, test_no_box_markers_fallback, test_multiple_boxes, test_empty_box_skipped, test_partial_box_no_match"
   },
   "tests/test_extract_file_paths.py": {
-    "hash": "13c5e35b9d999fdaffa518f3f1286884",
+    "hash": "06f4a1332ee6c4e957c00a82cdcc5c58",
     "desc": "Exports: TestExtractFilePathsBacktick"
   },
   "tests/test_extract_pr.py": {
@@ -123,8 +127,12 @@
     "hash": "032108bab34d246ca3424112f094b3ed",
     "desc": "Exports: TestDetectProviderFailure"
   },
+  "tests/test_f006_recovery.py": {
+    "hash": "4635ac5cfe39f760f0f0056523c2763b",
+    "desc": "Exports: TestCheckpointPath, TestSaveCheckpoint"
+  },
   "tests/test_final_coverage.py": {
-    "hash": "9c55d9df730c6d3d0983f8bbdbed9ebf",
+    "hash": "9f2fc544e4c756f1de294412020905ad",
     "desc": "Exports: _setup"
   },
   "tests/test_final_edge.py": {

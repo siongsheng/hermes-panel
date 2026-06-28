@@ -57,7 +57,7 @@
 ### F009: Depth Gating Tuning
 **Priority:** P1
 **Dependencies:** F007, F008
-**Status:** [~] In Progress
+**Status:** [x] Done Progress
 **User Story:** As a panel operator, the confidence × impact matrix reliably selects the right depth — docs changes don't run full nm+TL, novel features get full vetting.
 
 ### F010: Parallel Coder Robustness
