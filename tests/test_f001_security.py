@@ -85,3 +85,67 @@ class TestPromptSanitizer:
             assert "WARNING" in output
         finally:
             sys.stderr = old_stderr
+
+
+class TestRedactSecrets:
+    """Task 2: _redact_secrets strips token values from output."""
+
+    def test_redact_strips_gh_token_from_output(self):
+        import os
+        os.environ["GH_TOKEN"] = "ghp_testtoken123"
+        module = _load_panel()
+        try:
+            result = module._redact_secrets("Token is ghp_testtoken123 here")
+            assert "ghp_testtoken123" not in result
+            assert "[REDACTED]" in result
+        finally:
+            os.environ.pop("GH_TOKEN", None)
+
+    def test_redact_strips_api_key_from_output(self):
+        import os
+        os.environ["API_SERVER_KEY"] = "sk-secret-api-key-12345"
+        module = _load_panel()
+        try:
+            result = module._redact_secrets("Key is sk-secret-api-key-12345 here")
+            assert "sk-secret-api-key-12345" not in result
+            assert "[REDACTED]" in result
+        finally:
+            os.environ.pop("API_SERVER_KEY", None)
+
+    def test_redact_preserves_non_secret_text(self):
+        import os
+        token = os.environ.pop("GH_TOKEN", None)
+        module = _load_panel()
+        try:
+            text = "This is a normal feature description without secrets"
+            result = module._redact_secrets(text)
+            assert result == text
+        finally:
+            if token is not None:
+                os.environ["GH_TOKEN"] = token
+
+    def test_redact_handles_empty_string(self):
+        module = _load_panel()
+        assert module._redact_secrets("") == ""
+
+    def test_redact_handles_multiple_occurrences(self):
+        import os
+        os.environ["GH_TOKEN"] = "ghp_dup"
+        module = _load_panel()
+        try:
+            result = module._redact_secrets("ghp_dup first ghp_dup second")
+            assert "ghp_dup" not in result
+            assert result.count("[REDACTED]") == 2
+        finally:
+            os.environ.pop("GH_TOKEN", None)
+
+    def test_redact_handles_token_at_line_start(self):
+        import os
+        os.environ["GH_TOKEN"] = "ghp_abc"
+        module = _load_panel()
+        try:
+            result = module._redact_secrets("ghp_abc is at the start")
+            assert "ghp_abc" not in result
+            assert result.startswith("[REDACTED]")
+        finally:
+            os.environ.pop("GH_TOKEN", None)
