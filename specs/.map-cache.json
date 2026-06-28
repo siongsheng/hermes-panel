@@ -1,0 +1,198 @@
+{
+  "AGENTS.md": {
+    "hash": "9b0248debd0172d61b97abf182dbfe3b",
+    "desc": "Dokima \u2014 Multi-Agent Orchestration Engine"
+  },
+  "README.md": {
+    "hash": "dca34e9eefd4479296aa7f20ae0d6fe8",
+    "desc": "Dokima"
+  },
+  "docs/pipeline.md": {
+    "hash": "78b6646fab904ea901fbcc08f441a006",
+    "desc": "Dokima \u2014 Pipeline Reference"
+  },
+  "docs/setup.md": {
+    "hash": "dcc71a1ccb9c071a95a14a29dc56bcb9",
+    "desc": "Dokima \u2014 Deployment & Setup Guide"
+  },
+  "scripts/setup-linux.sh": {
+    "hash": "7f8282d5cf077979672bbc3442d5d94c",
+    "desc": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+  },
+  "skills/adversarial-review-lite/SKILL.md": {
+    "hash": "d685ec85b479a416e53f4892a4be321e",
+    "desc": "Adversarial Review (Lite \u2014 Tech Lead Edition)"
+  },
+  "skills/ai-coding-best-practices-lite/SKILL.md": {
+    "hash": "6d68196c566bdb872d2ca4a453b39f79",
+    "desc": "AI Coding Best Practices (Lite \u2014 Coder Edition)"
+  },
+  "skills/no-mistakes/SKILL.md": {
+    "hash": "fd9614d4d811810613d7a843e9f110aa",
+    "desc": "No Mistakes \u2014 Validation Pipeline"
+  },
+  "skills/no-mistakes/references/python-default-argument-pitfall.md": {
+    "hash": "34abacc8556e83ed24c3ec9cdeb9633c",
+    "desc": "Python Default Argument Binding Trap"
+  },
+  "skills/no-mistakes/references/vitest-dotenv-setup.md": {
+    "hash": "cc365686ed7450d2a505317c03c6b684",
+    "desc": "Vitest dotenv Setup"
+  },
+  "skills/ponytail-guard/SKILL.md": {
+    "hash": "bdd72696d7f0b4891603f7b2d8ccec74",
+    "desc": "Ponytail Guard \u2014 Laziness Ladder for dokima"
+  },
+  "skills/spec-strategist-lite/SKILL.md": {
+    "hash": "20dcfe6af2ada4d3fa14f8a34350a9bb",
+    "desc": "Spec Strategist (Lite \u2014 Panel Edition)"
+  },
+  "tests/conftest.py": {
+    "hash": "210f4fca9107f06ef6a0a90cd92a3582",
+    "desc": "Exports: _load_panel, _reload_panel"
+  },
+  "tests/test_acquire_lock.py": {
+    "hash": "f633babd5dfb43c5895635afbc1718a6",
+    "desc": "Exports: test_first_acquisition_succeeds, test_second_acquisition_blocked, test_stale_lock_dead_pid"
+  },
+  "tests/test_add_to_roadmap.py": {
+    "hash": "0164b46381f0f69b4f7be3102663ab4a",
+    "desc": ""
+  },
+  "tests/test_clean_spec.py": {
+    "hash": "23f26d5a0782df242841ce3a1e650fcd",
+    "desc": "Exports: TestCleanSpecContent"
+  },
+  "tests/test_codebase_map.py": {
+    "hash": "3a9560d467214c01517ee32ed21fadec",
+    "desc": "assert \"Fetch user data\" in desc"
+  },
+  "tests/test_conftest_fixtures.py": {
+    "hash": "09458709d58144434949b0b1a4318f14",
+    "desc": "Exports: TestTestRepoFixture, TestMockOrchestratorFixture"
+  },
+  "tests/test_continuous.py": {
+    "hash": "fd75b5b62d66717290572bf0f9d8c39e",
+    "desc": "Exports: _setup_two_features, test_continuous_loop_two_features"
+  },
+  "tests/test_control_panel.py": {
+    "hash": "18ea06a61cfd234d587d0fda3942c8f1",
+    "desc": "Exports: test_show_help_exits_zero, test_handle_status_idle, test_handle_status_running, test_handle_stop_no_running, test_handle_stop_creates_stop_file"
+  },
+  "tests/test_dag_format.py": {
+    "hash": "d4e2cfb59b429c08296312fd844b0e17",
+    "desc": "Exports: panel, test_dag_regex_matches_valid, test_dag_regex_rejects_invalid, test_dag_regex_matches_multiple"
+  },
+  "tests/test_detect_commands.py": {
+    "hash": "f81490a09b9b1292c6c9e413026ca643",
+    "desc": "Exports: test_first_acquisition_succeeds, test_second_acquisition_blocked, test_stale_lock_dead_pid"
+  },
+  "tests/test_edge_cases.py": {
+    "hash": "70717243374cb2e54d00484cbe148016",
+    "desc": "Exports: _setup"
+  },
+  "tests/test_extract_agent.py": {
+    "hash": "c66ec7368ca0fec7438770f28a96b972",
+    "desc": "Exports: test_hermes_box_format, test_no_box_markers_fallback, test_multiple_boxes, test_empty_box_skipped, test_partial_box_no_match"
+  },
+  "tests/test_extract_file_paths.py": {
+    "hash": "13c5e35b9d999fdaffa518f3f1286884",
+    "desc": "Exports: TestExtractFilePathsBacktick"
+  },
+  "tests/test_extract_pr.py": {
+    "hash": "4968e5a3dd91451aaf1c44a65b3c0314",
+    "desc": ""
+  },
+  "tests/test_f002_closure.py": {
+    "hash": "feb406edbc8ad345f623f4b2b1e8a751",
+    "desc": "Exports: test_f002_marked_done_in_roadmap, test_f002_recorded_in_status"
+  },
+  "tests/test_final_coverage.py": {
+    "hash": "6a9ce7477d55adf6659a739eb25a0bf0",
+    "desc": "Exports: _setup"
+  },
+  "tests/test_final_edge.py": {
+    "hash": "37861b1e4d95df4dec8b6ade23ce6ae7",
+    "desc": "Exports: _setup"
+  },
+  "tests/test_fix_mode.py": {
+    "hash": "51c0048590710a7b799092a19dd24175",
+    "desc": "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550"
+  },
+  "tests/test_functions_unit.py": {
+    "hash": "c63b1cdbed9bfe655259ac75cf4e291b",
+    "desc": "Exports: TestSafeRun, TestGit, TestHaltAndRevert"
+  },
+  "tests/test_helpers.py": {
+    "hash": "1c8913a5ebbbe7b55c962d72595fb802",
+    "desc": "Exports: test_make_status_entry_pending, test_make_status_entry_done_with_pr, test_make_status_entry_in_progress, test_commit_roadmap_update_dry, test_auto_repair_status_empty"
+  },
+  "tests/test_lock_paths.py": {
+    "hash": "272d96d5dce93d1a74102762e70a9cc0",
+    "desc": "Exports: test_explicit_project_dir_lock, test_explicit_project_dir_stop, test_implicit_from_global, test_trailing_slash_normalized, test_no_project_dir_no_arg"
+  },
+  "tests/test_main_integration.py": {
+    "hash": "fe249444ab211030caa9dd545117958f",
+    "desc": "Exports: _make_safe_run_result, _setup_test_project, _mock_spawn"
+  },
+  "tests/test_pick_next.py": {
+    "hash": "9bf22096e271589b296f5fe7eecd8406",
+    "desc": "Exports: make_feat, test_empty_list, test_all_done, test_single_pending_no_deps, test_p0_beats_p1"
+  },
+  "tests/test_pid_utils.py": {
+    "hash": "22ceb743fa00b889f26245187e389989",
+    "desc": "Exports: test_check_live_pid, test_check_dead_pid, test_check_non_numeric, test_check_empty_string, test_verify_owner_on_self"
+  },
+  "tests/test_pipeline_integration.py": {
+    "hash": "0d5fa7631c98ab3bf39ae166435adea6",
+    "desc": "Exports: _setup_test_project"
+  },
+  "tests/test_rich_pipeline.py": {
+    "hash": "a730bd228011714c5791ff79dee226ed",
+    "desc": "Exports: _setup_project"
+  },
+  "tests/test_roadmap_parse.py": {
+    "hash": "ebdf5a71fcd0cc7b8337e49215ca1063",
+    "desc": "Exports: test_file_not_found, test_empty_file, test_single_feature_all_fields"
+  },
+  "tests/test_roadmap_update.py": {
+    "hash": "367a5d950dddedc4a64a7b51ee16db55",
+    "desc": "Exports: test_pending_to_in_progress, test_in_progress_to_done, test_done_to_pending_revert, test_feature_not_found_no_change, test_file_not_found_no_crash"
+  },
+  "tests/test_root_cause_regressions.py": {
+    "hash": "a932434ef4c2b061edf7856110401acc",
+    "desc": "Exports: TestSpecPathDetection"
+  },
+  "tests/test_safe_run.py": {
+    "hash": "3eb69dcc4fb08a10846006e4e578e715",
+    "desc": "Exports: test_simple_echo, test_command_fails, test_shell_metachar_not_injected, test_complex_command, test_unsplittable_falls_back_to_bash"
+  },
+  "tests/test_slugify.py": {
+    "hash": "4408cde97f3a1c91cb556dca039bc4ae",
+    "desc": "Exports: test_clean_input_no_change, test_spaces_to_hyphens, test_special_chars_removed, test_exactly_40_chars_no_hash, test_41_chars_appends_hash"
+  },
+  "tests/test_status_md.py": {
+    "hash": "5cab1041379af41b43f058eb2d314d47",
+    "desc": "Exports: test_empty_status_file, test_single_active_entry, test_update_existing_entry, test_new_entry_appended, test_timestamp_auto_generated"
+  },
+  "tests/test_triple_bug_fix.py": {
+    "hash": "c0318354b36716babd21c996fb8618a5",
+    "desc": "\u2500\u2500 Bug 1: Spec archive \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+  },
+  "tests/test_unit_helpers.py": {
+    "hash": "70f45a0ff33f784f1a5906906e3b8bcf",
+    "desc": "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550"
+  },
+  "tests/htmlcov/coverage_html_cb_dd2e7eb5.js": {
+    "hash": "47d6ea8f87058d0cea6b52102adf1b13",
+    "desc": "Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0"
+  },
+  "tests/htmlcov/status.json": {
+    "hash": "81f4f62c039e3fe60da1fe321ec65c8f",
+    "desc": ""
+  },
+  "tests/htmlcov/style_cb_4667309f.css": {
+    "hash": "d647f42e23626b7ad1182af8492f3de7",
+    "desc": ""
+  }
+}

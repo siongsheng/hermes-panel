@@ -10,6 +10,7 @@
 | F006: Strategist Respects Existing Specs | [x] Done | — | 2026-06-27 |
 | F002: Pipeline Integration Tests | [x] Done | — | 2026-06-28 |
 - **F001: Security Hardening** — in progress since 2026-06-27 23:51, branch `feat/f001-security-hardening` [panel]
+- **F003: Edge Case & Robustness Tests** — in progress since 2026-06-28 11:20, branch `feat/f003-edge-case--robustness-tests` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
