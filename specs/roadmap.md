@@ -23,7 +23,7 @@
 ### F005: Model Family Fallback
 **Priority:** P1
 **Dependencies:** None
-**Status:** [x] Done Progress Progress Progress Progress
+**Status:** [x] Done
 **User Story:** As a panel operator, if the primary model provider is down, the panel auto-falls-back to a configured alternative (e.g. deepseek → openrouter → anthropic).
 
 ### F001: Security Hardening
@@ -35,7 +35,7 @@
 ### F006: Error Recovery & Resume
 **Priority:** P1
 **Dependencies:** F002
-**Status:** [~] In Progress Progress
+**Status:** [x] Done
 **User Story:** As a panel operator, if a pipeline crashes mid-run, I can resume from the last completed phase instead of restarting from scratch. Partial state (spec file, task extract, feature branch, open PR) is not lost.
 
 ---
