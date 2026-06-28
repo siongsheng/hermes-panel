@@ -4898,6 +4898,7 @@ def main():
             continue
         if arg == "--fix-all":
             fix_all = True
+            is_fix = True
             continue
         if arg == "--skip-autofix":
             skip_autofix = True
