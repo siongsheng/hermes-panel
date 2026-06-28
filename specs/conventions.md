@@ -32,6 +32,55 @@ The nm (adversarial reviewer) MUST use a different model **family** than the cod
 
 Same-family review shares blind spots and defeats the adversarial guarantee. Both nm primary AND fallback are cross-family from the coder.
 
+## Model Fallback
+
+When the primary model provider is down or returns an error, Dokima can automatically retry with a configured fallback model. This is opt-in — no changes required if the env var is unset.
+
+### Env Var: `PANEL_FALLBACK_MODEL`
+
+```
+PANEL_FALLBACK_MODEL=openrouter/anthropic/claude-sonnet-4
+```
+
+Format: `provider/model_name` (the same format used by `spawn_agent`'s `--provider`/`-m` flags). If unset or empty, fallback is disabled.
+
+### Detected Failure Patterns
+
+The panel scans agent output (stdout + stderr) for these case-insensitive regex patterns:
+
+| Pattern | Example |
+|---------|---------|
+| `\brate\s*limit\b` | "rate limit exceeded" |
+| `\b503\b` | "503 Service Unavailable" |
+| `Service\s+Unavailable` | "Service Unavailable" |
+| `provider\.?error` | "provider.error: upstream timeout" |
+| `model.*not.*found` | "model 'deepseek-v4-pro' not found" |
+| `connection\s+refused` | "connection refused" |
+
+Legitimate output containing words like "error" or "rate" in non-provider contexts (e.g. `"Error: file not found"`, `"def handle_error(): pass"`) does NOT trigger a false-positive fallback.
+
+### Retry Behavior
+
+- Only one retry per agent invocation (no infinite loop)
+- If the fallback also fails, the original error output is returned
+- If the primary agent times out, no fallback is attempted (timeout is not a provider failure)
+- The fallback uses the same profile, skills, prompt, and timeout as the primary call
+- The fallback model string is passed via list args to `hermes` CLI (no shell injection risk)
+
+### How to Verify Fallback Fired
+
+Search stderr or the output log for:
+
+```
+⚠ FALLBACK: primary failed — retrying with {FALLBACK_MODEL}
+```
+
+Or grep the log file:
+
+```bash
+grep -i "fallback" /tmp/dokima-output.txt
+```
+
 ## Profiling
 
 - Full pipeline runs logged to `/tmp/dokima-output.txt`
