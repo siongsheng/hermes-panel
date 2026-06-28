@@ -5,7 +5,7 @@ Usage: dokima "Feature description" [project_dir]
 Flow: Strategist → User Clarifications → Strategist Refine → TL Spec Pre-Review → Orchestrator Gate → Human Gate → Coder(branch) → vet(validate) → nm(adversarial+PR) → Tech Lead(spec review) → Report
 Output: Live to terminal + saved to /tmp/dokima-output.txt
 """
-import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal, datetime
+import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal, datetime, select
 
 REAL_HOME = pwd.getpwuid(os.getuid()).pw_dir
 HERMES = os.path.join(REAL_HOME, ".hermes")
@@ -3068,7 +3068,6 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
 
             user_answers = []
             try:
-                import select
                 for i in range(len(coder_clarify)):
                     print(f"\n  A{i+1}: ", end="", flush=True)
                     ready, _, _ = select.select([sys.stdin], [], [], 60.0)
@@ -3879,7 +3878,6 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
         print("-" * 60, flush=True)
         user_answers = []
         try:
-            import select
             for i in range(len(clarification_lines)):
                 print(f"\n  A{i+1}: ", end="", flush=True)
                 ready, _, _ = select.select([sys.stdin], [], [], 60.0)
