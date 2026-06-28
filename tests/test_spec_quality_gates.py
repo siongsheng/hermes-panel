@@ -611,7 +611,7 @@ class TestCiRegressionIntegration:
 
         spawn_calls = []
 
-        def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None, model=None):
+        def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None, model=None, **kwargs):
             spawn_calls.append({"profile": profile, "skills": skills})
             return GOOD_CI_SPEC
 
@@ -671,7 +671,7 @@ class TestCiRegressionIntegration:
 
         spawn_calls = []
 
-        def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None, model=None):
+        def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None, model=None, **kwargs):
             spawn_calls.append({"profile": profile, "skills": skills})
             return DEGRADED_CI_SPEC
 

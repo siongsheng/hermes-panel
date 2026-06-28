@@ -55,7 +55,7 @@ def test_continuous_loop_two_features(tmpdir):
     os.environ["PANEL_SKIP_HUMAN_GATE"] = "1"
     os.environ["PANEL_PARALLEL"] = "0"  # simplify: no parallel coders
 
-    def mock(profile, skills, prompt, timeout=600, cwd=None):
+    def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
         _spawn_calls.append(profile)
         if profile == "strategist":
             return "Confidence: High\nImpact: MEDIUM\n\nSpec for feature."

@@ -96,7 +96,7 @@ class TestContinuousDecisions:
         project_dir = _setup(tmpdir, panel, features=2)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: Medium\nImpact: LOW\n\nSpec."
@@ -138,7 +138,7 @@ class TestContinuousDecisions:
         project_dir = _setup(tmpdir, panel, features=2)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: Medium\nImpact: HIGH\n\nSpec."

@@ -167,7 +167,7 @@ class TestParallelCoders:
         project_dir = _setup_project(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return STRAT_WITH_TASKS
@@ -203,7 +203,7 @@ class TestVetFailure:
         _spawn_calls.clear()
 
         # Coder passes the gate to reach vet
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nSpec for test feature."

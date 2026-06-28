@@ -120,7 +120,7 @@ class TestInterviewGate:
         project_dir = _setup(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return STRAT_WITH_INTERVIEW
@@ -154,7 +154,7 @@ class TestCoderTimeout:
                 return ("commit_hash", "", 0)
             return ("", "", 0)
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nSpec."
@@ -177,7 +177,7 @@ class TestCoderTimeout:
                 return ("", "fatal: bad revision", 128)
             return ("", "", 0)
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nSpec."
@@ -208,7 +208,7 @@ class TestCoderPrExtraction:
         project_dir = _setup(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: LOW\n\nSpec."  # Impact LOW → depth="coder"
@@ -245,7 +245,7 @@ class TestMergeFailure:
         project_dir = _setup(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return STRAT_MULTI_TASK
@@ -280,7 +280,7 @@ class TestAutoMerge:
         project_dir = _setup(tmpdir, panel, features=2)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nSpec."
@@ -307,7 +307,7 @@ class TestAutoMerge:
         project_dir = _setup(tmpdir, panel, features=2)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nSpec."
@@ -348,7 +348,7 @@ class TestTlAutofixSkip:
         project_dir = _setup(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nSpec."

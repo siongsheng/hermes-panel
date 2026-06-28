@@ -106,7 +106,7 @@ def _make_safe_run_result(returncode=0, stdout=""):
     return result
 
 
-def _mock_capturing_spawn(profile, skills, prompt, timeout=600, cwd=None, model=None):
+def _mock_capturing_spawn(profile, skills, prompt, timeout=600, cwd=None, model=None, **kwargs):
     """Record all spawn_agent calls and return realistic strategist output."""
     _spawn_calls.append({"profile": profile, "skills": skills,
                          "prompt": prompt, "timeout": timeout, "cwd": cwd})
@@ -378,7 +378,7 @@ class TestModeDrivenDispatch:
             sys.argv = ["dokima", "--next", project_dir]
 
             # Return the single_session spec from spawn_agent
-            def _mock_spawn_single(profile, skills, prompt, timeout=600, cwd=None, model=None):
+            def _mock_spawn_single(profile, skills, prompt, timeout=600, cwd=None, model=None, **kwargs):
                 _spawn_calls.append({"profile": profile, "skills": skills,
                                      "prompt": prompt, "timeout": timeout, "cwd": cwd})
                 return STRAT_SPEC_SINGLE_SESSION
@@ -456,7 +456,7 @@ class TestModeDrivenDispatch:
             _spawn_calls.clear()
             sys.argv = ["dokima", "--next", project_dir]
 
-            def _mock_spawn_parallel(profile, skills, prompt, timeout=600, cwd=None, model=None):
+            def _mock_spawn_parallel(profile, skills, prompt, timeout=600, cwd=None, model=None, **kwargs):
                 _spawn_calls.append({"profile": profile, "skills": skills,
                                      "prompt": prompt, "timeout": timeout, "cwd": cwd})
                 return STRAT_SPEC_PER_TASK_SPAWN
@@ -532,7 +532,7 @@ class TestModeDrivenDispatch:
             _spawn_calls.clear()
             sys.argv = ["dokima", "--next", project_dir]
 
-            def _mock_spawn_per(profile, skills, prompt, timeout=600, cwd=None, model=None):
+            def _mock_spawn_per(profile, skills, prompt, timeout=600, cwd=None, model=None, **kwargs):
                 _spawn_calls.append({"profile": profile, "skills": skills,
                                      "prompt": prompt, "timeout": timeout, "cwd": cwd})
                 return STRAT_SPEC_PER_TASK_SPAWN

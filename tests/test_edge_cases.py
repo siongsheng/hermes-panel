@@ -166,7 +166,7 @@ class TestAdrCreation:
         project_dir = _setup(tmpdir, panel, adr_dir=True)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nADR-worthy decision."
@@ -215,7 +215,7 @@ class TestHumanGate:
         project_dir = _setup(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: Medium\nImpact: LOW\n\nFeature spec."
@@ -258,7 +258,7 @@ class TestHumanGate:
         old_environ = os.environ.copy()
         os.environ.pop("PANEL_SKIP_HUMAN_GATE", None)
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             if profile == "strategist":
                 return "Confidence: Medium\nImpact: LOW\n\nFeature."
             return "Mock"
@@ -318,7 +318,7 @@ class TestParallelFailure:
         project_dir = _setup(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return STRAT_WITH_TASKS
@@ -373,7 +373,7 @@ class TestClarificationGate:
         project_dir = _setup(tmpdir, panel)
         _spawn_calls.clear()
 
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: Medium\nImpact: LOW\n\nSpec."
@@ -444,7 +444,7 @@ RELEASE: YES minor
 class TestTechLeadPaths:
     def _run_pipeline(self, panel, project_dir, tl_output, gh_se=None):
         _spawn_calls.clear()
-        def mock(profile, skills, prompt, timeout=600, cwd=None):
+        def mock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             _spawn_calls.append(profile)
             if profile == "strategist":
                 return "Confidence: High\nImpact: MEDIUM\n\nFeature spec."

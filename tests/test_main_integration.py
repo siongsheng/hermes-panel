@@ -44,7 +44,7 @@ def _setup_test_project(panel, tmpdir):
 
 _spawn_calls = []
 
-def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None):
+def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
     _spawn_calls.append(profile)
     return "Mock agent output"
 
@@ -168,7 +168,7 @@ class TestPipelineExecution:
         project_dir = _setup_test_project(panel, str(tmpdir))
         lock_path = panel._lock_path(project_dir)
         lock_seen = []
-        def check_lock(profile, skills, prompt, timeout=600, cwd=None):
+        def check_lock(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             lock_seen.append(os.path.exists(lock_path))
             return "Mock"
         old = sys.argv
@@ -186,7 +186,7 @@ class TestPipelineExecution:
         """Failed coder should not mark feature as done."""
         panel = _load()
         project_dir = _setup_test_project(panel, str(tmpdir))
-        def fail_coder(profile, skills, prompt, timeout=600, cwd=None):
+        def fail_coder(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
             if profile == "coder":
                 return "[CODER_FAILED]"
             return "Mock"

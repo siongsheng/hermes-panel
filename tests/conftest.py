@@ -124,7 +124,7 @@ def mock_orchestrator(panel):
     Stops all patches on teardown."""
     spawn_calls = []
 
-    def mock_spawn(profile, skills, prompt, timeout=600, cwd=None):
+    def mock_spawn(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
         spawn_calls.append(profile)
         return "Mock agent output"
 
