@@ -4673,14 +4673,14 @@ Output NOTHING ELSE."""
             impact = marker
             break
     depth_matrix = {
-        ("High", "LOW"):    "vet+nm",   # Minimum: always verify build+test (coder-only = no PR, no verification)
+        ("High", "LOW"):    "vet",      # Docs/config changes: coder-only, skip adversarial review
         ("High", "MEDIUM"): "vet+nm",
         ("High", "HIGH"):   "full",
-        ("Medium", "LOW"):  "full",
+        ("Medium", "LOW"):  "vet+nm",
         ("Medium", "MEDIUM"): "full",
         ("Medium", "HIGH"): "full",
-        ("Low", "LOW"):     "full",
-        ("Low", "MEDIUM"):  "full",
+        ("Low", "LOW"):     "vet",      # Low-risk changes: coder-only
+        ("Low", "MEDIUM"):  "vet+nm",
         ("Low", "HIGH"):    "full",
     }
     depth = depth_matrix.get((confidence, impact), "full")
