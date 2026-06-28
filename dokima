@@ -1162,6 +1162,8 @@ FLAGS:
   --force-full         Run all 5 phases regardless of depth gating
   --skip-auto-archive  Don't auto-archive merged specs
   --skip-human-gate    Skip Human Gate prompt (for automation)
+  --resume             Resume from last checkpoint (re-runs incomplete phases only)
+  --no-resume          Ignore any existing checkpoint and start fresh
   --max-parallel=N     Max parallel coder agents (env: PANEL_MAX_PARALLEL, default: 5)
   --base-branch <b>    Override default branch for PR base (default: detected from origin/HEAD)
 
@@ -4989,7 +4991,7 @@ def main():
     global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE, DEFAULT_BRANCH, lock_fd, SKIP_AUTOFIX, FORCE_FULL, SKIP_HUMAN_GATE, max_parallel_override, FALLBACK_MODELS, RESUME
     import shutil
     if len(sys.argv) < 2:
-        print("Usage: dokima [--next|--continuous|--fix] [--fix-all] [--skip-autofix] [--force-full] [--skip-auto-archive] [--skip-human-gate] [--max-parallel=N] [--interactive] [--answers <json>] 'Feature' [dir]")
+        print("Usage: dokima [--next|--continuous|--fix] [--fix-all] [--skip-autofix] [--force-full] [--skip-auto-archive] [--skip-human-gate] [--resume|--no-resume] [--max-parallel=N] [--interactive] [--answers <json>] 'Feature' [dir]")
         print("  dokima --next [project_dir]             # one feature, manual merge")
         print("  dokima --continuous [project_dir]       # full sprint, auto-merge, loop")
         print("  dokima init 'description' [project_dir]")
