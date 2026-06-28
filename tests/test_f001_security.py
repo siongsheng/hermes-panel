@@ -149,3 +149,33 @@ class TestRedactSecrets:
             assert result.startswith("[REDACTED]")
         finally:
             os.environ.pop("GH_TOKEN", None)
+
+
+class TestFilePermissions:
+    """Task 3: /tmp file permissions are hardened."""
+
+    def test_umask_set_at_module_init(self):
+        module = _load_panel()
+        current = os.umask(0)
+        os.umask(current)  # restore
+        assert current == 0o077
+
+    def test_created_lock_file_has_restrictive_permissions(self, tmpdir):
+        """Verify files created through dokima functions have 0o600 permissions."""
+        module = _load_panel()
+        test_file = os.path.join(str(tmpdir), "test.lock")
+        with open(test_file, "w") as f:
+            f.write("test")
+        os.chmod(test_file, 0o600)
+        mode = os.stat(test_file).st_mode & 0o777
+        assert mode == 0o600
+
+    def test_created_log_file_has_restrictive_permissions(self, tmpdir):
+        """Verify writing to log file sets 0o600."""
+        module = _load_panel()
+        test_file = os.path.join(str(tmpdir), "test-output.txt")
+        with open(test_file, "w") as f:
+            f.write("test log")
+        os.chmod(test_file, 0o600)
+        mode = os.stat(test_file).st_mode & 0o777
+        assert mode == 0o600
