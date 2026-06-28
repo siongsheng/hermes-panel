@@ -13,7 +13,7 @@
 | F004: Deterministic Quality Gates | [x] Done | #12 | 2026-06-28 |
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
-- **F005: Model Family Fallback** — in progress since 2026-06-28 20:27, branch `feat/f005-model-family-fallback` [panel]
+- **F005: Model Family Fallback** — in progress since 2026-06-28 21:44, branch `feat/f005-model-family-fallback` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
