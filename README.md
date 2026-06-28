@@ -14,6 +14,30 @@ Dokima puts five agents in a room and makes them distrust each other. The strate
 
 **What comes out:** passing tests, passing build, a PR with two independent reviews, all automated. **What doesn't:** a CSS framework you didn't ask for.
 
+## Quick Install
+
+The fastest way to get dokima on your machine. Installs the panel and companion scripts — profiles and provider config come next.
+
+```bash
+curl -sSL https://raw.githubusercontent.com/siongsheng/dokima/main/install.sh | bash
+```
+
+This checks prerequisites (Python 3.6+, gh CLI, Hermes Agent), clones the repo to `~/.local/share/dokima`, and symlinks `dokima`, `nm`, and `vet` into `~/.local/bin`. Add `--with-profiles` to create agent profiles automatically:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/siongsheng/dokima/main/install.sh | bash -s -- --with-profiles
+```
+
+### Verify
+
+```bash
+dokima --help          # should print usage
+nm --help              # adversarial review runner
+vet --help             # build + test verifier
+```
+
+> **Full setup (provider config, API keys, GitHub token):** use the [Quick Start](#quick-start) below or see the [setup guide](docs/setup.md).
+
 ## Quick Start
 
 ### One-liner (Linux/macOS)
