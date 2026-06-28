@@ -17,7 +17,7 @@
 ### F004: Deterministic Quality Gates
 **Priority:** P1
 **Dependencies:** F002
-**Status:** [~] In Progress
+**Status:** [ ] Pending Progress
 **User Story:** As a contributor, running the same feature through the pipeline twice produces comparable output quality — same spec structure, same task granularity (5-15 min each), same DAG format, PR body has real Impact/What Changed (not placeholders). Quality regressions are caught by CI — if a panel change causes the strategist to output 14K-char specs for High-confidence features, the test fails.
 
 ### F005: Model Family Fallback

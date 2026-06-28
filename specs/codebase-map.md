@@ -1,6 +1,6 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-28 10:47:16 (incremental | 49 files)
+## Generated: 2026-06-28 12:11:06 (incremental | 52 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
@@ -36,6 +36,7 @@
 ├── test_dag_format.py  — Exports: panel, test_dag_regex_matches_valid, test_dag_regex_rejects_invalid, test_dag_regex_matches_multiple
 ├── test_detect_commands.py  — Exports: test_first_acquisition_succeeds, test_second_acquisition_blocked, test_stale_lock_dead_pid
 ├── test_edge_cases.py  — Exports: _setup
+├── test_execution_mode_dispatch.py  — Exports: _reset_called, _mock_run_phase2_coder, _mock_run_parallel_coders, _mock_halt_and_revert, _mock_merge_worktree_branches
 ├── test_extract_agent.py  — Exports: test_hermes_box_format, test_no_box_markers_fallback, test_multiple_boxes, test_empty_box_skipped, test_partial_box_no_match
 ├── test_extract_file_paths.py  — Exports: TestExtractFilePathsBacktick
 ├── test_extract_pr.py
@@ -44,6 +45,7 @@
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════
 ├── test_functions_unit.py  — Exports: TestSafeRun, TestGit, TestHaltAndRevert
+├── test_help_text.py  — Exports: test_help_text_documents_panel_max_parallel
 ├── test_helpers.py  — Exports: test_make_status_entry_pending, test_make_status_entry_done_with_pr, test_make_status_entry_in_progress, test_commit_roadmap_update_dry, test_auto_repair_status_empty
 ├── test_lock_paths.py  — Exports: test_explicit_project_dir_lock, test_explicit_project_dir_stop, test_implicit_from_global, test_trailing_slash_normalized, test_no_project_dir_no_arg
 ├── test_main_integration.py  — Exports: _make_safe_run_result, _setup_test_project, _mock_spawn
@@ -57,6 +59,7 @@
 ├── test_safe_run.py  — Exports: test_simple_echo, test_command_fails, test_shell_metachar_not_injected, test_complex_command, test_unsplittable_falls_back_to_bash
 ├── test_slugify.py  — Exports: test_clean_input_no_change, test_spaces_to_hyphens, test_special_chars_removed, test_exactly_40_chars_no_hash, test_41_chars_appends_hash
 ├── test_status_md.py  — Exports: test_empty_status_file, test_single_active_entry, test_update_existing_entry, test_new_entry_appended, test_timestamp_auto_generated
+├── test_task_dag.py  — Exports: panel, _make_dag, test_all_parallel_3tasks_2files_single_session, test_non_parallelizable_task_returns_per_task_spawn
 ├── test_triple_bug_fix.py  — ── Bug 1: Spec archive ──────────────────────────────────────
 └── test_unit_helpers.py  — ═══════════════════════════════════════════════════════════════════
 │   ├── htmlcov/

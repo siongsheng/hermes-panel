@@ -91,6 +91,10 @@
     "hash": "70717243374cb2e54d00484cbe148016",
     "desc": "Exports: _setup"
   },
+  "tests/test_execution_mode_dispatch.py": {
+    "hash": "b30b2432c2ec4e1fed15149152ea635f",
+    "desc": "Exports: _reset_called, _mock_run_phase2_coder, _mock_run_parallel_coders, _mock_halt_and_revert, _mock_merge_worktree_branches"
+  },
   "tests/test_extract_agent.py": {
     "hash": "c66ec7368ca0fec7438770f28a96b972",
     "desc": "Exports: test_hermes_box_format, test_no_box_markers_fallback, test_multiple_boxes, test_empty_box_skipped, test_partial_box_no_match"
@@ -123,6 +127,10 @@
     "hash": "c63b1cdbed9bfe655259ac75cf4e291b",
     "desc": "Exports: TestSafeRun, TestGit, TestHaltAndRevert"
   },
+  "tests/test_help_text.py": {
+    "hash": "5008b36dad6e635ee1a947a5e027f8e8",
+    "desc": "Exports: test_help_text_documents_panel_max_parallel"
+  },
   "tests/test_helpers.py": {
     "hash": "1c8913a5ebbbe7b55c962d72595fb802",
     "desc": "Exports: test_make_status_entry_pending, test_make_status_entry_done_with_pr, test_make_status_entry_in_progress, test_commit_roadmap_update_dry, test_auto_repair_status_empty"
@@ -144,7 +152,7 @@
     "desc": "Exports: test_check_live_pid, test_check_dead_pid, test_check_non_numeric, test_check_empty_string, test_verify_owner_on_self"
   },
   "tests/test_pipeline_integration.py": {
-    "hash": "0d5fa7631c98ab3bf39ae166435adea6",
+    "hash": "06e5ad1bc0743ee246be54c6ee8b67b2",
     "desc": "Exports: _setup_test_project"
   },
   "tests/test_rich_pipeline.py": {
@@ -174,6 +182,10 @@
   "tests/test_status_md.py": {
     "hash": "5cab1041379af41b43f058eb2d314d47",
     "desc": "Exports: test_empty_status_file, test_single_active_entry, test_update_existing_entry, test_new_entry_appended, test_timestamp_auto_generated"
+  },
+  "tests/test_task_dag.py": {
+    "hash": "6b039b61cf47d04aee85f08b939cb18a",
+    "desc": "Exports: panel, _make_dag, test_all_parallel_3tasks_2files_single_session, test_non_parallelizable_task_returns_per_task_spawn"
   },
   "tests/test_triple_bug_fix.py": {
     "hash": "c0318354b36716babd21c996fb8618a5",
