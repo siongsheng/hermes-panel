@@ -238,6 +238,43 @@ def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None):
         pass
 
     result = "".join(output)
+
+    # ── F005: Fallback retry on provider failure ──
+    if not timed_out and FALLBACK_MODEL and _detect_provider_failure(result):
+        print(f"\n{tag} ⚠ FALLBACK: primary failed — retrying with {FALLBACK_MODEL}", flush=True)
+        fb_cmd = [HERMES_BIN, "--profile", profile, "--yolo"]
+        if "/" in FALLBACK_MODEL:
+            fb_provider, fb_model_name = FALLBACK_MODEL.split("/", 1)
+            fb_cmd.extend(["--provider", fb_provider, "-m", fb_model_name])
+        else:
+            fb_cmd.extend(["-m", FALLBACK_MODEL])
+        for s in skills:
+            fb_cmd.extend(["-s", s])
+        fb_cmd.extend(["chat", "-q", prompt])
+        print(f"{tag} CMD: {' '.join(fb_cmd[:4])} ...\n", flush=True)
+
+        fb_proc = subprocess.Popen(fb_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True, cwd=cwd, env=env)
+        fb_output = []
+        try:
+            for line in fb_proc.stdout:
+                redacted = _redact_secrets(line.rstrip())
+                print(f"{tag} {redacted}", flush=True)
+                fb_output.append(line)
+        except Exception:
+            pass
+        try:
+            fb_proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            fb_output.append(f"\n\n[TIMEOUT: fallback agent exceeded {timeout}s. Partial output above.]")
+            fb_proc.kill()
+            try:
+                fb_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                fb_proc.terminate()
+        _write_log_line(f"{tag} ⚠ Fallback used: FALLBACK_MODEL={FALLBACK_MODEL}")
+        result = "".join(fb_output)
+
     if timed_out:
         result += f"\n\n[TIMEOUT: agent exceeded {timeout}s. Partial output above.]"
     return result
