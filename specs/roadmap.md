@@ -11,7 +11,7 @@
 ### F003: Edge Case & Robustness Tests
 **Priority:** P0
 **Dependencies:** F002
-**Status:** [~] In Progress
+**Status:** [x] Done
 **User Story:** As a panel operator, the pipeline handles every known failure mode gracefully: strategist returns interview mode (exit 2), strategist produces zero ### Task headers (DAG re-prompt fires), coder times out (partial results captured), coder produces only RED commits (vet catches it), nm model provider is down (fallback fires), TL detects BLOCKED verdict (auto-fix loop triggers), concurrent pipelines don't fight over lock files, stop/kill signals clean up worktrees, feature description contains special characters (slugify doesn't crash).
 
 ### F004: Deterministic Quality Gates
