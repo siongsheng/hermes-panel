@@ -35,7 +35,7 @@
 ### F006: Error Recovery & Resume
 **Priority:** P1
 **Dependencies:** F002
-**Status:** [~] In Progress
+**Status:** [~] In Progress Progress
 **User Story:** As a panel operator, if a pipeline crashes mid-run, I can resume from the last completed phase instead of restarting from scratch. Partial state (spec file, task extract, feature branch, open PR) is not lost.
 
 ---
