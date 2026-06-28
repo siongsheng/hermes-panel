@@ -103,7 +103,7 @@
 ### F011: Installer Script
 **Priority:** P2
 **Dependencies:** None
-**Status:** [ ] Pending
+**Status:** [~] In Progress
 **User Story:** As a new developer, I run `curl -sSL https://get.dokima.dev | bash` and get a working Dokima installation — script symlinks into PATH, checks dependencies (Python 3.6+, gh CLI, Hermes Agent), and prints next steps.
 
 ### F012: Profile Templates
