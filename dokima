@@ -3758,9 +3758,9 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
     RULES: Every task MUST start with "### Task N:" and have ALL five fields. Non-DAG formats are DISCARDED → feature runs SEQUENTIALLY (3× slower).
 
     CODER CONSTRAINTS:
-    - v4-flash (default): 5-8 tasks of ~100-300 lines each.
-    - v4-pro (≥8 tasks): 4-8 tasks of up to 500 lines each.
-    - Tasks touching the SAME file must be sequential (different waves).
+    - v4-flash (default): 3-5 tasks of ~100-200 lines each.
+    - v4-pro (≥6 tasks): 3-5 tasks of up to 400 lines each.
+    - MAXIMIZE PARALLELISM: assign different **Files:** per task so coders run concurrently. Same-file tasks are sequential (3× slower).
 
     CRITICAL: You are a DESIGNER, not a coder. Write NO implementation code. Describe WHAT and WHY — the coder decides HOW.
 
