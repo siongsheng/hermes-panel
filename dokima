@@ -7,6 +7,10 @@ Output: Live to terminal + saved to /tmp/dokima-output.txt
 """
 import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal, datetime
 
+# Set restrictive umask before any file writes — ensures all /tmp artifacts
+# are created with owner-only permissions (0o077) by default
+os.umask(0o077)
+
 REAL_HOME = pwd.getpwuid(os.getuid()).pw_dir
 HERMES = os.path.join(REAL_HOME, ".hermes")
 HERMES_BIN = os.path.join(HERMES, "hermes-agent/venv/bin/hermes")
@@ -18,6 +22,77 @@ SKIP_AUTOFIX = False       # set from --skip-autofix flag or PANEL_SKIP_AUTOFIX 
 FORCE_FULL = False         # set from --force-full flag or PANEL_FORCE_FULL env
 SKIP_HUMAN_GATE = False    # set from --skip-human-gate flag or PANEL_SKIP_HUMAN_GATE env
 max_parallel_override = None  # set from --max-parallel=N flag in main()
+
+# ── security helpers ─────────────────────────────
+
+def _sanitize_prompt(text):
+    """Strip known injection patterns from user-supplied text before it enters agent prompts.
+    Strips backtick-escaped shell commands, markdown code blocks with dangerous commands,
+    and SYSTEM:/OVERRIDE: prefix injection attempts. Logs a warning on any strip."""
+    if not text:
+        return text
+    original = text
+    # Strip SYSTEM: / OVERRIDE: prefix injection (case-insensitive, word-boundary)
+    text = re.sub(r'\b(?:SYSTEM|OVERRIDE)\s*:\s*', '', text, count=0, flags=re.IGNORECASE)
+    # Strip backtick-escaped shell commands (e.g. `rm -rf /`)
+    text = re.sub(r'`[^`]+`', '', text)
+    # Strip markdown code blocks (```cmd``` or ```\ncmd\n```) containing dangerous patterns
+    text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+    # Collapse multiple spaces
+    text = re.sub(r' +', ' ', text).strip()
+    if text != original:
+        stripped = original[:80].strip()
+        print(f"  WARNING: Sanitized prompt injection from feature text: {stripped!r}", file=sys.stderr, flush=True)
+    return text
+
+
+def _validate_project_dir(path):
+    """Verify path is a real directory containing .git (a valid git repo).
+    Returns True if valid, False otherwise."""
+    if not path:
+        return False
+    if not os.path.isdir(path):
+        return False
+    git_dir = os.path.join(path, ".git")
+    if not os.path.isdir(git_dir):
+        return False
+    return True
+
+
+def _redact_secrets(text):
+    """Strip GH_TOKEN, GITHUB_TOKEN, and API_SERVER_KEY values from text.
+    Looks up current values from the environment at call time (not cached).
+    Redacts with [REDACTED]. Returns the redacted text unmodified if no tokens found."""
+    if not text:
+        return text
+    tokens = []
+    for env_name in ("GH_TOKEN", "GITHUB_TOKEN", "API_SERVER_KEY"):
+        val = os.environ.get(env_name, "")
+        if val:
+            tokens.append(val)
+    if not tokens:
+        return text
+    result = text
+    for tok in tokens:
+        result = result.replace(tok, "[REDACTED]")
+    return result
+
+
+_LOG_FILE_HANDLE = None
+
+
+def _write_log_line(text):
+    """Append a redacted line to OUTPUT_LOG. Creates the file if it doesn't exist."""
+    global _LOG_FILE_HANDLE
+    try:
+        if _LOG_FILE_HANDLE is None:
+            _LOG_FILE_HANDLE = open(OUTPUT_LOG, "a")
+            os.chmod(OUTPUT_LOG, 0o600)
+        _LOG_FILE_HANDLE.write(text + "\n")
+        _LOG_FILE_HANDLE.flush()
+    except Exception:
+        pass
+
 
 # ── helpers ──────────────────────────────────────
 
@@ -99,8 +174,14 @@ def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None):
     timed_out = False
     try:
         for line in proc.stdout:
-            print(f"{tag} {line.rstrip()}", flush=True)
+            redacted = _redact_secrets(line.rstrip())
+            print(f"{tag} {redacted}", flush=True)
             output.append(line)
+            # Also write redacted output to log file
+            try:
+                _write_log_line(f"{tag} {redacted}")
+            except Exception:
+                pass
     except Exception:
         pass
     try:
@@ -807,6 +888,7 @@ def acquire_lock():
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             fd.write(f"{os.getpid()}\n")
             fd.flush()
+            os.chmod(_lock_path(), 0o600)
             return True, fd
         except (IOError, OSError):
             fd.close()
@@ -837,7 +919,7 @@ _STDOUT_ORIG = None
 
 def _cleanup_lock():
     """Release lock and restore stdout on interrupt or normal exit."""
-    global _LOCK_FD, _LOG_FILE, _STDOUT_ORIG
+    global _LOCK_FD, _LOG_FILE, _STDOUT_ORIG, _LOG_FILE_HANDLE
     if _LOCK_FD:
         try:
             _LOCK_FD.close()
@@ -1706,6 +1788,7 @@ def handle_stop(project_dir):
     else:
         with open(sp, "w") as f:
             f.write(f"stop at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        os.chmod(sp, 0o600)
         print(f"Stop signal sent to PID {pid}. Pipeline will stop after current feature.")
     sys.exit(0)
 
@@ -3997,6 +4080,7 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
             interview_path = "/tmp/dokima-interview.json"
             with open(interview_path, "w") as f:
                 json.dump(interview_state, f)
+            os.chmod(interview_path, 0o600)
             print(f"\n{'═' * 55}", flush=True)
             print(f"  STRATEGIST NEEDS CLARIFICATION", flush=True)
             print(f"{'═' * 55}", flush=True)
@@ -4391,6 +4475,9 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill):
     """Run one full pipeline iteration for a single feature. Returns exit code."""
     global PROJECT_DIR, REPO
 
+    # Sanitize feature description before it enters any agent prompt
+    feature = _sanitize_prompt(feature)
+
     strat_result = run_phase1_strategist(feature, user_answers_prefill)
     spec = strat_result["spec"]
     spec_path = strat_result["spec_path"]
@@ -4783,6 +4870,14 @@ def main():
     import atexit
     atexit.register(_cleanup_lock)
     # ── PROJECT SETUP ──
+    # Validate PROJECT_DIR is a real git repo before proceeding
+    if not _validate_project_dir(PROJECT_DIR):
+        print(f"ERROR: {PROJECT_DIR} is not a valid git repository (no .git directory found).")
+        print("  The panel requires a git repository to operate in.")
+        print("  Use a project directory that has been initialized with 'git init' or cloned from GitHub.")
+        _cleanup_lock()
+        sys.exit(1)
+
     agents_path = os.path.join(PROJECT_DIR, "AGENTS.md")
     if not os.path.exists(agents_path):
         print(f"ERROR: No AGENTS.md found in {PROJECT_DIR}")

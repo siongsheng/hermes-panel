@@ -38,3 +38,50 @@ Same-family review shares blind spots and defeats the adversarial guarantee. Bot
 - Specs archived post-merge (not kept in repo)
 - Worktrees cleaned up after pipeline completion or `SIGTERM`
 - Lock file at `/tmp/dokima-<project>.lock` prevents concurrent runs
+
+## Security
+
+### Prompt Sanitization
+All user-supplied feature descriptions are sanitized before entering agent prompts:
+- Backtick-escaped shell commands (`` `rm -rf /` ``) are stripped
+- Markdown code blocks (```` ```dangerous-command``` ````) are stripped
+- `SYSTEM:` and `OVERRIDE:` prefix injection attempts are stripped
+- Sanitization preserves all legitimate text
+- Stripped content logs a `WARNING` to stderr for audit
+- Sanitization is applied in `_sanitize_prompt()` before both strategist and coder phases
+
+### Token Redaction
+GH_TOKEN, GITHUB_TOKEN, and API_SERVER_KEY values are never written verbatim to logs:
+- `_redact_secrets()` replaces token values with `[REDACTED]` before log output
+- Token values are looked up from the environment at redaction time (not cached)
+- Redaction applies to the OUTPUT_LOG file (`/tmp/dokima-output.txt`) and to agent output lines printed by `spawn_agent`
+- All agent output lines pass through `_redact_secrets()` before printing
+
+### File Permission Hardening
+All `/tmp/dokima-*` artifacts are created with strict permissions:
+- `os.umask(0o077)` is set at module initialization — before any file writes
+- Lock files, stop signal files, interview JSON, and OUTPUT_LOG each get explicit `os.chmod(path, 0o600)` after creation
+- The restrictive umask covers any files we don't explicitly chmod
+
+### Subprocess Safety (Must-Follow Rules)
+All subprocess calls MUST use list-based argument syntax:
+```python
+# CORRECT
+subprocess.run(["git", "-C", path, "status"], ...)
+subprocess.Popen(["hermes", "--profile", p, "chat", "-q", prompt], ...)
+
+# FORBIDDEN
+subprocess.run("git status", shell=True, ...)   # shell=True is banned
+os.system("git status")                         # os.system() is banned
+```
+- `shell=True` is banned — never use it
+- `os.system()` is banned — never use it
+- String commands (bare strings as first arg) are banned — always use list args
+- The existing `_safe_run()` function already uses `shlex.split()` for safe string-to-arg conversion
+
+### PROJECT_DIR Validation
+The panel validates PROJECT_DIR before any operation:
+- Path must exist and be a directory
+- Path must contain a `.git` subdirectory
+- Non-repo directories, files, and nonexistent paths are rejected with a clear error message
+- Validation prevents path-traversal and symlink-attack vectors
