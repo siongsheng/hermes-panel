@@ -118,6 +118,23 @@ def _detect_provider_failure(output):
     return False
 
 
+# ── model family fallback ───────────────────────
+
+_MODEL_FAMILY_FALLBACK = {
+    "deepseek/deepseek-chat": "openrouter/anthropic/claude-sonnet-4-20250514",
+    "deepseek/deepseek-v4-pro": "deepseek/deepseek-v4-flash",
+    "anthropic/claude-sonnet-4-20250514": "openai/gpt-4o",
+}
+
+
+def _select_fallback_model(model, output):
+    """Check if output indicates provider failure and return a fallback model.
+    Returns fallback model name if a fallback is needed, None otherwise."""
+    if not _detect_provider_failure(output):
+        return None
+    return _MODEL_FAMILY_FALLBACK.get(model)
+
+
 # ── helpers ──────────────────────────────────────
 
 def load_key():
