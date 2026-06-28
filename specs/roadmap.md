@@ -72,6 +72,30 @@
 **Status:** [x] Done
 **User Story:** As a panel operator, the orchestrator auto-selects batch coder (single session, no worktrees) for small additive features and per-task spawn for complex/refactor features — derived from existing DAG signals (task count, file count, parallelizability). No strategist changes needed.
 
+### F023: Pipeline Self-Healing
+**Priority:** P1
+**Dependencies:** F010
+**Status:** [ ] Pending
+**User Story:** As a panel operator, the pipeline detects and recovers from common failure patterns without human intervention — auto-fix infinite loops (nm fix already applied), partial coder output (truncated agent), and stale lock files from killed pipelines.
+
+### F022: Modular Architecture
+**Priority:** P1
+**Dependencies:** F010, F023
+**Status:** [ ] Pending
+**User Story:** As a contributor, the 5,400-line monolith is split into modules (agent.py, pipeline.py, roadmap.py, tasks.py, utils.py) with clear interfaces — agents can read and modify one module without loading the entire codebase. Same behavior, same tests, smaller context windows.
+
+### F020: Structured CLI Output (`--help-json`)
+**Priority:** P2
+**Dependencies:** None
+**Status:** [ ] Pending
+**User Story:** As a docs maintainer, `dokima --help-json` outputs all commands, flags, and env vars as structured JSON — consumed by the docs site to auto-generate the CLI reference page. No more manual sync between code and docs.
+
+### F021: Semantic Versioning + GitHub Releases
+**Priority:** P2
+**Dependencies:** F020
+**Status:** [ ] Pending
+**User Story:** As a user, `dokima --version` prints the current version. Releases are tagged and published on GitHub with auto-generated changelogs from merged PRs. `dokima --upgrade` checks for newer versions.
+
 ---
 
 ## Phase 3: Distribution & Portability

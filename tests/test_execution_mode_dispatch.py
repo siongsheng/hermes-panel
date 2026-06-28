@@ -18,14 +18,25 @@ os.environ.setdefault("PANEL_PARALLEL", "0")
 
 
 _called = {}  # type: ignore[var-annotated]
+_captured_depth = None  # type: ignore[var-annotated]
 
 
 def _reset_called():
     _called.clear()
+    global _captured_depth
+    _captured_depth = None
 
 
 def _mock_run_phase2_coder(feature, spec, spec_path, tasks_extract_path,
                             pr_sections, branch, depth, mode, is_next):
+    _called["phase2_coder"] = True
+    return {"coder_failed": False, "pr_url": "http://pr/2", "verdict": "APPROVED"}
+
+
+def _mock_run_phase2_coder_capture(feature, spec, spec_path, tasks_extract_path,
+                                    pr_sections, branch, depth, mode, is_next):
+    global _captured_depth
+    _captured_depth = depth
     _called["phase2_coder"] = True
     return {"coder_failed": False, "pr_url": "http://pr/2", "verdict": "APPROVED"}
 
@@ -378,3 +389,152 @@ Test impact.
             "Empty DAG should fallback to sequential coder"
         assert not _called.get("parallel_coders"), \
             "Empty DAG should NOT route to parallel coders"
+
+
+# ── Depth matrix cell tests ──
+
+
+def _make_spec_with_confidence_impact(confidence, impact):
+    """Build a spec string with the given Confidence and Impact markers."""
+    return f"""# Test Feature
+
+## Impact
+Test impact.
+
+## What Changed
+- Nothing.
+
+### Confidence: {confidence}
+### Impact: {impact}
+
+## Task Breakdown
+
+### Task 1: Single task
+**Files:** a.py
+**Dependencies:** [none]
+**Parallelizable:** no
+**Description:** Do thing.
+"""
+
+
+class TestDepthMatrixCells:
+    """Verify all 9 (confidence × impact) combinations produce correct depth.
+    Tests exercise the actual depth computation inside run_phase1_strategist
+    by mocking spawn_agent instead of the entire strategist phase.
+    """
+
+    def _run_and_get_depth(self, panel, spec_text):
+        """Run the pipeline with a given spec text and return the computed depth."""
+        _reset_called()
+        panel.run_phase2_coder = _mock_run_phase2_coder_capture
+        panel.run_parallel_coders = _mock_run_parallel_coders
+        panel.halt_and_revert = _mock_halt_and_revert
+        panel.merge_worktree_branches = _mock_merge_worktree_branches
+        # DO NOT mock run_phase1_strategist — let it execute so
+        # the orchestration gate computes depth from the spec.
+
+        with patch.object(panel, "spawn_agent", return_value=spec_text), \
+             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+             patch.object(panel, "load_key", return_value="fk"), \
+             patch.object(panel, "load_github_token", return_value="ft"), \
+             patch.object(panel, "detect_repo", return_value="t/t"), \
+             patch.object(panel, "_set_gh_token"), \
+             patch.object(panel, "acquire_lock", return_value=(True, None)), \
+             patch.object(panel, "_cleanup_lock"), \
+             patch.object(panel, "_safe_run", return_value=__import__("subprocess").CompletedProcess([], 0)), \
+             patch.object(panel, "WorktreeManager"), \
+             patch("time.sleep"):
+            panel.PROJECT_DIR = "/tmp"
+            panel.REPO = "t/t"
+            panel.DEFAULT_BRANCH = "main"
+            try:
+                panel.run_pipeline("Test Feature", False, False, None)
+            except SystemExit:
+                pass
+        return _captured_depth
+
+    def test_high_conf_low_impact_produces_vet(self, panel):
+        """(High, LOW) → vet — docs/config changes skip adversarial review."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("High", "LOW"))
+        assert depth == "vet", f"Expected 'vet', got '{depth}'"
+
+    def test_high_conf_medium_impact_produces_vet_nm(self, panel):
+        """(High, MEDIUM) → vet+nm — normal changes get build+nm."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("High", "MEDIUM"))
+        assert depth == "vet+nm", f"Expected 'vet+nm', got '{depth}'"
+
+    def test_high_conf_high_impact_produces_full(self, panel):
+        """(High, HIGH) → full — high-impact changes get full pipeline."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("High", "HIGH"))
+        assert depth == "full", f"Expected 'full', got '{depth}'"
+
+    def test_medium_conf_low_impact_produces_vet_nm(self, panel):
+        """(Medium, LOW) → vet+nm — medium confidence+low impact gets vet+nm."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("Medium", "LOW"))
+        assert depth == "vet+nm", f"Expected 'vet+nm', got '{depth}'"
+
+    def test_medium_conf_medium_impact_produces_full(self, panel):
+        """(Medium, MEDIUM) → full."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("Medium", "MEDIUM"))
+        assert depth == "full", f"Expected 'full', got '{depth}'"
+
+    def test_medium_conf_high_impact_produces_full(self, panel):
+        """(Medium, HIGH) → full."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("Medium", "HIGH"))
+        assert depth == "full", f"Expected 'full', got '{depth}'"
+
+    def test_low_conf_low_impact_produces_vet(self, panel):
+        """(Low, LOW) → vet — low-risk changes skip adversarial review."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("Low", "LOW"))
+        assert depth == "vet", f"Expected 'vet', got '{depth}'"
+
+    def test_low_conf_medium_impact_produces_vet_nm(self, panel):
+        """(Low, MEDIUM) → vet+nm."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("Low", "MEDIUM"))
+        assert depth == "vet+nm", f"Expected 'vet+nm', got '{depth}'"
+
+    def test_low_conf_high_impact_produces_full(self, panel):
+        """(Low, HIGH) → full — low confidence but high impact gets full pipeline."""
+        depth = self._run_and_get_depth(panel, _make_spec_with_confidence_impact("Low", "HIGH"))
+        assert depth == "full", f"Expected 'full', got '{depth}'"
+
+    def test_confidence_parser_rejects_substring_false_positive(self, panel):
+        """Confidence 'Higher' must NOT match marker 'High' — defaults to Medium."""
+        spec = _make_spec_with_confidence_impact("Higher", "MEDIUM")
+        # "Confidence: Higher" should NOT match "High";
+        # default is "Medium" → (Medium, MEDIUM) = "full"
+        depth = self._run_and_get_depth(panel, spec)
+        assert depth == "full", f"Expected 'full' (default Medium), got '{depth}'"
+
+    def test_impact_parser_defaults_to_medium_not_high(self, panel):
+        """No Impact marker → defaults to MEDIUM (not HIGH)."""
+        spec = """# Test Feature
+
+## Impact
+Test impact.
+
+## What Changed
+- Nothing.
+
+### Confidence: High
+
+## Task Breakdown
+
+### Task 1: Single task
+**Files:** a.py
+**Dependencies:** [none]
+**Parallelizable:** no
+**Description:** Do thing.
+"""
+        # No Impact marker → impact="MEDIUM" → (High, MEDIUM) = "vet+nm"
+        depth = self._run_and_get_depth(panel, spec)
+        assert depth == "vet+nm", f"Expected 'vet+nm' (default MEDIUM), got '{depth}'"
+
+    def test_impact_parser_rejects_substring_false_positive(self, panel):
+        """'HIGHER' must NOT match marker 'HIGH' — defaults to MEDIUM."""
+        spec = _make_spec_with_confidence_impact("High", "HIGHER")
+        # "Impact: HIGHER" should NOT match "HIGH";
+        # default is "MEDIUM" → (High, MEDIUM) = "vet+nm"
+        depth = self._run_and_get_depth(panel, spec)
+        assert depth == "vet+nm", f"Expected 'vet+nm' (default MEDIUM), got '{depth}'"
