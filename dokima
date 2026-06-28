@@ -3758,9 +3758,11 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
     RULES: Every task MUST start with "### Task N:" and have ALL five fields. Non-DAG formats are DISCARDED → feature runs SEQUENTIALLY (3× slower).
 
     CODER CONSTRAINTS:
-    - v4-flash (default): 3-5 tasks of ~100-200 lines each.
-    - v4-pro (≥6 tasks): 3-5 tasks of up to 400 lines each.
-    - MAXIMIZE PARALLELISM: assign different **Files:** per task so coders run concurrently. Same-file tasks are sequential (3× slower).
+    - Each task MUST be completable in 5-10 min by a coder agent (100-200 lines).
+    - Break large features into MORE granular tasks, not fewer big ones.
+    - 8 small tasks > 4 big tasks. The panel runs coders in parallel.
+    - Assign different **Files:** per task so coders run concurrently. Same-file tasks are sequential (3× slower).
+    - If a feature genuinely needs 8+ tasks, that's fine — just keep each one small.
 
     CRITICAL: You are a DESIGNER, not a coder. Write NO implementation code. Describe WHAT and WHY — the coder decides HOW.
 
