@@ -26,6 +26,7 @@ from utils import (slugify, git, gh, _safe_run, _sanitize_prompt, _validate_proj
                    validate_checkpoint, acquire_lock, _cleanup_lock, _signal_handler,
                    try_auto_merge, _supplement_pr_sections, _detect_default_branch,
                    _set_gh_token, show_help, show_help_json, check_upgrade, _version_newer,
+                   do_release,
                    _parse_status_md, _make_status_entry, update_status_md,
                    _check_pid, _verify_pid_owner, _get_lock_state,
                    handle_status, handle_stop, handle_kill, handle_list_crons,
@@ -100,6 +101,8 @@ def main():
     is_status = False
     is_version = False
     is_upgrade = False
+    is_release = False
+    release_bump = None
     is_list_crons = False
     is_fix = False
     is_map = False
@@ -266,6 +269,13 @@ def main():
             base_branch_override = sys.argv[i + 1]
             break
 
+    # ── --release bump type extraction ──
+    if is_release:
+        for i, arg in enumerate(sys.argv):
+            if arg == "--release" and i + 1 < len(sys.argv):
+                release_bump = sys.argv[i + 1]
+                break
+
     answers_idx = None
     answers_path = None
     for i, arg in enumerate(sys.argv):
@@ -290,7 +300,7 @@ def main():
             break
 
     # ── Determine PROJECT_DIR and feature ──
-    if is_next or is_stop or is_kill or is_status or is_fix or is_map:
+    if is_next or is_stop or is_kill or is_status or is_fix or is_map or is_release:
         if is_stop or is_kill or is_status or is_map:
             if len(filtered_argv) >= 1:
                 PROJECT_DIR = os.path.abspath(filtered_argv[0])
@@ -302,6 +312,9 @@ def main():
             else:
                 PROJECT_DIR = os.getcwd()
             PANEL_FEATURE = f"fix: {PROJECT_DIR}"
+        elif is_release:
+            # --release: first remaining arg (if any) is the project dir
+            PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
         else:
             # --next: if two+ args, first is feature, second is project dir
             # If one arg, it's the project dir (feature comes from roadmap)
@@ -326,6 +339,8 @@ def main():
     # ── CONTROL FLAGS: early exit (priority order) ──
     if is_upgrade:
         check_upgrade()
+    if is_release:
+        do_release(release_bump, PROJECT_DIR)
     if is_version:
         print(f"dokima v{VERSION}")
         sys.exit(0)
