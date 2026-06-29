@@ -63,7 +63,7 @@
 ### F010: Parallel Coder Robustness
 **Priority:** P1
 **Dependencies:** None
-**Status:** [x] Done Progress
+**Status:** [x] Done
 **User Story:** As a panel operator, parallel coders never conflict on the same file, worktree cleanup is reliable, and timeout/dead agents don't block the wave.
 
 ### F019: Data-Driven Execution Mode (Orchestrator Computes)
@@ -101,6 +101,12 @@
 **Dependencies:** F020
 **Status:** [x] Done Progress
 **User Story:** As a user, `dokima --version` prints the current version. Releases are tagged and published on GitHub with auto-generated changelogs from merged PRs. `dokima --upgrade` checks for newer versions.
+
+### F024: Auto-Release — Tagging, Changelog, and GitHub Releases
+**Priority:** P2
+**Dependencies:** F021
+**Status:** [ ] Pending
+**User Story:** As a maintainer, `dokima --release [patch|minor|major]` bumps the version, auto-generates a changelog from merged PRs grouped by conventional commit prefix, creates a git tag, and publishes a GitHub Release — all in one command. Validates clean tree, default branch, and git sync before releasing.
 
 ---
 
