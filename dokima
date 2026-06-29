@@ -1292,6 +1292,83 @@ def show_help_json():
     sys.exit(0)
 
 
+def check_upgrade():
+    """--upgrade handler: check for newer version on GitHub."""
+    install_dir = os.path.join(REAL_HOME, ".local", "share", "dokima")
+    git_dir = os.path.join(install_dir, ".git")
+    if not os.path.isdir(git_dir):
+        print("Not installed via install.sh — cannot check for upgrades")
+        sys.exit(0)
+
+    # Check git is available
+    git_path = shutil.which("git")
+    if not git_path:
+        print("git required for --upgrade")
+        sys.exit(1)
+
+    # Fetch tags from origin
+    try:
+        subprocess.run(
+            [git_path, "-C", install_dir, "fetch", "--tags", "origin"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=30
+        )
+    except subprocess.TimeoutExpired:
+        print("Could not check for updates: network timeout")
+        sys.exit(1)
+    except OSError:
+        print("Could not check for updates: network error")
+        sys.exit(1)
+
+    # Read installed VERSION
+    installed_version_path = os.path.join(install_dir, "VERSION")
+    try:
+        with open(installed_version_path) as f:
+            installed_version = f.read().strip()
+    except OSError:
+        print("Could not determine installed version (VERSION file missing)")
+        sys.exit(1)
+
+    # Get latest semver tag
+    try:
+        tag_result = subprocess.run(
+            [git_path, "-C", install_dir, "tag", "--sort=-v:refname"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            universal_newlines=True, timeout=10
+        )
+        tags = tag_result.stdout.strip().split("\n") if tag_result.stdout.strip() else []
+        # Filter to vX.Y.Z patterns only
+        semver_tags = [t for t in tags if re.match(r'^v\d+\.\d+\.\d+$', t)]
+    except (subprocess.TimeoutExpired, OSError):
+        print("Could not check for updates: failed to fetch tags")
+        sys.exit(1)
+
+    if not semver_tags:
+        print("No releases found")
+        sys.exit(0)
+
+    latest_tag = semver_tags[0]
+    latest_version = latest_tag.lstrip("v")
+
+    # Compare versions
+    if _version_newer(latest_version, installed_version):
+        print(f"dokima v{latest_version} available (you have v{installed_version}) — "
+              f"run: curl -sSL https://get.dokima.dev | bash")
+    else:
+        print(f"dokima v{installed_version} is up to date")
+    sys.exit(0)
+
+
+def _version_newer(a, b):
+    """Return True if semver a > b. Both are 'X.Y.Z' strings."""
+    try:
+        parts_a = [int(x) for x in a.split(".")]
+        parts_b = [int(x) for x in b.split(".")]
+        return parts_a > parts_b
+    except (ValueError, AttributeError):
+        return False
+
+
 
 def parse_roadmap(roadmap_path: str) -> list:
     """Parse specs/roadmap.md into a list of RoadmapFeature. Returns empty list if none found.
@@ -5307,6 +5384,7 @@ def main():
     is_kill = False
     is_status = False
     is_version = False
+    is_upgrade = False
     is_list_crons = False
     is_fix = False
     is_map = False
@@ -5336,6 +5414,9 @@ def main():
             continue
         if arg in ("--version", "-v"):
             is_version = True
+            continue
+        if arg == "--upgrade":
+            is_upgrade = True
             continue
         if arg == "--next":
             is_next = True
@@ -5495,7 +5576,7 @@ def main():
                 PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
-        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version:
+        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade:
             print("ERROR: Feature description required")
             sys.exit(1)
         feature = filtered_argv[0] if filtered_argv else ""
@@ -5507,6 +5588,8 @@ def main():
             PROJECT_DIR = os.path.abspath(filtered_argv[1]) if len(filtered_argv) >= 2 else os.getcwd()
 
     # ── CONTROL FLAGS: early exit (priority order) ──
+    if is_upgrade:
+        check_upgrade()
     if is_version:
         print(f"dokima v{VERSION}")
         sys.exit(0)
