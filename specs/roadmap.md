@@ -115,7 +115,7 @@
 ### F013: Vendor-Agnostic Model Config
 **Priority:** P2
 **Dependencies:** F005, F012
-**Status:** [~] In Progress
+**Status:** [x] Done Progress
 **User Story:** As a developer using Anthropic, I configure `ANTHROPIC_API_KEY` and the panel maps strategist→claude-sonnet, coder→claude-haiku, TL→claude-opus — no deepseek dependency.
 
 ### F014: nm Script Portability
