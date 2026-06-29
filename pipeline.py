@@ -1057,6 +1057,57 @@ Report: what you fixed, commit hash."""
     return {"nm_ok": True, "pr_url": pr_url, "risk": risk, "nm_stdout": nm_stdout}
 
 
+def _verify_pr_impact_alignment(pr_body: str, spec_text: str) -> str | None:
+    """Verify PR body's Impact section aligns with the spec's Impact.
+    Returns None if aligned, or a BLOCKER description string if mismatched.
+    Skips verification if spec has no Impact section (spec may not require one)."""
+    # Extract spec Impact
+    spec_impact_m = re.search(
+        r'^##\s*\d*\.?\s*Impact\s*\n+(.+?)(?=\n##\s|\n###\s|\n\*\*Confidence|\Z)',
+        spec_text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
+    if not spec_impact_m:
+        # Try legacy colon format
+        spec_impact_m = re.search(
+            r'Impact:\s*(.+?)(?=\n\s*\n|\n(?:What Changed|Confidence|### Task|\Z))',
+            spec_text, re.DOTALL | re.IGNORECASE)
+    if not spec_impact_m:
+        return None  # No Impact in spec — skip verification
+
+    spec_impact = spec_impact_m.group(1).strip()
+    if not spec_impact:
+        return None
+
+    # Extract PR body Impact
+    pr_impact_m = re.search(
+        r'^##\s*Impact\s*\n+(.+?)(?=\n##\s|\n\*\*|\Z)',
+        pr_body, re.DOTALL | re.IGNORECASE | re.MULTILINE)
+    if not pr_impact_m:
+        return ("🔴 BLOCKER: PR body is missing '## Impact' section. "
+                "The spec defines impact; the PR must include it.")
+
+    pr_impact = pr_impact_m.group(1).strip()
+
+    # Check alignment: spec impact keywords should appear in PR body
+    # Normalize: lowercase, strip punctuation for comparison
+    import string as _string
+    spec_words = set(
+        w.lower().rstrip(_string.punctuation)
+        for w in spec_impact.split() if len(w) > 1)
+    pr_words = set(
+        w.lower().rstrip(_string.punctuation)
+        for w in pr_impact.split() if len(w) > 1)
+
+    # Require at least 30% word overlap (safe threshold for meaningful alignment)
+    if spec_words and pr_words:
+        overlap = len(spec_words & pr_words) / len(spec_words)
+        if overlap >= 0.30:
+            return None  # Aligned
+
+    return ("🔴 BLOCKER: PR body Impact section does not align with spec. "
+            "Spec Impact must be reflected in the PR body. "
+            "Regenerate PR body from spec or update Impact to match.")
+
+
 def run_phase5_tech_lead(feature, pr_url, branch, spec_path, impact, nm_output=""):
     """Phase 5: Tech Lead — spawn tech lead, handle BLOCKED/CHANGES_REQUESTED verdicts, auto-fix loop.
     Returns dict with: verdict, tl_output, changes_made."""
@@ -1064,6 +1115,25 @@ def run_phase5_tech_lead(feature, pr_url, branch, spec_path, impact, nm_output="
     tl_output = ""
 
     print("\n── Phase 5: Tech Lead (PR review) ──", flush=True)
+
+    # ── Pre-check: verify PR body Impact aligns with spec ──
+    if pr_url and spec_path and os.path.exists(spec_path):
+        try:
+            with open(spec_path) as f:
+                spec_text = f.read()
+            # Fetch PR body from GitHub
+            pr_body, _, rc = gh("pr", "view", pr_url.split("/")[-1], "--repo", REPO,
+                               "--json", "body", "--jq", ".body")
+            if rc == 0 and pr_body.strip():
+                alignment_issue = _verify_pr_impact_alignment(pr_body, spec_text)
+                if alignment_issue:
+                    print(f"\n  {alignment_issue}", flush=True)
+                    # Don't block the pipeline — flag it, TL will re-check
+            else:
+                print("  ⚠ Could not fetch PR body for impact alignment check", flush=True)
+        except Exception as e:
+            print(f"  ⚠ Impact alignment check failed: {e}", flush=True)
+
     tl_prompt = f"""You are the Tech Lead — your job is a THREE-PART adversarial review against the spec at {spec_path}.
 
 FIRST — read the spec: the chosen approach, API/interface proposal, and task breakdown.
