@@ -3256,6 +3256,27 @@ def extract_file_paths(text):
     return sorted(paths)
 
 
+def _detect_truncation(text):
+    """Detect truncated coder output. Returns True if output appears truncated.
+
+    A non-truncated output has a Report: line OR ends with terminal
+    punctuation (., !, ?). None input returns False (safety); empty input
+    returns True (coder crashed).
+    """
+    if text is None:
+        return False
+    if not text:
+        return True
+    # Check for Report: marker (case-insensitive, word boundary)
+    if re.search(r'\bReport:', text, re.IGNORECASE):
+        return False
+    # Check if last non-whitespace character is terminal punctuation
+    stripped = text.rstrip()
+    if stripped and stripped[-1] in ('.', '!', '?'):
+        return False
+    return True
+
+
 def _extract_code_context(spec_text, task_text, project_dir):
     """Extract relevant code snippets from line-range references in spec/task text.
     
@@ -3838,6 +3859,7 @@ def run_phase2_coder(feature, spec, spec_path, tasks_extract_path, pr_sections, 
     coder_output = ""
     pr_url = None
     verdict = None
+    _truncation_retried = False  # F023: truncation retry guard
     for attempt in range(max_retries + 1):
         if attempt > 0:
             print(f"\n── Phase 2 (Retry {attempt}): Coder ──", flush=True)
@@ -4016,6 +4038,23 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
                 print(f"  ✓ Coder re-run finished ({len(coder_output)} chars)", flush=True)
             else:
                 print("  → No answers provided — proceeding with original output", flush=True)
+
+        # F023: Truncation detection — retry once if output appears truncated
+        if not _truncation_retried and _detect_truncation(coder_output):
+            print("  ⚠ [TRUNCATED] Coder output appears incomplete — retrying once...", flush=True)
+            _truncation_retried = True
+            coder_prompt_trunc = (
+                f"{coder_prompt}\n\n"
+                f"[SYSTEM NOTE: Your previous output was truncated. "
+                f"Please ensure your response ends with a Report: section "
+                f"summarizing what was done.]"
+            )
+            coder_output = spawn_agent("coder", ["ai-coding-best-practices-lite"],
+                                       coder_prompt_trunc, cwd=PROJECT_DIR,
+                                       fallback_model=FALLBACK_MODELS.get("coder"))
+            print(f"  ✓ Coder truncation retry finished ({len(coder_output)} chars)", flush=True)
+        elif _truncation_retried and _detect_truncation(coder_output):
+            print("  ⚠ Output still appears truncated after retry — proceeding anyway", flush=True)
 
         # Coder contingency: check if branch + commits exist despite timeout
         if "[TIMEOUT:" in coder_output:
