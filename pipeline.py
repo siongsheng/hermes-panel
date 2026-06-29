@@ -1653,7 +1653,12 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
 
     # Quality gate: validate spec quality, re-prompt once on failure
     _qg_passed, _qg_failures = verify_spec_quality(spec)
-    if not _qg_passed:
+    _on_fallback = "[strategist:fallback]" in strat_output or "[fallback]" in strat_output
+    if not _qg_passed and _on_fallback:
+        print(f"  ⚠ Spec quality gate: {len(_qg_failures)} issue(s) — but strategist ran on fallback, skipping re-prompt", flush=True)
+        for _f in _qg_failures:
+            print(f"     - {_f} (degraded quality accepted)", flush=True)
+    elif not _qg_passed:
         print(f"  ⚠ Spec quality gate: {len(_qg_failures)} issue(s)", flush=True)
         for _f in _qg_failures:
             print(f"     - {_f}", flush=True)

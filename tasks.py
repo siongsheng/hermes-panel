@@ -446,6 +446,21 @@ def merge_worktree_branches(feature_branch: str, tasks: dict[str, Task],
         subprocess.run(["git", "checkout", feature_branch], cwd=project_dir,
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
 
+    # Pre-check: detect file overlap between task branches before merging
+    task_branches = [(t.id, t.branch, t.files) for t in completed_tasks]
+    for i, (tid1, br1, files1) in enumerate(task_branches):
+        for tid2, br2, files2 in task_branches[i+1:]:
+            if not files1 or not files2:
+                continue
+            overlap = set(files1) & set(files2)
+            if overlap:
+                print(f"  🔴 BLOCKED — File overlap detected between tasks:", flush=True)
+                print(f"     Task {tid1} ({br1}): {sorted(files1)}", flush=True)
+                print(f"     Task {tid2} ({br2}): {sorted(files2)}", flush=True)
+                print(f"     Overlapping: {sorted(overlap)}", flush=True)
+                print(f"  Parallel coders modified the same files — merge will conflict.", flush=True)
+                return False
+
     # Merge in dependency order
     for task in sorted(completed_tasks, key=lambda t: int(t.id)):
         print(f"  Merging {task.branch} (Task {task.id}: {task.description[:50]}...)")
