@@ -63,7 +63,7 @@
 ### F010: Parallel Coder Robustness
 **Priority:** P1
 **Dependencies:** None
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a panel operator, parallel coders never conflict on the same file, worktree cleanup is reliable, and timeout/dead agents don't block the wave.
 
 ### F019: Data-Driven Execution Mode (Orchestrator Computes)
@@ -75,13 +75,13 @@
 ### F023: Pipeline Self-Healing
 **Priority:** P1
 **Dependencies:** F010
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a panel operator, the pipeline detects and recovers from common failure patterns without human intervention — auto-fix infinite loops (nm fix already applied), partial coder output (truncated agent), and stale lock files from killed pipelines.
 
 ### F022: Modular Architecture
 **Priority:** P1
 **Dependencies:** F010, F023
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a contributor, the 5,400-line monolith is split into modules (agent.py, pipeline.py, roadmap.py, tasks.py, utils.py) with clear interfaces — agents can read and modify one module without loading the entire codebase. Same behavior, same tests, smaller context windows.
 
 ### F020: Structured CLI Output (`--help-json`)
