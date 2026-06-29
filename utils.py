@@ -2004,6 +2004,30 @@ def archive_specs_for_feature(spec_path, branch, pr_url):
         pass
     return False
 
+def _prune_old_tags(keep_count=10):
+    """Delete old release tags from origin, keeping the newest keep_count.
+    Only prunes tags matching vX.Y.Z pattern. If ≤keep_count tags exist,
+    or no tags match the pattern, the function is a silent no-op."""
+    stdout, _, rc = git("tag", "--sort=-v:refname")
+    if rc != 0:
+        return
+
+    import re as _re
+    _semver_pat = _re.compile(r'^v\d+\.\d+\.\d+$')
+    tags = [t.strip() for t in stdout.split('\n')
+            if t.strip() and _semver_pat.match(t.strip())]
+
+    if len(tags) <= keep_count:
+        return
+
+    for tag in tags[keep_count:]:
+        print(f"Pruning old release tag: {tag}", flush=True)
+        try:
+            git("push", "origin", "--delete", tag)
+        except Exception:
+            print(f"Warning: failed to prune {tag}", flush=True)
+
+
 # Module-level original references for delegation checks (F022 modular refactor)
 _ENSURE_PROFILES_ORIGINAL = ensure_profiles
 _DEPLOY_PROFILE_SKILLS_ORIGINAL = deploy_profile_skills
