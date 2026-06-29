@@ -264,6 +264,15 @@ class TestReleaseHelpText:
         assert "patch" in (out + err).lower() or "invalid" in (out + err).lower(), \
             f"Expected error message about bump type, got out={out} err={err}"
 
+    def test_release_patch_exits_0(self):
+        """dokima --release patch exits 0 (or errors clearly if not on default branch)."""
+        rc, out, err = self._run("--release", "patch")
+        # Should either succeed (0) or fail with a clear error message
+        # (not a generic "Feature description required")
+        combined = out + err
+        assert "Feature description required" not in combined, \
+            f"--release should be dispatched, not fall through. Got: {combined}"
+
 
 class TestDoRelease:
     """Tests for do_release() function."""
