@@ -10,6 +10,8 @@ from unittest.mock import patch, MagicMock
 
 from conftest import _load_panel as _load
 
+import agent as _agent_mod
+
 _spawn_calls = []
 
 
@@ -101,7 +103,7 @@ class TestCallAgent:
 class TestSpawnAgent:
     def test_timeout_returns_partial(self, panel):
         """proc.wait() timeout → returns partial output."""
-        panel.HERMES_BIN = "/bin/echo"
+        _agent_mod.HERMES_BIN = "/bin/echo"
         mock_proc = MagicMock()
         # Make stdout iterable (the code does `for line in proc.stdout`)
         mock_proc.stdout.__iter__.return_value = iter(["line1\n", "line2\n"])
@@ -110,16 +112,16 @@ class TestSpawnAgent:
         mock_proc.stderr.read.return_value = b""
         mock_proc.returncode = -1
         mock_proc.communicate.return_value = (b"", b"")
-        with patch.object(panel, "subprocess") as mock_sp:
+        with patch.object(_agent_mod, "subprocess") as mock_sp:
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.TimeoutExpired = type("TO", (Exception,), {})
-            result = panel.spawn_agent("test", [], "prompt", timeout=1)
+            result = _agent_mod.spawn_agent("test", [], "prompt", timeout=1)
             assert "line1" in result
 
     def test_process_returns_nonzero(self, panel):
         """Nonzero exit code → returns output anyway."""
-        panel.HERMES_BIN = "/bin/echo"
+        _agent_mod.HERMES_BIN = "/bin/echo"
         mock_proc = MagicMock()
         mock_proc.stdout.__iter__.return_value = iter(["output\n"])
         mock_proc.poll.return_value = 1
@@ -127,11 +129,11 @@ class TestSpawnAgent:
         mock_proc.stderr.read.return_value = b"error output"
         mock_proc.returncode = 1
         mock_proc.communicate.return_value = (b"", b"")
-        with patch.object(panel, "subprocess") as mock_sp:
+        with patch.object(_agent_mod, "subprocess") as mock_sp:
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.TimeoutExpired = type("TO", (Exception,), {})
-            result = panel.spawn_agent("test", [], "prompt", timeout=5)
+            result = _agent_mod.spawn_agent("test", [], "prompt", timeout=5)
             assert "output" in result
 
 

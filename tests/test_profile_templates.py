@@ -7,6 +7,8 @@ from conftest import _load_panel as _load
 
 panel = _load()
 
+import utils as _utils_mod
+
 
 class TestEnsureProfiles:
     """Tests for ensure_profiles() — creating agent profiles via hermes CLI."""
@@ -220,6 +222,7 @@ class TestDeployProfileSkills:
                 f.write(f"# {skill}\\n\\nTest skill content.\\n")
         # Patch PANEL_DIR to point to our temp dir
         panel_ref.PANEL_DIR = tmpdir
+        _utils_mod.PANEL_DIR = tmpdir
         return skills_dir
 
     def test_skills_deployed_to_correct_dirs(self, tmpdir):
@@ -238,8 +241,8 @@ class TestDeployProfileSkills:
         os.makedirs(hermes_dir, exist_ok=True)
 
         # Patch the module's PROFILES and HERMES paths
-        with patch.object(panel, "PROFILES", profiles_dir), \
-             patch.object(panel, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
+             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
             panel.deploy_profile_skills()
 
             # Check strategist skills
@@ -271,8 +274,8 @@ class TestDeployProfileSkills:
         hermes_dir = os.path.join(str(tmpdir), "skills", "software-development")
         os.makedirs(hermes_dir, exist_ok=True)
 
-        with patch.object(panel, "PROFILES", profiles_dir), \
-             patch.object(panel, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
+             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
             # First deploy
             panel.deploy_profile_skills()
             # Second deploy — should not crash
@@ -291,14 +294,15 @@ class TestDeployProfileSkills:
         with open(os.path.join(skills_dir, "spec-strategist-lite", "SKILL.md"), "w") as f:
             f.write("# spec-strategist-lite\\n")
         panel.PANEL_DIR = str(tmpdir)
+        _utils_mod.PANEL_DIR = str(tmpdir)
 
         profiles_dir = os.path.join(str(tmpdir), "profiles")
         for name in ["strategist", "coder"]:
             os.makedirs(os.path.join(profiles_dir, name, "skills", "software-development"),
                        exist_ok=True)
 
-        with patch.object(panel, "PROFILES", profiles_dir), \
-             patch.object(panel, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
+             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
             # Should not raise
             panel.deploy_profile_skills()
 
@@ -313,8 +317,8 @@ class TestDeployProfileSkills:
         profiles_dir = os.path.join(str(tmpdir), "profiles")
         # Don't pre-create profile dirs — deploy should create them
 
-        with patch.object(panel, "PROFILES", profiles_dir), \
-             patch.object(panel, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
+             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
             panel.deploy_profile_skills()
 
             # Profile dirs should have been created

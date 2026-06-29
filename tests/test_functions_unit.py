@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 from conftest import _load_panel as _load
 
+import utils as _utils_mod
+
 
 class TestSafeRun:
     """_safe_run(cmd_str, cwd, timeout) — safe subprocess execution."""
@@ -36,13 +38,13 @@ class TestGit:
         project_dir = os.path.join(str(tmpdir), "git-test")
         os.makedirs(project_dir)
         subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        panel.PROJECT_DIR = project_dir
+        _utils_mod.PROJECT_DIR = project_dir
         stdout, stderr, rc = panel.git("rev-parse", "--git-dir")
         assert rc == 0
         assert ".git" in stdout
 
     def test_git_in_nongit_dir(self, panel, tmpdir):
-        panel.PROJECT_DIR = str(tmpdir)
+        _utils_mod.PROJECT_DIR = str(tmpdir)
         stdout, stderr, rc = panel.git("status")
         assert rc != 0
 
