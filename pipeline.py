@@ -611,8 +611,8 @@ FIRST: Create and switch to branch '{branch}':
 Implement ALL tasks from the spec, ONE AT A TIME. Before each: check if another task remains. Do not stop until ALL tasks done — including trivial ones (docs, imports, config).
 
 For each task, TDD with TWO SEPARATE COMMITS:
-RED: Write tests → {TEST_CMD} must FAIL → git add <test files only> && git commit -m "test: <summary>"
-GREEN: Write minimum code → {TEST_CMD} must PASS → {BUILD_CMD} must succeed → git add <impl files only> && git commit -m "feat: <summary>"
+RED: Write tests → run ONLY the new test file (e.g. pytest tests/test_new.py -v) must FAIL → git add <test files only> && git commit -m "test: <summary>"
+GREEN: Write minimum code → run ONLY the new test file must PASS → {TEST_CMD} must PASS → {BUILD_CMD} must succeed → git add <impl files only> && git commit -m "feat: <summary>"
 CRITICAL: Two distinct commits, RED before GREEN, different timestamps. NEVER bundle. No task numbers in commit messages.
 BEFORE PUSHING: After ALL tasks done, check if the spec requires a README update. If yes, update README.md and commit as \"docs: update README for <feature>\". Then run lint ({LINT_CMD}) + FULL test suite ({TEST_CMD}). If either fails, fix and retry. Only git push when clean.
 
@@ -1444,6 +1444,8 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
     ║ "Wave 1: (T1)", not "- [ ] Task 1", not **Task 1**.       ║
     ║ Before submitting, search your output for ### Task.        ║
     ╚═════════════════════════════════════════════════════════════╝
+
+    TASK GRANULARITY: Each task should be 50-150 LOC. If a logical change is smaller than 30 LOC, merge it with the next related change in the same file. Do NOT create tasks smaller than 30 LOC — the panel spawns one coder per task, and sub-30-LOC tasks waste CI overhead.
 
     1. DECISION TABLE: For novel/complex features, compare ≥2 approaches. For features with an obvious pattern match (visual change, config, docs, standard CRUD), use "SINGLE APPROACH: <one sentence>" — skip the comparison table.
 
