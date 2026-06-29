@@ -2063,20 +2063,30 @@ def run_parallel_coders(tasks: dict[str, Task], waves: list[list[str]],
 
                 _poll_until_wave_done(wave, running, tasks, locks, timeout=900)
 
-                # Run overflow tasks
-                for tid in overflow:
-                    if not locks.claim(tid, f"coder-wave{wave_num}-overflow"):
-                        continue
-                    task = tasks[tid]
-                    parent_branch = DEFAULT_BRANCH
-                    if task.dependencies:
-                        dep_id = task.dependencies[0]
-                        if dep_id in tasks and tasks[dep_id].branch:
-                            parent_branch = tasks[dep_id].branch
-                    wt_path = worktrees.create(tid, task.branch)
-                    proc = spawn_coder_in_worktree(task, wt_path, spec_path, parent_branch, tasks_extract_path)
-                    running[tid] = proc
-                    _poll_until_wave_done([tid], running, tasks, locks, timeout=900)
+                # Run overflow tasks in sub-waves (parallel batches)
+                overflow_idx = 0
+                while overflow_idx < len(overflow):
+                    sub_wave = overflow[overflow_idx:overflow_idx + max_parallel]
+                    overflow_idx += len(sub_wave)
+
+                    print(f"  ⚠ Overflow sub-wave: {len(sub_wave)} task(s)", flush=True)
+
+                    # Spawn all tasks in this sub-wave
+                    for tid in sub_wave:
+                        if not locks.claim(tid, f"coder-wave{wave_num}-overflow"):
+                            continue
+                        task = tasks[tid]
+                        parent_branch = DEFAULT_BRANCH
+                        if task.dependencies:
+                            dep_id = task.dependencies[0]
+                            if dep_id in tasks and tasks[dep_id].branch:
+                                parent_branch = tasks[dep_id].branch
+                        wt_path = worktrees.create(tid, task.branch)
+                        proc = spawn_coder_in_worktree(task, wt_path, spec_path, parent_branch, tasks_extract_path)
+                        running[tid] = proc
+
+                    # Poll the sub-wave in parallel
+                    _poll_until_wave_done(sub_wave, running, tasks, locks, timeout=900)
 
             # Report wave results
             for tid in wave:
