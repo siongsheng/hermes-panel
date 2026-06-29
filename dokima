@@ -25,7 +25,7 @@ from utils import (slugify, git, gh, _safe_run, _sanitize_prompt, _validate_proj
                    save_checkpoint, load_checkpoint, delete_checkpoint, _phase_should_skip,
                    validate_checkpoint, acquire_lock, _cleanup_lock, _signal_handler,
                    try_auto_merge, _supplement_pr_sections, _detect_default_branch,
-                   _set_gh_token, show_help, show_help_json, check_upgrade, _version_newer,
+                   _set_gh_token, show_help, show_help_json, check_upgrade, _version_newer, do_release,
                    _parse_status_md, _make_status_entry, update_status_md,
                    _check_pid, _verify_pid_owner, _get_lock_state,
                    handle_status, handle_stop, handle_kill, handle_list_crons,
