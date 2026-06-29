@@ -186,3 +186,43 @@ Updated something. Estimated +120 lines.
 def test_empty_spec(panel):
     result = panel.extract_pr_sections("", "Empty")
     assert len(result) < 100 or "## Why" in result
+
+
+# ── PR Impact Alignment verification ──────────────────────────
+
+def test_verify_pr_impact_alignment_missing_impact(panel):
+    """Returns BLOCKER when PR body has no Impact section."""
+    spec = "## 3. Impact\n\nFaster pipelines via modular architecture."
+    pr_body = "## Why\n\nTest.\n## What Changed\n\n- stuff"
+    result = panel._verify_pr_impact_alignment(pr_body, spec)
+    assert result is not None
+    assert "BLOCKER" in result
+
+def test_verify_pr_impact_alignment_passes_when_aligned(panel):
+    """Returns None when PR body Impact matches spec."""
+    spec = "## 3. Impact\n\nFaster pipelines via modular architecture."
+    pr_body = "## Impact\n\nFaster pipelines via modular architecture."
+    result = panel._verify_pr_impact_alignment(pr_body, spec)
+    assert result is None
+
+def test_verify_pr_impact_alignment_detects_mismatch(panel):
+    """Returns BLOCKER when PR body Impact text differs significantly from spec."""
+    spec = "## 3. Impact\n\nFaster pipelines via modular architecture."
+    pr_body = "## Impact\n\nPurely internal refactor."
+    result = panel._verify_pr_impact_alignment(pr_body, spec)
+    assert result is not None
+    assert "BLOCKER" in result
+
+def test_verify_pr_impact_alignment_no_spec_impact_skips(panel):
+    """When spec has no Impact section, verification is skipped (returns None)."""
+    spec = "## 4. What Changed\n\n- stuff"
+    pr_body = "## Why\n\nTest."
+    result = panel._verify_pr_impact_alignment(pr_body, spec)
+    assert result is None
+
+def test_verify_pr_impact_alignment_none_impact_matches(panel):
+    """When spec says Impact is None, PR body saying None is aligned."""
+    spec = "## 3. Impact\n\nNone. No user-facing changes."
+    pr_body = "## Impact\n\nNo user-facing changes."
+    result = panel._verify_pr_impact_alignment(pr_body, spec)
+    assert result is None

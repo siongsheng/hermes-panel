@@ -84,6 +84,12 @@
 **Status:** [x] Done
 **User Story:** As a contributor, the 5,400-line monolith is split into modules (agent.py, pipeline.py, roadmap.py, tasks.py, utils.py) with clear interfaces — agents can read and modify one module without loading the entire codebase. Same behavior, same tests, smaller context windows.
 
+### F022b: Modular Architecture — Pipeline, Roadmap, Tasks
+**Priority:** P1
+**Dependencies:** F022
+**Status:** [ ] In Progress
+**User Story:** As a contributor, the remaining 3 modules (pipeline.py, roadmap.py, tasks.py) are extracted from the monolith. Pipeline phase coordination, DAG task execution, roadmap parsing, and task management each live in their own module. Agents working on pipeline logic read ~300 lines instead of 5000+. Builds on F022's agent.py and utils.py extraction. Same 640 tests, same behavior.
+
 ### F020: Structured CLI Output (`--help-json`)
 **Priority:** P2
 **Dependencies:** None
@@ -115,25 +121,25 @@
 ### F013: Vendor-Agnostic Model Config
 **Priority:** P2
 **Dependencies:** F005, F012
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a developer using Anthropic, I configure `ANTHROPIC_API_KEY` and the panel maps strategist→claude-sonnet, coder→claude-haiku, TL→claude-opus — no deepseek dependency.
 
 ### F014: nm Script Portability
 **Priority:** P2
 **Dependencies:** F011
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a new developer, the adversarial review script (`nm`) is installed with the panel — same behavior, same model diversity requirement, no manual `~/bin/nm` symlink needed.
 
 ### F015: README & Quickstart Guide
 **Priority:** P2
 **Dependencies:** F011, F012, F013, F014
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a new developer, I clone dokima, follow a 5-minute quickstart, and run my first pipeline on a demo repo — no tribal knowledge required.
 
 ### F016: Config Validation (`dokima doctor`)
 **Priority:** P2
 **Dependencies:** F012
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a developer, `dokima doctor` checks: Hermes Agent running, profiles configured, API keys valid, gh CLI authenticated, nm script present — and tells me exactly what to fix.
 
 ---
@@ -143,11 +149,11 @@
 ### F017: Dokima-as-Service
 **Priority:** P3
 **Dependencies:** Full Phase 3 (F011-F016)
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a team lead, I point Dokima at a GitHub webhook and it auto-reviews every PR — no CLI needed, no local machine dependency.
 
 ### F018: Multi-Repo Orchestration
 **Priority:** P3
 **Dependencies:** F017
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a platform team, Dokima manages features across a monorepo with cross-cutting specs, shared ADRs, and parallel pipelines per sub-project.

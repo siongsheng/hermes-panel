@@ -12,15 +12,27 @@
     "desc": "Dokima"
   },
   "agent.py": {
-    "hash": "6d8c23c2aeba72a09dbfbb28d6e63a27",
+    "hash": "62030bd021dd8e6aa7c8fc209f2bb089",
     "desc": "\u2500\u2500 Module-level globals (set by main()) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
   },
   "install.sh": {
     "hash": "e4e5f7bccc855f364b6d29c2bb5cf391",
     "desc": "Dokima Installer \u2014 one-command setup"
   },
+  "pipeline.py": {
+    "hash": "4abe61020fea5a86d68d1f435d52d798",
+    "desc": "Exports: run_post_pipeline"
+  },
+  "roadmap.py": {
+    "hash": "0e674ce502784c0031a1525a713dc44a",
+    "desc": "Exports: parse_roadmap"
+  },
+  "tasks.py": {
+    "hash": "74f980b921083310e2d6678764344209",
+    "desc": "Exports: WorktreeManager"
+  },
   "utils.py": {
-    "hash": "297b2788664c6993e3a4feb0cc278d52",
+    "hash": "d84e0bb61e3c083d83b4209c76c8fe67",
     "desc": "shutil imported dynamically where needed (deploy_profile_skills)"
   },
   "docs/pipeline.md": {
@@ -64,8 +76,8 @@
     "desc": "Spec Strategist (Lite \u2014 Panel Edition)"
   },
   "tests/conftest.py": {
-    "hash": "770f53a6a6a21e5d1cb1d7f48945cb53",
-    "desc": "Exports: _load_panel, _reload_panel"
+    "hash": "fd038f6cbdb55dfba930f31c056a2c63",
+    "desc": "Exports: _load_panel"
   },
   "tests/test_acquire_lock.py": {
     "hash": "f633babd5dfb43c5895635afbc1718a6",
@@ -104,11 +116,11 @@
     "desc": "Exports: test_first_acquisition_succeeds, test_second_acquisition_blocked, test_stale_lock_dead_pid"
   },
   "tests/test_edge_cases.py": {
-    "hash": "aae598910adc93da057fe14979ffafe2",
+    "hash": "6270cf0ead433aa8f31ecb51b473bd72",
     "desc": "Exports: _setup"
   },
   "tests/test_execution_mode_dispatch.py": {
-    "hash": "e7eeda917719c4d02e033245c2ba1144",
+    "hash": "4cce0811274f5ca095f72ae4f25a8647",
     "desc": "Exports: _reset_called, _mock_run_phase2_coder, _mock_run_phase2_coder_capture, _mock_run_parallel_coders, _mock_halt_and_revert"
   },
   "tests/test_extract_agent.py": {
@@ -132,7 +144,7 @@
     "desc": "Exports: test_f002_marked_done_in_roadmap, test_f002_recorded_in_status"
   },
   "tests/test_f003_robustness.py": {
-    "hash": "9db270a2a1470cca0f2e5939647f41e5",
+    "hash": "7dda25b5c546cbc73ac78b2cfeee71f7",
     "desc": "Exports: _make_result, TestRedOnlyCommits"
   },
   "tests/test_f005_fallback.py": {
@@ -140,7 +152,7 @@
     "desc": "Exports: TestDetectProviderFailure"
   },
   "tests/test_f006_recovery.py": {
-    "hash": "4635ac5cfe39f760f0f0056523c2763b",
+    "hash": "ff5039c55aa2425b5174e5c594b865a3",
     "desc": "Exports: TestCheckpointPath, TestSaveCheckpoint"
   },
   "tests/test_f020_help_json.py": {
@@ -152,19 +164,35 @@
     "desc": "Exports: _run, test_version_flag_prints_version_and_exits_0, test_help_includes_version_command, test_help_includes_upgrade_command, test_help_json_includes_version"
   },
   "tests/test_f022_agent.py": {
-    "hash": "b2bcd1bc6eaa7c69b47ab69635faadc6",
-    "desc": "Exports: test_agent_importable, test_agent_exports_call_agent, test_agent_exports_spawn_agent, test_agent_exports_detect_provider_failure, test_agent_module_compiles"
+    "hash": "574f0407913df74039e7c1b89154b085",
+    "desc": "Exports: test_detect_provider_failure_none, test_detect_provider_failure_empty_nonzero, test_detect_provider_failure_timeout_pattern, test_detect_provider_failure_503, test_detect_provider_failure_429"
+  },
+  "tests/test_f022_pipeline.py": {
+    "hash": "ad97a9cc1a022a150d857ed601e86332",
+    "desc": "Exports: test_pipeline_module_importable, test_pipeline_has_run_pipeline, test_pipeline_has_run_phase1_strategist, test_pipeline_has_run_phase2_coder, test_pipeline_has_run_phase3_vet"
+  },
+  "tests/test_f022_roadmap.py": {
+    "hash": "08663a2ca069481d666afeb852c4648f",
+    "desc": "Exports: test_roadmap_module_importable, test_roadmap_has_parse_roadmap, test_roadmap_has_pick_next_feature, test_roadmap_has_update_roadmap_status, test_roadmap_has_commit_roadmap_update"
+  },
+  "tests/test_f022_tasks.py": {
+    "hash": "a65327de1eb149b1a5f03669cebbb79f",
+    "desc": "Exports: test_tasks_module_importable, test_tasks_has_worktree_manager, test_tasks_has_task_lock, test_tasks_has_task_class, test_tasks_has_roadmap_feature"
   },
   "tests/test_f022_utils.py": {
-    "hash": "5b51c318d3cfe76440ed87c9133c615e",
-    "desc": "Exports: test_utils_importable, test_utils_exports_slugify, test_utils_exports_git, test_utils_exports_sanitize_prompt, test_utils_exports_load_key"
+    "hash": "e3a9cce3a7f9e9cf114363d00f7c67ed",
+    "desc": "Exports: test_slugify_simple, test_slugify_special_chars, test_slugify_short, test_slugify_long, test_slugify_empty"
+  },
+  "tests/test_f022_utils_complete.py": {
+    "hash": "97613f47ba4caf93727c771b68f517eb",
+    "desc": "Exports: test_utils_has_halt_and_revert, test_utils_has_archive_specs_for_feature"
   },
   "tests/test_f023_self_healing.py": {
-    "hash": "c388aea63a1c0f0aea4291de411e6724",
+    "hash": "833afff1c48d581078129b29ed1fb601",
     "desc": "Exports: test_lock_age_old_lock_with_live_pid_removed"
   },
   "tests/test_final_coverage.py": {
-    "hash": "9f2fc544e4c756f1de294412020905ad",
+    "hash": "fce4946929107bbda29ff535a543a3ec",
     "desc": "Exports: _setup"
   },
   "tests/test_final_edge.py": {
@@ -172,12 +200,12 @@
     "desc": "Exports: _setup"
   },
   "tests/test_fix_mode.py": {
-    "hash": "51c0048590710a7b799092a19dd24175",
+    "hash": "086600e0ba2e87f5370f795565133d9b",
     "desc": "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550"
   },
   "tests/test_functions_unit.py": {
-    "hash": "c63b1cdbed9bfe655259ac75cf4e291b",
-    "desc": "Exports: TestSafeRun, TestGit, TestHaltAndRevert"
+    "hash": "30b28480519d8d1231041db04a67815a",
+    "desc": "Exports: TestSafeRun, TestGit"
   },
   "tests/test_help_text.py": {
     "hash": "5008b36dad6e635ee1a947a5e027f8e8",
@@ -192,15 +220,15 @@
     "desc": "Exports: _make_fake_cmd, _make_fake_hermes, _make_git_repo"
   },
   "tests/test_lock_paths.py": {
-    "hash": "272d96d5dce93d1a74102762e70a9cc0",
+    "hash": "f9f2538222c678974488ed2f17cfffa2",
     "desc": "Exports: test_explicit_project_dir_lock, test_explicit_project_dir_stop, test_implicit_from_global, test_trailing_slash_normalized, test_no_project_dir_no_arg"
   },
   "tests/test_main_integration.py": {
-    "hash": "eab8521dd897924fbd25bc2681702f3c",
+    "hash": "d126295e2d5ec37c3f48256f597b7d03",
     "desc": "Exports: _make_safe_run_result, _setup_test_project, _mock_spawn"
   },
   "tests/test_parallel_robustness.py": {
-    "hash": "2d96e7116bed8ba25579b16b44a7df29",
+    "hash": "e463e915ca81c88e63cbd96f5d1a61ac",
     "desc": "Reuse conftest's _load_panel to get a fresh dokima module"
   },
   "tests/test_pick_next.py": {
@@ -216,15 +244,15 @@
     "desc": "Exports: test_check_live_pid, test_check_dead_pid, test_check_non_numeric, test_check_empty_string, test_verify_owner_on_self"
   },
   "tests/test_pipeline_integration.py": {
-    "hash": "aca4a2c0d86db25cdc74ee1ab726aa52",
+    "hash": "1f102ffcc9a0a3fddfff37e8f2629a4b",
     "desc": "Exports: _setup_test_project"
   },
   "tests/test_profile_templates.py": {
-    "hash": "ca34e6ca5be6d49b271bc7e708cf67c1",
+    "hash": "f4858616a6c8de514296374affc29209",
     "desc": "Exports: TestEnsureProfiles"
   },
   "tests/test_rich_pipeline.py": {
-    "hash": "774920992898755fffcae480cbf52c2f",
+    "hash": "33cab01aad7b53f6c6adf990b7177fa7",
     "desc": "Exports: _setup_project"
   },
   "tests/test_roadmap_parse.py": {
@@ -260,7 +288,7 @@
     "desc": "Exports: panel, _make_dag, test_all_parallel_3tasks_2files_single_session, test_non_parallelizable_task_returns_single_session"
   },
   "tests/test_tl_extraction.py": {
-    "hash": "7d2a6602d2aa6cbadf171b092b7d8083",
+    "hash": "3ee624c8cd33d61818149872dbb025cd",
     "desc": "Exports: panel"
   },
   "tests/test_triple_bug_fix.py": {
@@ -268,7 +296,7 @@
     "desc": "\u2500\u2500 Bug 1: Spec archive \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
   },
   "tests/test_unit_helpers.py": {
-    "hash": "acbbac4ed2cbaa0975e7bad0103eb82a",
+    "hash": "f2748c1f11c4407187fb54db42d6509e",
     "desc": "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550"
   },
   "tests/htmlcov/coverage_html_cb_dd2e7eb5.js": {

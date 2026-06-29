@@ -38,13 +38,13 @@ class TestGit:
         project_dir = os.path.join(str(tmpdir), "git-test")
         os.makedirs(project_dir)
         subprocess.run(["git", "init", project_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        _utils_mod.PROJECT_DIR = project_dir
+        panel._utils.PROJECT_DIR = project_dir
         stdout, stderr, rc = panel.git("rev-parse", "--git-dir")
         assert rc == 0
         assert ".git" in stdout
 
     def test_git_in_nongit_dir(self, panel, tmpdir):
-        _utils_mod.PROJECT_DIR = str(tmpdir)
+        panel._utils.PROJECT_DIR = str(tmpdir)
         stdout, stderr, rc = panel.git("status")
         assert rc != 0
 

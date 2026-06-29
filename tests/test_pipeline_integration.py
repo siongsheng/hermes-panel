@@ -119,7 +119,7 @@ def _patch_and_run(panel, mock_lock=True):
     Pattern copied from test_main_integration.py.
     """
     patches = [
-        patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}),
+        patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}),
         patch.object(panel, "_set_gh_token"),
         patch.object(panel, "git", return_value=("", "", 0)),
         patch.object(panel, "gh", return_value=("", "", 0)),
@@ -397,7 +397,7 @@ class TestModeDrivenDispatch:
                 return True
 
             patches = [
-                patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}),
+                patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}),
                 patch.object(panel, "_set_gh_token"),
                 patch.object(panel, "git", return_value=("", "", 0)),
                 patch.object(panel, "gh", return_value=("", "", 0)),
@@ -407,12 +407,12 @@ class TestModeDrivenDispatch:
                 patch.object(panel, "acquire_lock", return_value=(True, None)),
                 patch.object(panel, "_cleanup_lock"),
                 patch.object(panel, "_safe_run", return_value=_make_safe_run_result(0, "mock ok")),
-                patch.object(panel, "merge_worktree_branches", return_value=True),
+                patch.object(panel._tasks, "merge_worktree_branches", return_value=True),
                 patch.object(panel, "_supplement_pr_sections", return_value="test pr"),
                 patch("time.sleep"),
                 # Replace the actual coder functions with mocks
-                patch.object(panel, "run_phase2_coder", side_effect=_mock_run_phase2),
-                patch.object(panel, "run_parallel_coders", side_effect=_mock_run_parallel),
+                patch.object(panel._pipeline, "run_phase2_coder", side_effect=_mock_run_phase2),
+                patch.object(panel._tasks, "run_parallel_coders", side_effect=_mock_run_parallel),
             ]
 
             from contextlib import ExitStack
@@ -474,7 +474,7 @@ class TestModeDrivenDispatch:
                 return True
 
             patches = [
-                patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}),
+                patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}),
                 patch.object(panel, "_set_gh_token"),
                 patch.object(panel, "git", return_value=("", "", 0)),
                 patch.object(panel, "gh", return_value=("", "", 0)),
@@ -484,11 +484,11 @@ class TestModeDrivenDispatch:
                 patch.object(panel, "acquire_lock", return_value=(True, None)),
                 patch.object(panel, "_cleanup_lock"),
                 patch.object(panel, "_safe_run", return_value=_make_safe_run_result(0, "mock ok")),
-                patch.object(panel, "merge_worktree_branches", return_value=True),
+                patch.object(panel._tasks, "merge_worktree_branches", return_value=True),
                 patch.object(panel, "_supplement_pr_sections", return_value="test pr"),
                 patch("time.sleep"),
-                patch.object(panel, "run_phase2_coder", side_effect=_mock_run_phase2),
-                patch.object(panel, "run_parallel_coders", side_effect=_mock_run_parallel),
+                patch.object(panel._pipeline, "run_phase2_coder", side_effect=_mock_run_phase2),
+                patch.object(panel._tasks, "run_parallel_coders", side_effect=_mock_run_parallel),
             ]
 
             from contextlib import ExitStack
@@ -550,7 +550,7 @@ class TestModeDrivenDispatch:
                 return True
 
             patches = [
-                patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}),
+                patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}),
                 patch.object(panel, "_set_gh_token"),
                 patch.object(panel, "git", return_value=("", "", 0)),
                 patch.object(panel, "gh", return_value=("", "", 0)),
@@ -560,11 +560,11 @@ class TestModeDrivenDispatch:
                 patch.object(panel, "acquire_lock", return_value=(True, None)),
                 patch.object(panel, "_cleanup_lock"),
                 patch.object(panel, "_safe_run", return_value=_make_safe_run_result(0, "mock ok")),
-                patch.object(panel, "merge_worktree_branches", return_value=True),
+                patch.object(panel._tasks, "merge_worktree_branches", return_value=True),
                 patch.object(panel, "_supplement_pr_sections", return_value="test pr"),
                 patch("time.sleep"),
-                patch.object(panel, "run_phase2_coder", side_effect=_mock_run_phase2),
-                patch.object(panel, "run_parallel_coders", side_effect=_mock_run_parallel),
+                patch.object(panel._pipeline, "run_phase2_coder", side_effect=_mock_run_phase2),
+                patch.object(panel._tasks, "run_parallel_coders", side_effect=_mock_run_parallel),
             ]
 
             from contextlib import ExitStack

@@ -18,6 +18,10 @@ def _load_panel():
     # Remove stale module if present
     if module_name in sys.modules:
         del sys.modules[module_name]
+    # F022: Also remove stale sub-modules so fresh imports pick up changes
+    for sub in ('tasks', 'utils', 'agent', 'pipeline', 'roadmap'):
+        if sub in sys.modules:
+            del sys.modules[sub]
 
     module = types.ModuleType(module_name)
     module.__file__ = PANEL_PATH
@@ -34,10 +38,44 @@ def _load_panel():
     module.BUILD_CMD = "echo build"
     module.LINT_CMD = "echo lint"
 
+    # F022: Intercept global assignments to sync to sub-modules.
+    def _sync_globals_on_setattr(self, name, value):
+        object.__setattr__(self, name, value)
+        if name in ('PROJECT_DIR', 'REPO', 'DEFAULT_BRANCH', 'PANEL_FEATURE',
+                     'PANEL_DIR', 'API_KEY', 'OUTPUT_LOG', 'HERMES_BIN',
+                     'FALLBACK_MODELS', 'SKIP_AUTOFIX', 'FORCE_FULL',
+                     'SKIP_HUMAN_GATE', 'max_parallel_override', 'RESUME',
+                     'TEST_CMD', 'BUILD_CMD', 'LINT_CMD'):
+            for mod_ref in ('_utils', '_agent', '_tasks', '_roadmap', '_pipeline'):
+                target = getattr(self, mod_ref, None)
+                if target is not None and hasattr(target, name):
+                    object.__setattr__(target, name, value)
+    module.__class__ = type('DokimaModule', (types.ModuleType,), {'__setattr__': _sync_globals_on_setattr})
+
     # Execute the script in the module's namespace
     with open(PANEL_PATH) as f:
         code = compile(f.read(), PANEL_PATH, "exec")
     exec(code, module.__dict__)
+
+    # F022b: Link each sub-module back to this panel so override detection
+    # uses the correct panel instance (not sys.modules which can be stale).
+    for mod_ref in ('_utils', '_agent', '_pipeline', '_tasks', '_roadmap'):
+        target = getattr(module, mod_ref, None)
+        if target is not None:
+            target._IMPORTING_PANEL = module
+
+    # F022: Sync initial globals (set before __setattr__ was active) to sub-modules
+    for g_name in ('PROJECT_DIR', 'REPO', 'DEFAULT_BRANCH', 'PANEL_FEATURE',
+                   'PANEL_DIR', 'API_KEY', 'OUTPUT_LOG', 'HERMES_BIN',
+                   'FALLBACK_MODELS', 'SKIP_AUTOFIX', 'FORCE_FULL',
+                   'SKIP_HUMAN_GATE', 'max_parallel_override', 'RESUME',
+                   'TEST_CMD', 'BUILD_CMD', 'LINT_CMD'):
+        val = getattr(module, g_name, None)
+        if val is not None:
+            for mod_ref in ('_utils', '_agent', '_tasks', '_roadmap', '_pipeline'):
+                target = getattr(module, mod_ref, None)
+                if target is not None and hasattr(target, g_name):
+                    object.__setattr__(target, g_name, val)
 
     return module
 
@@ -51,10 +89,48 @@ def _reload_panel():
     return _load_panel()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_panel_modules():
+    """Save/restore sys.modules around every test to prevent stale
+    references from _load()/_load_panel() calls leaking between tests
+    (F022b: Modular Architecture — sys.modules state isolation).
+
+    Tests that call _load() directly (not through the panel fixture)
+    leave sys.modules pointing to their panel, breaking override
+    detection in other tests that use module-level panel references."""
+    _sub_module_names = ('tasks', 'utils', 'agent', 'pipeline', 'roadmap', 'dokima')
+    _saved = {k: sys.modules.get(k) for k in _sub_module_names}
+    _had = {k: k in sys.modules for k in _sub_module_names}
+
+    yield
+
+    for key in _sub_module_names:
+        if _had[key] and _saved[key] is not None:
+            sys.modules[key] = _saved[key]
+        elif key in sys.modules:
+            del sys.modules[key]
+
+
 @pytest.fixture
 def panel():
-    """Loaded dokima module with globals set. Fresh per test."""
-    return _load_panel()
+    """Loaded dokima module with globals set. Fresh per test.
+    Saves/restores sys.modules so stale references from module-level
+    imports in other test files don't leak into override detection
+    (F022b: Modular Architecture — fix stale sys.modules references)."""
+    _sub_module_names = ('tasks', 'utils', 'agent', 'pipeline', 'roadmap', 'dokima')
+    _saved = {k: sys.modules.get(k) for k in _sub_module_names}
+    _had = {k: k in sys.modules for k in _sub_module_names}
+
+    p = _load_panel()
+    yield p
+
+    # Restore sys.modules to pre-test state so module-level imports
+    # in other test files resolve correctly.
+    for key in _sub_module_names:
+        if _had[key] and _saved[key] is not None:
+            sys.modules[key] = _saved[key]
+        elif key in sys.modules:
+            del sys.modules[key]
 
 
 @pytest.fixture

@@ -8,6 +8,8 @@ import sys, os, json, re, subprocess
 from utils import load_key, load_github_token, _redact_secrets, _write_log_line, HERMES_BIN, OUTPUT_LOG
 
 # ── Module-level globals (set by main()) ──────────
+# Set by conftest._load_panel() — see utils.py _IMPORTING_PANEL docstring (F022b).
+_IMPORTING_PANEL = None
 API_KEY = ""
 PANEL_PORT = {"strategist": 8647, "tech-lead": 8644, "coder": 8645, "nm": 8648}
 FALLBACK_MODELS = {}
@@ -102,6 +104,21 @@ def spawn_agent(profile, skills, prompt, timeout=900, cwd=None, model=None, fall
     If model is specified (e.g. 'deepseek-v4-pro'), passes -m/--provider to override the profile default.
     If fallback_model is specified, on provider failure the agent is re-spawned
     with the fallback model. Output tagged with [profile:fallback] on fallback success."""
+    # Allow test patching via dokima.spawn_agent or agent.spawn_agent override (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    # Check if agent.spawn_agent was patched (tests use panel._agent.spawn_agent)
+    if dokima_mod is not None:
+        agent_mod = getattr(dokima_mod, '_agent', None)
+        if agent_mod is not None:
+            agent_override = getattr(agent_mod, 'spawn_agent', None)
+            if agent_override is not None and agent_override is not _SPAWN_ORIGINAL:
+                return agent_override(profile, skills, prompt, timeout=timeout, cwd=cwd, model=model, fallback_model=fallback_model)
+    # Check if dokima.spawn_agent was patched (tests use panel.spawn_agent)
+    if dokima_mod is not None:
+        dokima_override = getattr(dokima_mod, 'spawn_agent', None)
+        if dokima_override is not None and dokima_override is not _SPAWN_ORIGINAL:
+            return dokima_override(profile, skills, prompt, timeout=timeout, cwd=cwd, model=model, fallback_model=fallback_model)
+
     result, returncode = _run_agent(profile, skills, prompt, timeout, cwd, model)
 
     # Check if fallback is needed
@@ -195,4 +212,7 @@ def _run_agent(profile, skills, prompt, timeout, cwd, model):
         return result, proc.returncode
     except Exception:
         return result, 0
+
+# Module-level original reference for delegation check (F022 modular refactor)
+_SPAWN_ORIGINAL = spawn_agent
 

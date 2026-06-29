@@ -163,7 +163,7 @@ def test_fix_flag_dispatches_to_run_fix_mode(panel, tmpdir):
             run_fix_args.append(kwargs.get('project_dir', ''))
 
         with patch.object(panel, 'acquire_lock', return_value=(None, None)):
-            with patch.object(panel, 'run_fix_mode', side_effect=mock_run_fix):
+            with patch.object(panel._pipeline, 'run_fix_mode', side_effect=mock_run_fix):
                 with patch.object(panel, 'load_key', return_value="test-key"):
                     with patch.object(panel, 'detect_repo', return_value="t/t"):
                         with patch.object(panel, '_set_gh_token'):
@@ -197,7 +197,7 @@ def test_fix_mode_skips_auto_archive(panel, tmpdir):
 
         # Track if auto-archive block runs
         with patch.object(panel, 'acquire_lock', return_value=(None, None)):
-            with patch.object(panel, 'run_fix_mode'):
+            with patch.object(panel._pipeline, 'run_fix_mode'):
                 with patch.object(panel, 'load_key', return_value="test-key"):
                     with patch.object(panel, 'detect_repo', return_value="t/t"):
                         with patch.object(panel, '_set_gh_token'):
@@ -225,7 +225,7 @@ def test_fix_answers_warning(panel):
     try:
         sys.argv = ['dokima', '--fix', '--answers', '/nonexistent/answers.json']
         with patch.object(panel, 'acquire_lock', return_value=(None, None)):
-            with patch.object(panel, 'run_fix_mode'):
+            with patch.object(panel._pipeline, 'run_fix_mode'):
                 with patch.object(panel, 'load_key', return_value="test-key"):
                     with patch.object(panel, 'detect_repo', return_value="t/t"):
                         with patch.object(panel, '_set_gh_token'):
@@ -268,10 +268,10 @@ def test_run_fix_mode_extracts_blockers(panel):
     with patch.object(panel, 'discover_blocked_pr', return_value=mock_pr):
         with patch.object(panel, 'gh', side_effect=mock_gh):
             with patch.object(panel, 'git'):
-                with patch.object(panel, 'run_phase2_coder', return_value={"coder_failed": False, "pr_url": "https://github.com/t/t/pull/42"}):
-                    with patch.object(panel, 'run_phase3_vet', return_value={"nm_output": "", "pr_url": "", "coder_failed": False, "verdict": "APPROVED"}):
-                        with patch.object(panel, 'run_phase4_nm', return_value={"nm_ok": True, "pr_url": "", "risk": "LOW"}):
-                            with patch.object(panel, 'run_phase5_tech_lead', return_value={"verdict": "APPROVED", "tl_output": "All good"}):
+                with patch.object(panel._pipeline, 'run_phase2_coder', return_value={"coder_failed": False, "pr_url": "https://github.com/t/t/pull/42"}):
+                    with patch.object(panel._pipeline, 'run_phase3_vet', return_value={"nm_output": "", "pr_url": "", "coder_failed": False, "verdict": "APPROVED"}):
+                        with patch.object(panel._pipeline, 'run_phase4_nm', return_value={"nm_ok": True, "pr_url": "", "risk": "LOW"}):
+                            with patch.object(panel._pipeline, 'run_phase5_tech_lead', return_value={"verdict": "APPROVED", "tl_output": "All good"}):
                                 with patch.dict(os.environ, {"PANEL_SKIP_HUMAN_GATE": "1"}):
                                     with patch('sys.stdout'):
                                         panel.run_fix_mode("/tmp/test")

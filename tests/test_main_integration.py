@@ -52,7 +52,7 @@ def _mock_spawn(profile, skills, prompt, timeout=600, cwd=None, **kwargs):
 def _patch_and_run(panel, mock_lock=True):
     """Run panel.main() with all standard patches applied."""
     patches = [
-        patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}),
+        patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}),
         patch.object(panel, "_set_gh_token"),
         patch.object(panel, "git", return_value=("", "", 0)),
         patch.object(panel, "gh", return_value=("", "", 0)),
@@ -215,7 +215,7 @@ class TestVetPhase:
 
         with patch.object(panel, 'git', return_value=("", "", 0)):
             with patch.object(panel, 'gh', return_value=("https://pr.url", "", 0)):
-                with patch.object(panel, 'spawn_agent', return_value="ok"):
+                with patch.object(panel._agent, 'spawn_agent', return_value="ok"):
                     with patch.object(panel, 'halt_and_revert'):
                         result = panel.run_phase3_vet(
                             feature="Test Feature",
@@ -243,7 +243,7 @@ class TestVetPhase:
 
         with patch.object(panel, 'git', return_value=("", "", 0)):
             with patch.object(panel, 'gh', return_value=("", "", 0)):
-                with patch.object(panel, 'spawn_agent', return_value="ok"):
+                with patch.object(panel._agent, 'spawn_agent', return_value="ok"):
                     with patch.object(panel, 'halt_and_revert'):
                         result = panel.run_phase3_vet(
                             feature="Test Feature",

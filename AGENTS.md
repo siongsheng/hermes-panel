@@ -4,7 +4,7 @@ Python script that routes feature development through a pipeline of AI agents.
 This repo IS the panel — you don't run the panel on itself.
 
 ## Tech Stack
-- Python 3.6+ (single script, no dependencies)
+- Python 3.6+ (modular: dokima entry point + utils.py, agent.py, pipeline.py, roadmap.py, tasks.py)
 - Bash for companion scripts (nm, vet)
 - Hermes Agent for profile spawning
 - GitHub CLI for PR/issue management
@@ -17,12 +17,12 @@ This repo IS the panel — you don't run the panel on itself.
 - Verify vet script: `bash -n ~/bin/vet`
 
 ## Testing
-196 tests (pytest). Coverage: core functions + control panel + edge cases.
+673 tests pass, 6 skipped, 679 total (pytest). Coverage: core functions + control panel + edge cases.
 ```bash
-# Full suite (excludes slow integration tests)
+# Quick suite (excludes slow integration tests)
 python3 -m pytest tests/ -q --ignore=tests/test_main_integration.py
 
-# All tests including integration (may be slow)
+# Full suite including integration (may be slow)
 python3 -m pytest tests/ -q
 
 # Single file

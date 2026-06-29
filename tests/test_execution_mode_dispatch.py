@@ -125,16 +125,16 @@ class TestExecutionModeDispatch:
     def test_single_session_routes_to_phase2_coder(self, panel):
         """3 parallel tasks on 2 files → single_session → run_phase2_coder called."""
         _reset_called()
-        panel.run_phase2_coder = _mock_run_phase2_coder
-        panel.run_parallel_coders = _mock_run_parallel_coders
+        panel._pipeline.run_phase2_coder = _mock_run_phase2_coder
+        panel._pipeline.run_parallel_coders = _mock_run_parallel_coders
         panel.halt_and_revert = _mock_halt_and_revert
-        panel.merge_worktree_branches = _mock_merge_worktree_branches
+        panel._pipeline.merge_worktree_branches = _mock_merge_worktree_branches
 
         strat = _make_strat_result(panel, parallel_enabled=True, spec_has_tasks=True)
-        with patch.object(panel, "run_phase1_strategist", return_value=strat), \
+        with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
              patch.object(panel, "git", return_value=("", "", 0)), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
-             patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+             patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
              patch.object(panel, "load_github_token", return_value="ft"), \
              patch.object(panel, "detect_repo", return_value="t/t"), \
@@ -143,7 +143,7 @@ class TestExecutionModeDispatch:
              patch.object(panel, "_cleanup_lock"), \
              patch.object(panel, "_safe_run", return_value=__import__("subprocess").CompletedProcess([], 0)), \
              patch.object(panel, "WorktreeManager"), \
-             patch.object(panel, "spawn_agent", return_value="mock"), \
+             patch.object(panel._agent, "spawn_agent", return_value="mock"), \
              patch("time.sleep"):
             panel.PROJECT_DIR = "/tmp"
             panel.REPO = "t/t"
@@ -161,10 +161,10 @@ class TestExecutionModeDispatch:
     def test_per_task_spawn_routes_to_parallel_coders(self, panel):
         """4 parallelizable tasks, 4 distinct files (>3) → per_task_spawn → run_parallel_coders."""
         _reset_called()
-        panel.run_phase2_coder = _mock_run_phase2_coder
-        panel.run_parallel_coders = _mock_run_parallel_coders
+        panel._pipeline.run_phase2_coder = _mock_run_phase2_coder
+        panel._pipeline.run_parallel_coders = _mock_run_parallel_coders
         panel.halt_and_revert = _mock_halt_and_revert
-        panel.merge_worktree_branches = _mock_merge_worktree_branches
+        panel._pipeline.merge_worktree_branches = _mock_merge_worktree_branches
 
         # All parallelizable, 4 distinct files (>3 threshold) → per_task_spawn
         spec = """# Test Feature
@@ -207,10 +207,10 @@ Test impact.
         strat = _make_strat_result(panel, parallel_enabled=True, spec_has_tasks=True)
         strat["spec"] = spec
 
-        with patch.object(panel, "run_phase1_strategist", return_value=strat), \
+        with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
              patch.object(panel, "git", return_value=("", "", 0)), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
-             patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+             patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
              patch.object(panel, "load_github_token", return_value="ft"), \
              patch.object(panel, "detect_repo", return_value="t/t"), \
@@ -219,7 +219,7 @@ Test impact.
              patch.object(panel, "_cleanup_lock"), \
              patch.object(panel, "_safe_run", return_value=__import__("subprocess").CompletedProcess([], 0)), \
              patch.object(panel, "WorktreeManager"), \
-             patch.object(panel, "spawn_agent", return_value="mock"), \
+             patch.object(panel._agent, "spawn_agent", return_value="mock"), \
              patch("time.sleep"):
             panel.PROJECT_DIR = "/tmp"
             panel.REPO = "t/t"
@@ -237,10 +237,10 @@ Test impact.
     def test_parallel_enabled_false_downgrades_to_sequential(self, panel):
         """parallel_enabled=False → sequential even for per_task_spawn DAG."""
         _reset_called()
-        panel.run_phase2_coder = _mock_run_phase2_coder
-        panel.run_parallel_coders = _mock_run_parallel_coders
+        panel._pipeline.run_phase2_coder = _mock_run_phase2_coder
+        panel._pipeline.run_parallel_coders = _mock_run_parallel_coders
         panel.halt_and_revert = _mock_halt_and_revert
-        panel.merge_worktree_branches = _mock_merge_worktree_branches
+        panel._pipeline.merge_worktree_branches = _mock_merge_worktree_branches
 
         # Non-parallelizable task → would be per_task_spawn, but disabled
         spec = """# Test Feature
@@ -265,10 +265,10 @@ Test impact.
         strat = _make_strat_result(panel, parallel_enabled=False, spec_has_tasks=True)
         strat["spec"] = spec
 
-        with patch.object(panel, "run_phase1_strategist", return_value=strat), \
+        with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
              patch.object(panel, "git", return_value=("", "", 0)), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
-             patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+             patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
              patch.object(panel, "load_github_token", return_value="ft"), \
              patch.object(panel, "detect_repo", return_value="t/t"), \
@@ -277,7 +277,7 @@ Test impact.
              patch.object(panel, "_cleanup_lock"), \
              patch.object(panel, "_safe_run", return_value=__import__("subprocess").CompletedProcess([], 0)), \
              patch.object(panel, "WorktreeManager"), \
-             patch.object(panel, "spawn_agent", return_value="mock"), \
+             patch.object(panel._agent, "spawn_agent", return_value="mock"), \
              patch("time.sleep"):
             panel.PROJECT_DIR = "/tmp"
             panel.REPO = "t/t"
@@ -295,10 +295,10 @@ Test impact.
     def test_force_execution_mode_override(self, panel):
         """PANEL_FORCE_EXECUTION_MODE=single_session overrides per_task_spawn DAG."""
         _reset_called()
-        panel.run_phase2_coder = _mock_run_phase2_coder
-        panel.run_parallel_coders = _mock_run_parallel_coders
+        panel._pipeline.run_phase2_coder = _mock_run_phase2_coder
+        panel._pipeline.run_parallel_coders = _mock_run_parallel_coders
         panel.halt_and_revert = _mock_halt_and_revert
-        panel.merge_worktree_branches = _mock_merge_worktree_branches
+        panel._pipeline.merge_worktree_branches = _mock_merge_worktree_branches
 
         # Non-parallelizable task → per_task_spawn, but overridden
         spec = """# Test Feature
@@ -323,10 +323,10 @@ Test impact.
         strat = _make_strat_result(panel, parallel_enabled=True, spec_has_tasks=True)
         strat["spec"] = spec
 
-        with patch.object(panel, "run_phase1_strategist", return_value=strat), \
+        with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
              patch.object(panel, "git", return_value=("", "", 0)), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
-             patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+             patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
              patch.object(panel, "load_github_token", return_value="ft"), \
              patch.object(panel, "detect_repo", return_value="t/t"), \
@@ -335,7 +335,7 @@ Test impact.
              patch.object(panel, "_cleanup_lock"), \
              patch.object(panel, "_safe_run", return_value=__import__("subprocess").CompletedProcess([], 0)), \
              patch.object(panel, "WorktreeManager"), \
-             patch.object(panel, "spawn_agent", return_value="mock"), \
+             patch.object(panel._agent, "spawn_agent", return_value="mock"), \
              patch("time.sleep"):
             panel.PROJECT_DIR = "/tmp"
             panel.REPO = "t/t"
@@ -356,17 +356,17 @@ Test impact.
     def test_empty_dag_routes_to_sequential(self, panel):
         """No tasks in DAG → fallback to sequential coder."""
         _reset_called()
-        panel.run_phase2_coder = _mock_run_phase2_coder
-        panel.run_parallel_coders = _mock_run_parallel_coders
+        panel._pipeline.run_phase2_coder = _mock_run_phase2_coder
+        panel._pipeline.run_parallel_coders = _mock_run_parallel_coders
         panel.halt_and_revert = _mock_halt_and_revert
-        panel.merge_worktree_branches = _mock_merge_worktree_branches
+        panel._pipeline.merge_worktree_branches = _mock_merge_worktree_branches
 
         strat = _make_strat_result(panel, parallel_enabled=True, spec_has_tasks=False)
 
-        with patch.object(panel, "run_phase1_strategist", return_value=strat), \
+        with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
              patch.object(panel, "git", return_value=("", "", 0)), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
-             patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+             patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
              patch.object(panel, "load_github_token", return_value="ft"), \
              patch.object(panel, "detect_repo", return_value="t/t"), \
@@ -375,7 +375,7 @@ Test impact.
              patch.object(panel, "_cleanup_lock"), \
              patch.object(panel, "_safe_run", return_value=__import__("subprocess").CompletedProcess([], 0)), \
              patch.object(panel, "WorktreeManager"), \
-             patch.object(panel, "spawn_agent", return_value="mock"), \
+             patch.object(panel._agent, "spawn_agent", return_value="mock"), \
              patch("time.sleep"):
             panel.PROJECT_DIR = "/tmp"
             panel.REPO = "t/t"
@@ -426,16 +426,16 @@ class TestDepthMatrixCells:
     def _run_and_get_depth(self, panel, spec_text):
         """Run the pipeline with a given spec text and return the computed depth."""
         _reset_called()
-        panel.run_phase2_coder = _mock_run_phase2_coder_capture
-        panel.run_parallel_coders = _mock_run_parallel_coders
+        panel._pipeline.run_phase2_coder = _mock_run_phase2_coder_capture
+        panel._pipeline.run_parallel_coders = _mock_run_parallel_coders
         panel.halt_and_revert = _mock_halt_and_revert
-        panel.merge_worktree_branches = _mock_merge_worktree_branches
+        panel._pipeline.merge_worktree_branches = _mock_merge_worktree_branches
         # DO NOT mock run_phase1_strategist — let it execute so
         # the orchestration gate computes depth from the spec.
 
-        with patch.object(panel, "spawn_agent", return_value=spec_text), \
+        with patch.object(panel._agent, "spawn_agent", return_value=spec_text), \
              patch.object(panel, "git", return_value=("", "", 0)), \
-             patch.object(panel, "call_agent", return_value={"content": "M", "tokens": 1}), \
+             patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
              patch.object(panel, "load_github_token", return_value="ft"), \
              patch.object(panel, "detect_repo", return_value="t/t"), \

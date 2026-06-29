@@ -1,6 +1,6 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-29 10:45:49 (incremental | 71 files)
+## Generated: 2026-06-29 13:20:14 (incremental | 78 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
@@ -8,6 +8,9 @@
 ├── README.md  — Dokima
 ├── agent.py  — ── Module-level globals (set by main()) ──────────
 ├── install.sh  — Dokima Installer — one-command setup
+├── pipeline.py  — Exports: run_post_pipeline
+├── roadmap.py  — Exports: parse_roadmap
+├── tasks.py  — Exports: WorktreeManager
 └── utils.py  — shutil imported dynamically where needed (deploy_profile_skills)
 ├── docs/
 ├── pipeline.md  — Dokima — Pipeline Reference
@@ -29,7 +32,7 @@
 │   ├── spec-strategist-lite/
 │   │   └── SKILL.md  — Spec Strategist (Lite — Panel Edition)
 ├── tests/
-├── conftest.py  — Exports: _load_panel, _reload_panel
+├── conftest.py  — Exports: _load_panel
 ├── test_acquire_lock.py  — Exports: test_first_acquisition_succeeds, test_second_acquisition_blocked, test_stale_lock_dead_pid
 ├── test_add_to_roadmap.py
 ├── test_clean_spec.py  — Exports: TestCleanSpecContent
@@ -51,13 +54,17 @@
 ├── test_f006_recovery.py  — Exports: TestCheckpointPath, TestSaveCheckpoint
 ├── test_f020_help_json.py  — Exports: run_help_json, TestHelpJsonOutput
 ├── test_f021_version.py  — Exports: _run, test_version_flag_prints_version_and_exits_0, test_help_includes_version_command, test_help_includes_upgrade_command, test_help_json_includes_version
-├── test_f022_agent.py  — Exports: test_agent_importable, test_agent_exports_call_agent, test_agent_exports_spawn_agent, test_agent_exports_detect_provider_failure, test_agent_module_compiles
-├── test_f022_utils.py  — Exports: test_utils_importable, test_utils_exports_slugify, test_utils_exports_git, test_utils_exports_sanitize_prompt, test_utils_exports_load_key
+├── test_f022_agent.py  — Exports: test_detect_provider_failure_none, test_detect_provider_failure_empty_nonzero, test_detect_provider_failure_timeout_pattern, test_detect_provider_failure_503, test_detect_provider_failure_429
+├── test_f022_pipeline.py  — Exports: test_pipeline_module_importable, test_pipeline_has_run_pipeline, test_pipeline_has_run_phase1_strategist, test_pipeline_has_run_phase2_coder, test_pipeline_has_run_phase3_vet
+├── test_f022_roadmap.py  — Exports: test_roadmap_module_importable, test_roadmap_has_parse_roadmap, test_roadmap_has_pick_next_feature, test_roadmap_has_update_roadmap_status, test_roadmap_has_commit_roadmap_update
+├── test_f022_tasks.py  — Exports: test_tasks_module_importable, test_tasks_has_worktree_manager, test_tasks_has_task_lock, test_tasks_has_task_class, test_tasks_has_roadmap_feature
+├── test_f022_utils.py  — Exports: test_slugify_simple, test_slugify_special_chars, test_slugify_short, test_slugify_long, test_slugify_empty
+├── test_f022_utils_complete.py  — Exports: test_utils_has_halt_and_revert, test_utils_has_archive_specs_for_feature
 ├── test_f023_self_healing.py  — Exports: test_lock_age_old_lock_with_live_pid_removed
 ├── test_final_coverage.py  — Exports: _setup
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════
-├── test_functions_unit.py  — Exports: TestSafeRun, TestGit, TestHaltAndRevert
+├── test_functions_unit.py  — Exports: TestSafeRun, TestGit
 ├── test_help_text.py  — Exports: test_help_text_documents_panel_max_parallel
 ├── test_helpers.py  — Exports: test_make_status_entry_pending, test_make_status_entry_done_with_pr, test_make_status_entry_in_progress, test_commit_roadmap_update_dry, test_auto_repair_status_empty
 ├── test_installer.py  — Exports: _make_fake_cmd, _make_fake_hermes, _make_git_repo

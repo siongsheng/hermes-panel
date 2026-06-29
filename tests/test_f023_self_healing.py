@@ -96,7 +96,7 @@ def test_lock_age_fresh_lock_with_live_pid_exits(panel, tmpdir_path, monkeypatch
     panel.sys.exit = fake_exit
 
     try:
-        with patch.object(panel, 'fcntl') as mock_fcntl:
+        with patch.object(panel._utils, 'fcntl') as mock_fcntl:
             mock_fcntl.flock = mock_flock
             mock_fcntl.LOCK_EX = fcntl.LOCK_EX
             mock_fcntl.LOCK_NB = fcntl.LOCK_NB
@@ -298,7 +298,7 @@ def test_vet_hash_cycle_same_output_blocked(panel, tmpdir_path, monkeypatch):
     # Mock _safe_run: first iter fails, second iter fails too (hash same)
     run_count = [0]
 
-    def mock_safe_run(cmd, **kwargs):
+    def mock_safe_run(cmd_str, cwd=None, timeout=None):
         run_count[0] += 1
         if run_count[0] <= 2:
             # First verification: tests + build both fail
@@ -313,7 +313,7 @@ def test_vet_hash_cycle_same_output_blocked(panel, tmpdir_path, monkeypatch):
     with patch.object(panel, 'git', return_value=("", "", 0)), \
          patch.object(panel, '_safe_run', side_effect=mock_safe_run), \
          patch.object(panel, 'halt_and_revert') as mock_halt, \
-         patch.object(panel, 'spawn_agent') as mock_spawn, \
+         patch.object(panel._agent, 'spawn_agent') as mock_spawn, \
          patch.object(panel, 'detect_commands', return_value=(
              "echo test", "echo build", "echo lint")):
 
@@ -348,7 +348,7 @@ def test_vet_hash_cycle_different_output_proceeds(panel, tmpdir_path, monkeypatc
 
     run_count = [0]
 
-    def mock_safe_run(cmd, **kwargs):
+    def mock_safe_run(cmd_str, cwd=None, timeout=None):
         run_count[0] += 1
         if run_count[0] <= 2:
             # First verification: tests + build both fail
@@ -362,7 +362,7 @@ def test_vet_hash_cycle_different_output_proceeds(panel, tmpdir_path, monkeypatc
 
     with patch.object(panel, 'git', return_value=("", "", 0)), \
          patch.object(panel, '_safe_run', side_effect=mock_safe_run), \
-         patch.object(panel, 'spawn_agent') as mock_spawn, \
+         patch.object(panel._agent, 'spawn_agent') as mock_spawn, \
          patch.object(panel, 'detect_commands', return_value=(
              "echo test", "echo build", "echo lint")), \
          patch.object(panel, 'gh', return_value=(

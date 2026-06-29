@@ -64,7 +64,7 @@ def _run_pipeline(panel, project_dir, spawn_mock, extra_patches=None, is_continu
             return ("", "", 0)
 
         patches = [
-            patch("dokima.call_agent", return_value={"content": "M", "tokens": 1}),
+            patch("dokima._agent.call_agent", return_value={"content": "M", "tokens": 1}),
             patch("dokima._set_gh_token"),
             patch("dokima.git", return_value=("", "", 0)),
             patch("dokima.gh", side_effect=gh_se),
@@ -74,6 +74,8 @@ def _run_pipeline(panel, project_dir, spawn_mock, extra_patches=None, is_continu
             patch("dokima._safe_run", return_value=mock_run),
             patch("dokima.subprocess.run", return_value=mock_run),
             patch("dokima.time.sleep"),
+            patch("utils.ensure_profiles"),
+            patch("utils.deploy_profile_skills"),
         ]
         if extra_patches:
             patches.extend(extra_patches)
@@ -263,7 +265,7 @@ class TestMergeFailure:
         mock_proc = type("P", (), {"poll": lambda s: 0, "communicate": lambda s,t=None: (b"done", None)})()
 
         _run_pipeline(panel, project_dir, mock, extra_patches=[
-            patch("dokima.merge_worktree_branches", return_value=False),
+            patch("dokima._tasks.merge_worktree_branches", return_value=False),
             patch("dokima.WorktreeManager", return_value=wt_mgr),
             patch("dokima.subprocess.Popen", return_value=mock_proc),
         ])

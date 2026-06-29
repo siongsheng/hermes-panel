@@ -8,6 +8,11 @@ import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal, datetime
 # shutil imported dynamically where needed (deploy_profile_skills)
 
 # ── Module-level globals (set by main()) ──────────
+# Set by conftest._load_panel() after importing this module.
+# Used by override-detection to find the correct panel instance
+# without relying on sys.modules (which can be stale from
+# other _load_panel() calls in tests — F022b).
+_IMPORTING_PANEL = None
 PROJECT_DIR = ""
 REPO = ""
 DEFAULT_BRANCH = "master"
@@ -202,6 +207,12 @@ def _write_log_line(text):
         pass
 
 def load_key():
+    # Allow test patching via dokima.load_key override (F022b)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'load_key', None)
+        if override is not None and override is not load_key:
+            return override()
     env_path = os.path.join(PROFILES, "work", ".env")
     if not os.path.exists(env_path):
         return ""
@@ -213,6 +224,12 @@ def load_key():
     return ""
 
 def load_github_token():
+    # Allow test patching via dokima.load_github_token override (F022b)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'load_github_token', None)
+        if override is not None and override is not load_github_token:
+            return override()
     env_path = os.path.join(PROFILES, "work", ".env")
     if not os.path.exists(env_path):
         return ""
@@ -225,12 +242,26 @@ def load_github_token():
 
 def git(*args, **kwargs):
     """Run git in PROJECT_DIR. Returns (stdout, stderr, returncode)."""
+    # Allow test patching via dokima.git override (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'git', None)
+        if override is not None and override is not git:
+            return override(*args, **kwargs)
+
     result = subprocess.run(["git", "-C", PROJECT_DIR] + list(args),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=30)
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
 def gh(*args, **kwargs):
     """Run gh CLI with GH_TOKEN. Returns (stdout, stderr, returncode)."""
+    # Allow test patching via dokima.gh override (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'gh', None)
+        if override is not None and override is not gh:
+            return override(*args, **kwargs)
+
     global _GH_TOKEN_CACHE
     env = os.environ.copy()
     if _GH_TOKEN_CACHE is None:
@@ -246,6 +277,14 @@ def _safe_run(cmd_str: str, cwd: str, timeout: int = 300):
     Uses shlex.split to parse into argument list.
     Returns a CompletedProcess-like object. On timeout, returns object
     with returncode=124 and timeout error message in stdout."""
+    # Allow test patching via dokima._safe_run override (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, '_safe_run', None)
+        if override is not None and override is not _safe_run:
+            # Patched in tests — call the mock with the same signature
+            return override(cmd_str, cwd, timeout=timeout)
+
     import subprocess as _sp
     try:
         args = shlex.split(cmd_str)
@@ -487,6 +526,12 @@ def _check_pr_body_quality(spec_text: str, failures: list) -> None:
 
 def detect_repo():
     """Extract owner/repo from git remote origin."""
+    # Allow test patching via dokima.detect_repo override (F022b)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'detect_repo', None)
+        if override is not None and override is not detect_repo:
+            return override()
     result = subprocess.run(["git", "-C", PROJECT_DIR, "remote", "get-url", "origin"],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
     if result.returncode == 0:
@@ -647,8 +692,8 @@ def validate_checkpoint(slug):
     branch = data.get("branch", "")
     if not branch:
         return False
-    _, _, rc = _safe_run(["git", "rev-parse", "--verify", branch])
-    if rc != 0:
+    result = _safe_run("git rev-parse --verify " + shlex.quote(branch), cwd=PROJECT_DIR)
+    if result.returncode != 0:
         return False
     return True
 
@@ -707,12 +752,19 @@ def acquire_lock():
 def _cleanup_lock():
     """Release lock and restore stdout on interrupt or normal exit."""
     global _LOCK_FD, _LOG_FILE, _STDOUT_ORIG, _LOG_FILE_HANDLE
-    if _LOCK_FD:
+    # Also check dokima's _LOCK_FD (may be set by tests without syncing)
+    dokima_mod = _IMPORTING_PANEL
+    panel_fd = getattr(dokima_mod, '_LOCK_FD', None) if dokima_mod else None
+    fd_to_close = _LOCK_FD or panel_fd
+    if fd_to_close:
         try:
-            _LOCK_FD.close()
+            fd_to_close.close()
         except Exception:
             pass
         _LOCK_FD = None
+        # Sync to dokima module if loaded (F022 modular refactor)
+        if dokima_mod is not None:
+            dokima_mod._LOCK_FD = None
     try:
         os.remove(_lock_path())
     except OSError:
@@ -994,6 +1046,13 @@ def update_status_md(status_path: str, feature_id: str, title: str, status: str,
 
 def _check_pid(pid_str):
     """Check if PID is alive. Returns True/False."""
+    # Allow test patching via dokima._check_pid override (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, '_check_pid', None)
+        if override is not None and override is not _check_pid:
+            return override(pid_str)
+
     try:
         os.kill(int(pid_str), 0)
         return True
@@ -1002,6 +1061,13 @@ def _check_pid(pid_str):
 
 def _verify_pid_owner(pid: int) -> bool:
     """Verify /proc/{pid}/comm is dokima or python. Returns True/False."""
+    # Allow test patching via dokima._verify_pid_owner override (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, '_verify_pid_owner', None)
+        if override is not None and override is not _verify_pid_owner:
+            return override(pid)
+
     try:
         with open(f"/proc/{pid}/comm") as f:
             comm = f.read().strip()
@@ -1735,6 +1801,13 @@ def ensure_profiles():
     Strategist also gets agent.reasoning_effort=high.
     Idempotent — skips profiles that already exist.
     Non-interactive safe — works without a TTY."""
+    # Allow test patching via dokima module (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'ensure_profiles', None)
+        if override is not None and override is not _ENSURE_PROFILES_ORIGINAL:
+            return override()
+
     for name in _PROFILE_ORDER:
         profile_dir = os.path.join(PROFILES, name)
 
@@ -1782,7 +1855,14 @@ def deploy_profile_skills():
     """Deploy panel skills from PANEL_DIR/skills/ to profile skill directories.
     Idempotent — skips existing skill directories.
     nm's 'no-mistakes' skill goes to the global skills dir (~/.hermes/skills/)."""
-    import shutil
+    # Allow test patching via dokima module (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'deploy_profile_skills', None)
+        if override is not None and override is not _DEPLOY_PROFILE_SKILLS_ORIGINAL:
+            return override()
+
+    import shutil as _shutil
 
     skills_dir = os.path.join(PANEL_DIR, "skills")
     software_dev = "software-development"
@@ -1815,6 +1895,97 @@ def deploy_profile_skills():
             continue
 
         os.makedirs(dest_parent, exist_ok=True)
-        shutil.copytree(src, dest)
+        _shutil.copytree(src, dest)
         print(f"  Deployed skill '{skill}' → {profile}", flush=True)
+
+
+def halt_and_revert(reason, phase, branch, task_ids=None, worktrees=None):
+    """Revert all changes and print failure summary for orchestrator.
+
+    Args:
+        reason: Why the pipeline halted.
+        phase: Which phase failed (e.g., 'PHASE 2 (Parallel Coders)').
+        branch: The main feature branch to delete.
+        task_ids: Optional list of task IDs. When provided, deletes task
+                  branches (feat/<slug>-tN) before the main branch.
+        worktrees: Optional WorktreeManager reference. When provided,
+                   calls cleanup_all() to remove worktree directories.
+    """
+    # Allow test patching via dokima.halt_and_revert override (F022 modular refactor)
+    dokima_mod = _IMPORTING_PANEL
+    if dokima_mod is not None:
+        override = getattr(dokima_mod, 'halt_and_revert', None)
+        if override is not None and override is not halt_and_revert:
+            return override(reason, phase, branch, task_ids=task_ids, worktrees=worktrees)
+
+    print(f"\n{'═'*55}", flush=True)
+    print(f"  PIPELINE HALTED — {phase} Failed", flush=True)
+    print(f"{'═'*55}", flush=True)
+    print(f"\nReason: {reason}", flush=True)
+    print("\nReverting all changes...", flush=True)
+
+    # Delete task branches first (feat/<slug>-tN)
+    if task_ids:
+        for tid in task_ids:
+            task_branch = f"{branch}-t{tid}"
+            try:
+                git("branch", "-D", task_branch)
+            except Exception:
+                pass  # Branch might not exist if created before worktree
+
+    git("checkout", DEFAULT_BRANCH)
+    git("branch", "-D", branch)
+    git("stash", "clear")
+    print(f"  Branch '{branch}' deleted, back on master", flush=True)
+
+    # Clean up worktree directories if manager provided
+    if worktrees and task_ids:
+        try:
+            worktrees.cleanup_all(task_ids)
+        except Exception:
+            pass
+
+    print("\n── Orchestrator Action Required ──", flush=True)
+    print(f"  1. Review the failure context above", flush=True)
+    print(f"  2. Diagnose root cause", flush=True)
+    print(f"  3. Fix the issue (code, config, prompt, etc.)", flush=True)
+    print(f"  4. Ask user for go-ahead before retrying", flush=True)
+    print(f"\nFull log: {OUTPUT_LOG}", flush=True)
+
+
+def archive_specs_for_feature(spec_path, branch, pr_url):
+    """Move a feature's spec directory to archive/ if PR is merged.
+    Returns True if archived, False otherwise."""
+    if not pr_url:
+        return False
+    import shutil as _shutil
+    pr_num = pr_url.rstrip("/").split("/")[-1]
+    if not pr_num.isdigit():
+        return False
+    try:
+        stdout, _, rc = gh("pr", "view", pr_num, "--json", "merged,state")
+        if rc != 0 or not stdout.strip():
+            return False
+        import json as _json
+        data = _json.loads(stdout)
+        if data.get("merged") is True:
+            parent_dir = os.path.dirname(spec_path)
+            archive_dir = os.path.join(parent_dir, "archive")
+            os.makedirs(archive_dir, exist_ok=True)
+            dirname = os.path.basename(spec_path)
+            archive_target = os.path.join(archive_dir, dirname)
+            if os.path.exists(archive_target):
+                if os.path.isdir(archive_target):
+                    _shutil.rmtree(archive_target)
+                else:
+                    os.remove(archive_target)
+            _shutil.move(spec_path, archive_target)
+            return True
+    except Exception:
+        pass
+    return False
+
+# Module-level original references for delegation checks (F022 modular refactor)
+_ENSURE_PROFILES_ORIGINAL = ensure_profiles
+_DEPLOY_PROFILE_SKILLS_ORIGINAL = deploy_profile_skills
 

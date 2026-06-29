@@ -2,12 +2,23 @@
 import os
 import sys
 import subprocess
+import pytest
 from unittest.mock import patch, MagicMock, call
-from conftest import _load_panel as _load
+from conftest import _load_panel
 
-panel = _load()
+panel = None  # set by _fresh_panel fixture before each test
 
-import utils as _utils_mod
+
+@pytest.fixture(autouse=True)
+def _fresh_panel():
+    """F022b: Create a fresh panel for each test.
+    Module-level panel references go stale when other tests'
+    _load_panel() calls replace sys.modules entries. A per-test
+    fixture ensures this module always has a panel whose
+    _IMPORTING_PANEL references are correct."""
+    global panel
+    panel = _load_panel()
+    yield
 
 
 class TestEnsureProfiles:
@@ -222,7 +233,7 @@ class TestDeployProfileSkills:
                 f.write(f"# {skill}\\n\\nTest skill content.\\n")
         # Patch PANEL_DIR to point to our temp dir
         panel_ref.PANEL_DIR = tmpdir
-        _utils_mod.PANEL_DIR = tmpdir
+        panel_ref._utils.PANEL_DIR = tmpdir
         return skills_dir
 
     def test_skills_deployed_to_correct_dirs(self, tmpdir):
@@ -241,8 +252,8 @@ class TestDeployProfileSkills:
         os.makedirs(hermes_dir, exist_ok=True)
 
         # Patch the module's PROFILES and HERMES paths
-        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
-             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(panel._utils, "PROFILES", profiles_dir), \
+             patch.object(panel._utils, "HERMES", os.path.join(str(tmpdir))):
             panel.deploy_profile_skills()
 
             # Check strategist skills
@@ -274,8 +285,8 @@ class TestDeployProfileSkills:
         hermes_dir = os.path.join(str(tmpdir), "skills", "software-development")
         os.makedirs(hermes_dir, exist_ok=True)
 
-        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
-             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(panel._utils, "PROFILES", profiles_dir), \
+             patch.object(panel._utils, "HERMES", os.path.join(str(tmpdir))):
             # First deploy
             panel.deploy_profile_skills()
             # Second deploy — should not crash
@@ -294,15 +305,15 @@ class TestDeployProfileSkills:
         with open(os.path.join(skills_dir, "spec-strategist-lite", "SKILL.md"), "w") as f:
             f.write("# spec-strategist-lite\\n")
         panel.PANEL_DIR = str(tmpdir)
-        _utils_mod.PANEL_DIR = str(tmpdir)
+        panel._utils.PANEL_DIR = str(tmpdir)
 
         profiles_dir = os.path.join(str(tmpdir), "profiles")
         for name in ["strategist", "coder"]:
             os.makedirs(os.path.join(profiles_dir, name, "skills", "software-development"),
                        exist_ok=True)
 
-        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
-             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(panel._utils, "PROFILES", profiles_dir), \
+             patch.object(panel._utils, "HERMES", os.path.join(str(tmpdir))):
             # Should not raise
             panel.deploy_profile_skills()
 
@@ -317,8 +328,8 @@ class TestDeployProfileSkills:
         profiles_dir = os.path.join(str(tmpdir), "profiles")
         # Don't pre-create profile dirs — deploy should create them
 
-        with patch.object(_utils_mod, "PROFILES", profiles_dir), \
-             patch.object(_utils_mod, "HERMES", os.path.join(str(tmpdir))):
+        with patch.object(panel._utils, "PROFILES", profiles_dir), \
+             patch.object(panel._utils, "HERMES", os.path.join(str(tmpdir))):
             panel.deploy_profile_skills()
 
             # Profile dirs should have been created
@@ -347,7 +358,7 @@ class TestIntegrationRunInit:
 
         with patch.object(panel, "ensure_profiles", side_effect=mock_ensure), \
              patch.object(panel, "deploy_profile_skills", side_effect=mock_deploy), \
-             patch.object(panel, "spawn_agent", side_effect=mock_spawn), \
+             patch.object(panel._agent, "spawn_agent", side_effect=mock_spawn), \
              patch.object(panel, "load_key", return_value="test-key"), \
              patch.object(panel, "load_github_token", return_value="test-gh-token"), \
              patch.object(panel, "detect_repo", return_value="test/test"), \
@@ -386,7 +397,7 @@ class TestIntegrationRunInit:
 
         with patch.object(panel, "ensure_profiles", side_effect=mock_ensure), \
              patch.object(panel, "deploy_profile_skills", side_effect=mock_deploy), \
-             patch.object(panel, "spawn_agent", side_effect=mock_spawn), \
+             patch.object(panel._agent, "spawn_agent", side_effect=mock_spawn), \
              patch.object(panel, "load_key", return_value="test-key"), \
              patch.object(panel, "load_github_token", return_value="test-gh-token"), \
              patch.object(panel, "detect_repo", return_value="test/test"), \

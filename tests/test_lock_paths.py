@@ -19,15 +19,15 @@ def test_trailing_slash_normalized(panel):
     assert result == "/tmp/dokima-project.lock"
 
 def test_no_project_dir_no_arg(panel):
-    # Simulate NameError by temporarily deleting and capturing
-    old = panel.PROJECT_DIR
+    # Simulate missing PROJECT_DIR by temporarily deleting from utils module
+    old = panel._utils.PROJECT_DIR
     try:
-        del panel.PROJECT_DIR
+        del panel._utils.PROJECT_DIR
         result = panel._lock_path()
         assert "unknown" in result
         assert result.endswith(".lock")
     finally:
-        panel.PROJECT_DIR = old
+        panel._utils.PROJECT_DIR = old
 
 def test_stop_path_mirrors_lock_path(panel):
     lock = panel._lock_path("/tmp/bar")

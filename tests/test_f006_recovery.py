@@ -140,7 +140,7 @@ class TestCheckpointValidation:
             # Mock git to say branch exists
             original_run = panel._safe_run
             try:
-                panel._safe_run = lambda cmd, **kw: ("", "", 0)
+                panel._safe_run = lambda cmd_str, cwd=None, timeout=None: __import__("subprocess").CompletedProcess([], 0)
                 is_valid = panel.validate_checkpoint(slug)
                 assert is_valid is True
             finally:
@@ -166,7 +166,7 @@ class TestCheckpointValidation:
             })
             original_run = panel._safe_run
             try:
-                panel._safe_run = lambda cmd, **kw: ("", "", 0)
+                panel._safe_run = lambda cmd_str, cwd=None, timeout=None: __import__("subprocess").CompletedProcess([], 0)
                 is_valid = panel.validate_checkpoint(slug)
                 assert is_valid is False
             finally:
@@ -189,7 +189,7 @@ class TestCheckpointValidation:
                 f.write("# Test spec")
             original_run = panel._safe_run
             try:
-                panel._safe_run = lambda cmd, **kw: ("", "not a branch", 1)
+                panel._safe_run = lambda cmd_str, cwd=None, timeout=None: __import__("subprocess").CompletedProcess([], 1)
                 is_valid = panel.validate_checkpoint(slug)
                 assert is_valid is False
             finally:

@@ -82,7 +82,7 @@ def _apply_rich_patches(fn):
             "stderr": None,
         })()
         mock_subprocess_run = type("RunResult", (), {"returncode": 0, "stdout": "mock", "stderr": ""})()
-        with patch("dokima.call_agent", return_value={"content": "M", "tokens": 1}), \
+        with patch("dokima._agent.call_agent", return_value={"content": "M", "tokens": 1}), \
              patch("dokima._set_gh_token"), \
              patch("dokima.git", return_value=("", "", 0)), \
              patch("dokima.gh", side_effect=gh_side_effect), \
@@ -183,7 +183,7 @@ class TestParallelCoders:
             "remove": lambda self, *a, **kw: None,
             "cleanup_all": lambda self, *a, **kw: None,
         })()
-        with patch("dokima.merge_worktree_branches", return_value=True), \
+        with patch("dokima._tasks.merge_worktree_branches", return_value=True), \
              patch("dokima.WorktreeManager", return_value=wt_mgr_instance):
             self._run(panel, project_dir, mock)
 
@@ -236,7 +236,7 @@ class TestVetFailure:
 
             mock_run = type("RunResult", (), {"returncode": 0, "stdout": "mock", "stderr": ""})()
 
-            with patch("dokima.call_agent", return_value={"content": "M", "tokens": 1}), \
+            with patch("dokima._agent.call_agent", return_value={"content": "M", "tokens": 1}), \
                  patch("dokima._set_gh_token"), \
                  patch("dokima.git", return_value=("", "", 0)), \
                  patch("dokima.gh", side_effect=gh_side_effect), \

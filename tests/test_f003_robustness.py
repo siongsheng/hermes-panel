@@ -44,7 +44,7 @@ class TestRedOnlyCommits:
 
         with patch.object(panel, "git", return_value=("", "", 0)):
             with patch.object(panel, "gh", return_value=("", "", 0)):
-                with patch.object(panel, "spawn_agent", return_value="ok"):
+                with patch.object(panel._agent, "spawn_agent", return_value="ok"):
                     with patch.object(panel, "halt_and_revert"):
                         # Simulate test failing (RED-only → no impl → tests fail), build also fails
                         with patch.object(panel, "_safe_run", return_value=_make_result(1, "0 passed 1 failed")):
@@ -75,7 +75,7 @@ class TestEmptyCoderOutput:
         # Checkout fails — branch doesn't exist (empty coder output = no branch created)
         with patch.object(panel, "git", return_value=("", "fatal: path not found", 1)):
             with patch.object(panel, "gh", return_value=("", "", 0)):
-                with patch.object(panel, "spawn_agent", return_value=""):
+                with patch.object(panel._agent, "spawn_agent", return_value=""):
                     with patch.object(panel, "halt_and_revert"):
                         result = panel.run_phase3_vet(
                             feature="Empty Feature",
@@ -146,12 +146,12 @@ class TestVetRetryExhaustion:
 
         halt_called = []
 
-        def _mock_halt(reason, phase, branch):
+        def _mock_halt(reason, phase, branch, task_ids=None, worktrees=None):
             halt_called.append((reason, phase, branch))
 
         with patch.object(panel, "git", return_value=("", "", 0)):
             with patch.object(panel, "gh", return_value=("", "", 0)):
-                with patch.object(panel, "spawn_agent", return_value="fix_attempt"):
+                with patch.object(panel._agent, "spawn_agent", return_value="fix_attempt"):
                     with patch.object(panel, "halt_and_revert", side_effect=_mock_halt):
                         with patch.object(panel, "_safe_run",
                                           return_value=_make_result(1, "0 passed 1 failed")):

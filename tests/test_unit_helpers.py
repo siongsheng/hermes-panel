@@ -134,7 +134,7 @@ class TestPollUntilWaveDone:
             "1": type("T", (), {"status": "pending", "output": "", "id": "1"})()
         }
         locks = MagicMock()
-        panel._poll_until_wave_done(["1"], running, tasks, locks, timeout=5)
+        panel._tasks._poll_until_wave_done(["1"], running, tasks, locks, timeout=5)
         assert tasks["1"].status == "completed"
 
 
@@ -176,7 +176,7 @@ class TestAutoRepairStatus:
         with open(road_path, "w") as f:
             f.write("# Roadmap\n\n## Phase 1\n\n### F001: Test\n**Status:** [ ] Pending\n**User Story:** Test\n")
         feat = type("F", (), {"id": "F001", "title": "Test", "status": "pending"})()
-        with patch.object(panel, "gh", return_value=("PR_URL", "", 0)), \
+        with patch.object(panel, "gh", return_value=('{"number": 1, "url": "PR_URL"}', "", 0)), \
              patch("builtins.print"):
             repaired = panel.auto_repair_status([feat], road_path)
         assert repaired == 1

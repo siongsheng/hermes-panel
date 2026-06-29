@@ -57,7 +57,7 @@ class TestWorktreeCleanupOnException:
 
         with patch.object(panel, "WorktreeManager", return_value=TrackingWorktreeManager("/tmp/test")), \
              patch.object(panel, "TaskLock", return_value=MockTaskLock("/tmp/test")), \
-             patch.object(panel, "_poll_until_wave_done", side_effect=mock_poll_and_raise), \
+             patch.object(panel._tasks, "_poll_until_wave_done", side_effect=mock_poll_and_raise), \
              patch.object(panel.subprocess, "Popen", return_value=mock_proc), \
              patch("os.makedirs"):
             try:
@@ -118,7 +118,7 @@ class TestWorktreeCleanupOnException:
 
         with patch.object(panel, "WorktreeManager", return_value=TrackingWorktreeManager("/tmp/test")), \
              patch.object(panel, "TaskLock", return_value=MockTaskLock("/tmp/test")), \
-             patch.object(panel, "_poll_until_wave_done", side_effect=mock_poll_done), \
+             patch.object(panel._tasks, "_poll_until_wave_done", side_effect=mock_poll_done), \
              patch.object(panel.subprocess, "Popen", return_value=mock_proc), \
              patch("os.makedirs"):
             result = panel.run_parallel_coders(tasks, waves, "/tmp/test", "/tmp/spec.md")
@@ -513,7 +513,7 @@ class TestOverflowBatching:
 
         with patch.object(panel, "WorktreeManager", return_value=TrackingWorktreeManager("/tmp/t")), \
              patch.object(panel, "TaskLock", return_value=MockTaskLock("/tmp/t")), \
-             patch.object(panel, "_poll_until_wave_done", side_effect=mock_poll_done), \
+             patch.object(panel._tasks, "_poll_until_wave_done", side_effect=mock_poll_done), \
              patch.object(panel.subprocess, "Popen", return_value=mock_proc), \
              patch("os.makedirs"):
             panel.run_parallel_coders(task_list, waves, "/tmp/t", "/tmp/spec.md")
@@ -574,7 +574,7 @@ class TestOverflowBatching:
 
         with patch.object(panel, "WorktreeManager", return_value=TrackingWorktreeManager("/tmp/t")), \
              patch.object(panel, "TaskLock", return_value=MockTaskLock("/tmp/t")), \
-             patch.object(panel, "_poll_until_wave_done", side_effect=mock_poll_done), \
+             patch.object(panel._tasks, "_poll_until_wave_done", side_effect=mock_poll_done), \
              patch.object(panel.subprocess, "Popen", return_value=mock_proc), \
              patch("os.makedirs"), \
              patch.object(panel, "max_parallel_override", 1):
