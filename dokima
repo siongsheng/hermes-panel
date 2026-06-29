@@ -1582,16 +1582,32 @@ def auto_repair_status(features: list, roadmap_path: str) -> int:
 
         for bp in branch_patterns:
             stdout, _, rc = gh("pr", "list", "--repo", REPO, "--head", bp,
-                              "--state", "merged", "--json", "url", "--jq", ".[0].url")
-            if rc == 0 and stdout.strip():
-                update_roadmap_status(roadmap_path, f.id, "done")
-                print(f"  Auto-repair: {f.id} → [x] Done (merged PR: {stdout.strip()})")
-                # Update STATUS.md
-                status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
-                update_status_md(status_path, f.id, f.title, "done",
-                                 pr_url=stdout.strip(), source="auto-repair")
-                repaired += 1
-                break
+                              "--state", "merged", "--json", "url,number", "--jq", ".[0]")
+            if rc != 0 or not stdout.strip():
+                continue
+            pr_data = json.loads(stdout.strip()) if stdout.strip().startswith("{") else {}
+            pr_url = pr_data.get("url", stdout.strip())
+            pr_num = pr_data.get("number", "")
+
+            # Guard: only auto-repair if the PR had real code changes (not just specs)
+            if pr_num:
+                diff_out, _, drc = gh("pr", "diff", str(pr_num), "--repo", REPO, "--stat")
+                code_files = [l for l in (diff_out or "").split("\n")
+                              if l.strip() and not l.startswith("specs/")
+                              and not l.startswith(" .../") and "file changed" not in l
+                              and l.strip()]
+                if not code_files:
+                    print(f"  Auto-repair: SKIPPED {f.id} — merged PR #{pr_num} has no code changes (spec-only)")
+                    continue
+
+            update_roadmap_status(roadmap_path, f.id, "done")
+            print(f"  Auto-repair: {f.id} → [x] Done (merged PR: {pr_url})")
+            # Update STATUS.md
+            status_path = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
+            update_status_md(status_path, f.id, f.title, "done",
+                             pr_url=pr_url, source="auto-repair")
+            repaired += 1
+            break
 
     if repaired:
         rel_path = os.path.relpath(roadmap_path, PROJECT_DIR)
