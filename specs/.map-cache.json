@@ -4,16 +4,24 @@
     "desc": "Dokima \u2014 Multi-Agent Orchestration Engine"
   },
   "MAINTAINERS.md": {
-    "hash": "68117ed2910b34df36b2f2510a6ebba1",
+    "hash": "4f8ebdf6eaae97c5bba45b9507f016dd",
     "desc": "Dokima \u2014 Maintainer's Reference"
   },
   "README.md": {
     "hash": "f2a1d64ab72dba2ca8a6b838e94ce4fa",
     "desc": "Dokima"
   },
+  "agent.py": {
+    "hash": "6d8c23c2aeba72a09dbfbb28d6e63a27",
+    "desc": "\u2500\u2500 Module-level globals (set by main()) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+  },
   "install.sh": {
     "hash": "e4e5f7bccc855f364b6d29c2bb5cf391",
     "desc": "Dokima Installer \u2014 one-command setup"
+  },
+  "utils.py": {
+    "hash": "297b2788664c6993e3a4feb0cc278d52",
+    "desc": "shutil imported dynamically where needed (deploy_profile_skills)"
   },
   "docs/pipeline.md": {
     "hash": "50595743d76b954c390e95e6fd3da97c",
@@ -124,7 +132,7 @@
     "desc": "Exports: test_f002_marked_done_in_roadmap, test_f002_recorded_in_status"
   },
   "tests/test_f003_robustness.py": {
-    "hash": "14ccf0e5fe11acaf0edc91acabda3982",
+    "hash": "9db270a2a1470cca0f2e5939647f41e5",
     "desc": "Exports: _make_result, TestRedOnlyCommits"
   },
   "tests/test_f005_fallback.py": {
@@ -142,6 +150,18 @@
   "tests/test_f021_version.py": {
     "hash": "ccaeb077ae577fecf0e93f9888bd59b6",
     "desc": "Exports: _run, test_version_flag_prints_version_and_exits_0, test_help_includes_version_command, test_help_includes_upgrade_command, test_help_json_includes_version"
+  },
+  "tests/test_f022_agent.py": {
+    "hash": "b2bcd1bc6eaa7c69b47ab69635faadc6",
+    "desc": "Exports: test_agent_importable, test_agent_exports_call_agent, test_agent_exports_spawn_agent, test_agent_exports_detect_provider_failure, test_agent_module_compiles"
+  },
+  "tests/test_f022_utils.py": {
+    "hash": "5b51c318d3cfe76440ed87c9133c615e",
+    "desc": "Exports: test_utils_importable, test_utils_exports_slugify, test_utils_exports_git, test_utils_exports_sanitize_prompt, test_utils_exports_load_key"
+  },
+  "tests/test_f023_self_healing.py": {
+    "hash": "c388aea63a1c0f0aea4291de411e6724",
+    "desc": "Exports: test_lock_age_old_lock_with_live_pid_removed"
   },
   "tests/test_final_coverage.py": {
     "hash": "9f2fc544e4c756f1de294412020905ad",
@@ -178,6 +198,10 @@
   "tests/test_main_integration.py": {
     "hash": "eab8521dd897924fbd25bc2681702f3c",
     "desc": "Exports: _make_safe_run_result, _setup_test_project, _mock_spawn"
+  },
+  "tests/test_parallel_robustness.py": {
+    "hash": "2d96e7116bed8ba25579b16b44a7df29",
+    "desc": "Reuse conftest's _load_panel to get a fresh dokima module"
   },
   "tests/test_pick_next.py": {
     "hash": "81dd41d83ddbe306efc32eb8ea50f908",
@@ -244,7 +268,7 @@
     "desc": "\u2500\u2500 Bug 1: Spec archive \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
   },
   "tests/test_unit_helpers.py": {
-    "hash": "70f45a0ff33f784f1a5906906e3b8bcf",
+    "hash": "acbbac4ed2cbaa0975e7bad0103eb82a",
     "desc": "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550"
   },
   "tests/htmlcov/coverage_html_cb_dd2e7eb5.js": {

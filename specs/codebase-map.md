@@ -1,12 +1,14 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-29 08:56:11 (incremental | 65 files)
+## Generated: 2026-06-29 10:45:49 (incremental | 71 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
 ├── MAINTAINERS.md  — Dokima — Maintainer's Reference
 ├── README.md  — Dokima
-└── install.sh  — Dokima Installer — one-command setup
+├── agent.py  — ── Module-level globals (set by main()) ──────────
+├── install.sh  — Dokima Installer — one-command setup
+└── utils.py  — shutil imported dynamically where needed (deploy_profile_skills)
 ├── docs/
 ├── pipeline.md  — Dokima — Pipeline Reference
 └── setup.md  — Dokima — Deployment & Setup Guide
@@ -49,6 +51,9 @@
 ├── test_f006_recovery.py  — Exports: TestCheckpointPath, TestSaveCheckpoint
 ├── test_f020_help_json.py  — Exports: run_help_json, TestHelpJsonOutput
 ├── test_f021_version.py  — Exports: _run, test_version_flag_prints_version_and_exits_0, test_help_includes_version_command, test_help_includes_upgrade_command, test_help_json_includes_version
+├── test_f022_agent.py  — Exports: test_agent_importable, test_agent_exports_call_agent, test_agent_exports_spawn_agent, test_agent_exports_detect_provider_failure, test_agent_module_compiles
+├── test_f022_utils.py  — Exports: test_utils_importable, test_utils_exports_slugify, test_utils_exports_git, test_utils_exports_sanitize_prompt, test_utils_exports_load_key
+├── test_f023_self_healing.py  — Exports: test_lock_age_old_lock_with_live_pid_removed
 ├── test_final_coverage.py  — Exports: _setup
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════
@@ -58,6 +63,7 @@
 ├── test_installer.py  — Exports: _make_fake_cmd, _make_fake_hermes, _make_git_repo
 ├── test_lock_paths.py  — Exports: test_explicit_project_dir_lock, test_explicit_project_dir_stop, test_implicit_from_global, test_trailing_slash_normalized, test_no_project_dir_no_arg
 ├── test_main_integration.py  — Exports: _make_safe_run_result, _setup_test_project, _mock_spawn
+├── test_parallel_robustness.py  — Reuse conftest's _load_panel to get a fresh dokima module
 ├── test_pick_next.py  — Exports: make_feat, test_empty_list, test_all_done, test_single_pending_no_deps, test_p0_beats_p1
 ├── test_pick_next_feature.py  — Helper to build RoadmapFeature objects for testing
 ├── test_pid_utils.py  — Exports: test_check_live_pid, test_check_dead_pid, test_check_non_numeric, test_check_empty_string, test_verify_owner_on_self

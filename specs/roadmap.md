@@ -75,7 +75,7 @@
 ### F023: Pipeline Self-Healing
 **Priority:** P1
 **Dependencies:** F010
-**Status:** [ ] Pending
+**Status:** [x] Done
 **User Story:** As a panel operator, the pipeline detects and recovers from common failure patterns without human intervention — auto-fix infinite loops (nm fix already applied), partial coder output (truncated agent), and stale lock files from killed pipelines.
 
 ### F022: Modular Architecture
