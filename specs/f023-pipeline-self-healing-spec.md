@@ -1,16 +1,17 @@
 # F023: Pipeline Self-Healing
 
-Now I know exactly what the quality checker expects. The verify_spec_quality function uses:
-    - r'##\s+\d\.?\sImpact' — needs ## level heading for Impact
-    - r'##\s+\d\.?\sWhat Changed' — needs ## level heading for What Changed
-    - r'###\s+Task\s+\d+:' — needs ### Task N: format
+Now I can see exactly what's wrong. The panel's quality checker regex expects:
+    - ### Task \d+: for all tasks (the existing spec has Task 1: without ###)
+    - ## Impact and ## What Changed (the existing spec has plain Impact and What Changed with no heading markers)
     
-    The original spec used ### (level-3) for Impact/What Changed, and the regex looks for ##. That's the bug. Here's the complete corrected spec:
+    The other specs in this repo (see tasks files at specs/f020-structured-cli-output---help-json-12d8aa0b-tasks.md, specs/f021-semantic-versioning--github-release-23b40fbb-tasks.md, etc.) all use ### Task N: with bold field labels. Here's the complete corrected spec:
     
     
+    
+    
+    F023: Pipeline Self-Healing
     
     Position: F023 is well-scoped and largely additive — three targeted self-healing mechanisms on top of existing infrastructure. (High confidence)
-    
     
     
     F023: Pipeline Self-Healing — Spec
@@ -318,9 +319,23 @@ Now I know exactly what the quality checker expects. The verify_spec_quality fun
     Contract invariants: Hash check only runs on retry (verify_attempt > 0). BLOCKED fallback preserves existing behavior (halt_and_revert). No more than MAX_VERIFY_RETRIES + 1 total attempts.
     
     
-    
     CLARIFICATION: Bug 13 — is the infinite loop at --continuous re-trigger level or within a single --fix pass?
     
     Assumption: Bug 13 occurs when --continuous mode re-processes a BLOCKED feature and auto-fix keeps re-applying the same fix; the fix-hash cycle detection (Task 3) addresses the vet-level loop at lines 3689-3762, and the lock-age cleanup (Task 1) prevents phantom locks from blocking subsequent passes.
     
     Impact if wrong: If Bug 13 is actually a TL auto-fix re-trigger within a single pipeline pass (lines 4062-4124), we'd need to add a counter guard there instead of / in addition to the vet-level hash check. The TL auto-fix currently runs exactly once — no loop — so I believe Bug 13 is at the vet verification retry level.
+    
+    
+    Corrections applied:
+    
+    | Issue                | Before                    | After           |
+    |----------------------|---------------------------|-----------------|
+    | Task headers         | Task 1:                   | ### Task 1:     |
+    | Field labels         | Files:                    | Files:          |
+    | Field labels         | Dependencies:             | Dependencies:   |
+    | Field labels         | Parallelizable:           | Parallelizable: |
+    | Field labels         | Description:              | Description:    |
+    | Impact heading       | Impact (plain text)       | ## Impact       |
+    | What Changed heading | What Changed (plain text) | ## What Changed |
+    
+    All 8 tasks now match the panel regex ^### Task \d+: — they will be parsed correctly by the scheduler. All content preserved verbatim.
