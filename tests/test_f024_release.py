@@ -165,3 +165,72 @@ class TestReleaseDispatch:
                 f"--release should be a flag. Got: {combined!r}"
             assert "is not a valid git repository" not in combined, \
                 f"--release should dispatch before project validation. Got: {combined!r}"
+
+
+class TestDryRun:
+    """Task 6: --dry-run flag with --release."""
+
+    def test_release_patch_dry_run_exits_zero(self):
+        """--release patch --dry-run exits 0 (dry run completes successfully)."""
+        rc, stdout, stderr = _run("--release", "patch", "--dry-run")
+        assert rc == 0, (
+            f"Expected exit 0, got {rc}\n"
+            f"stdout: {stdout}\nstderr: {stderr}"
+        )
+
+    def test_release_patch_dry_run_prints_dry_run_header(self):
+        """--release patch --dry-run prints '[DRY RUN]' indicator."""
+        rc, stdout, stderr = _run("--release", "patch", "--dry-run")
+        combined = stdout + stderr
+        assert "[DRY RUN]" in combined, (
+            f"Expected '[DRY RUN]' in output, got: {combined!r}"
+        )
+
+    def test_release_patch_dry_run_shows_planned_version(self):
+        """--release patch --dry-run shows the planned new version."""
+        rc, stdout, stderr = _run("--release", "patch", "--dry-run")
+        combined = stdout + stderr
+        assert "Would release" in combined, (
+            f"Expected 'Would release' in output, got: {combined!r}"
+        )
+
+    def test_release_patch_dry_run_no_git_error(self):
+        """--release patch --dry-run does NOT produce a git-repo error."""
+        rc, stdout, stderr = _run("--release", "patch", "--dry-run")
+        combined = stdout + stderr
+        assert "is not a valid git repository" not in combined, (
+            f"--dry-run should be recognized as a flag. Got: {combined!r}"
+        )
+
+    def test_release_major_dry_run_exits_zero(self):
+        """--release major --dry-run exits 0."""
+        rc, stdout, stderr = _run("--release", "major", "--dry-run")
+        assert rc == 0, (
+            f"Expected exit 0, got {rc}\n"
+            f"stdout: {stdout}\nstderr: {stderr}"
+        )
+
+    def test_release_minor_dry_run_exits_zero(self):
+        """--release minor --dry-run exits 0."""
+        rc, stdout, stderr = _run("--release", "minor", "--dry-run")
+        assert rc == 0, (
+            f"Expected exit 0, got {rc}\n"
+            f"stdout: {stdout}\nstderr: {stderr}"
+        )
+
+    def test_release_dry_run_with_project_dir(self):
+        """--release patch --dry-run with project_dir arg works."""
+        rc, stdout, stderr = _run("--release", "patch", "--dry-run", "/tmp")
+        assert rc == 0, (
+            f"Expected exit 0, got {rc}\n"
+            f"stdout: {stdout}\nstderr: {stderr}"
+        )
+
+    def test_dry_run_before_release(self):
+        """--dry-run --release patch (flag order swap) is recognized."""
+        rc, stdout, stderr = _run("--dry-run", "--release", "patch")
+        combined = stdout + stderr
+        assert "is not a valid git repository" not in combined, (
+            f"--dry-run should be recognized before --release. Got: {combined!r}"
+        )
+
