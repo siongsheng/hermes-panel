@@ -105,7 +105,7 @@
 ### F024: Auto-Release — Tagging, Changelog, and GitHub Releases
 **Priority:** P2
 **Dependencies:** F021
-**Status:** [ ] Pending
+**Status:** [~] In Progress
 **User Story:** As a maintainer, `dokima --release [patch|minor|major]` bumps the version, auto-generates a changelog from merged PRs grouped by conventional commit prefix, creates a git tag, and publishes a GitHub Release — all in one command. Validates clean tree, default branch, and git sync before releasing.
 
 ---
