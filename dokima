@@ -499,10 +499,6 @@ def main():
     _sync_modules()
     _cleanup_lock()
 
-
-if __name__ == "__main__":
-    main()
-
 def _sync_modules():
     """Propagate mutable globals to all module files (F022)."""
     try:
@@ -518,6 +514,9 @@ def _sync_modules():
                         setattr(mod, g, val)
     except Exception:
         pass
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
