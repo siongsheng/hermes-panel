@@ -124,6 +124,11 @@ TL may produce `VERDICT: APPROVED` then change to `VERDICT: BLOCKED`. **Fix:** `
 
 ## Pipeline Cleanup (When Things Go Wrong)
 
+> **F023 Self-Healing (Jun 2026):** Dokima now includes automatic lock-age cleanup
+> (stale locks >12h auto-removed even with live PID), fix-loop hash cycle detection
+> (identical test+build output after coder fix → skip to BLOCKED), and coder output
+> truncation detection (retries once if output appears incomplete).
+
 ```bash
 # Kill a running pipeline
 kill <pid>
@@ -249,7 +254,6 @@ PR body must have sections in order: `## Why` → `## Impact` → `## What Chang
 |-----|----------|-------------|
 | 1c | LOW | Strategist uses wave format despite prompt prohibition — DAG re-prompt recovers |
 | 11 | MEDIUM | Merge assembly fails on same-file task branches — fixed by Bug 14 (execution mode) but still possible if tasks incorrectly marked parallelizable |
-| 13 | MEDIUM | Auto-fix infinite loop — nm fix already applied but pipeline keeps re-triggering |
 | 19 | MEDIUM | Coder reads full codebase despite file hints — mitigated by `_extract_code_context()` (Jun 29) |
 | Strategist scope creep | LOW | Strategist adds tasks beyond spec scope — >20% more tasks is suspect |
 | spawn_agent blocking | LOW | `proc.stdout` blocking read can hang — use `_safe_run` pattern |
