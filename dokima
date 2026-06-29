@@ -352,6 +352,7 @@ def main():
             print("Usage: dokima --release <patch|minor|major> [--dry-run] [project_dir]", flush=True)
             sys.exit(1)
         do_release(release_bump, os.getcwd() if is_release and len(filtered_argv) == 0 else PROJECT_DIR, dry_run=is_dry_run)
+        return
     if is_map:
         generate_codebase_map(PROJECT_DIR, full=map_full)
         return
