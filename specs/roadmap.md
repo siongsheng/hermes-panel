@@ -93,7 +93,7 @@
 ### F021: Semantic Versioning + GitHub Releases
 **Priority:** P2
 **Dependencies:** F020
-**Status:** [ ] Pending
+**Status:** [~] In Progress
 **User Story:** As a user, `dokima --version` prints the current version. Releases are tagged and published on GitHub with auto-generated changelogs from merged PRs. `dokima --upgrade` checks for newer versions.
 
 ---
