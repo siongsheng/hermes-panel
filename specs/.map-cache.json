@@ -135,6 +135,14 @@
     "hash": "4635ac5cfe39f760f0f0056523c2763b",
     "desc": "Exports: TestCheckpointPath, TestSaveCheckpoint"
   },
+  "tests/test_f020_help_json.py": {
+    "hash": "23a911e39071f42b8e04945bda6199cf",
+    "desc": "Exports: run_help_json, TestHelpJsonOutput"
+  },
+  "tests/test_f021_version.py": {
+    "hash": "ccaeb077ae577fecf0e93f9888bd59b6",
+    "desc": "Exports: _run, test_version_flag_prints_version_and_exits_0, test_help_includes_version_command, test_help_includes_upgrade_command, test_help_json_includes_version"
+  },
   "tests/test_final_coverage.py": {
     "hash": "9f2fc544e4c756f1de294412020905ad",
     "desc": "Exports: _setup"

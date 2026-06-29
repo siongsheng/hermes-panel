@@ -1,6 +1,6 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-29 02:54:37 (incremental | 63 files)
+## Generated: 2026-06-29 08:56:11 (incremental | 65 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
@@ -47,6 +47,8 @@
 ├── test_f003_robustness.py  — Exports: _make_result, TestRedOnlyCommits
 ├── test_f005_fallback.py  — Exports: TestDetectProviderFailure
 ├── test_f006_recovery.py  — Exports: TestCheckpointPath, TestSaveCheckpoint
+├── test_f020_help_json.py  — Exports: run_help_json, TestHelpJsonOutput
+├── test_f021_version.py  — Exports: _run, test_version_flag_prints_version_and_exits_0, test_help_includes_version_command, test_help_includes_upgrade_command, test_help_json_includes_version
 ├── test_final_coverage.py  — Exports: _setup
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════
