@@ -63,7 +63,7 @@
 ### F010: Parallel Coder Robustness
 **Priority:** P1
 **Dependencies:** None
-**Status:** [x] Done
+**Status:** [ ] Pending
 **User Story:** As a panel operator, parallel coders never conflict on the same file, worktree cleanup is reliable, and timeout/dead agents don't block the wave.
 
 ### F019: Data-Driven Execution Mode (Orchestrator Computes)
@@ -75,7 +75,7 @@
 ### F023: Pipeline Self-Healing
 **Priority:** P1
 **Dependencies:** F010
-**Status:** [x] Done
+**Status:** [ ] Pending
 **User Story:** As a panel operator, the pipeline detects and recovers from common failure patterns without human intervention — auto-fix infinite loops (nm fix already applied), partial coder output (truncated agent), and stale lock files from killed pipelines.
 
 ### F022: Modular Architecture
