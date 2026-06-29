@@ -1800,21 +1800,52 @@ Report: both commit hashes, files changed, test results, lint status, branch nam
 
 
 def _reap_completed(running: dict, tasks: dict[str, Task], locks: TaskLock) -> list[str]:
-    """Check for completed/failed processes. Returns list of task IDs that finished."""
+    """Check for completed/failed processes. Returns list of task IDs that finished.
+
+    Uses non-blocking stdout drain to avoid proc.communicate() hanging on zombie
+    children that hold pipe handles open. Escalates to SIGKILL if wait() times out
+    after 2 seconds, marking the task as 'orphaned'.
+    """
     finished = []
     for tid, proc in list(running.items()):
         ret = proc.poll()
         if ret is not None:
-            output = ""
+            # Drain stdout in non-blocking chunks (avoids communicate() hang)
+            output_chunks = []
+            if proc.stdout is not None:
+                try:
+                    while True:
+                        chunk = proc.stdout.read(4096)
+                        if not chunk:
+                            break
+                        if isinstance(chunk, bytes):
+                            output_chunks.append(chunk.decode(errors="replace"))
+                        else:
+                            output_chunks.append(str(chunk))
+                except BrokenPipeError:
+                    pass
+                except Exception:
+                    pass
+            output = "".join(output_chunks)
+
+            # Reap the process; escalate to SIGKILL if stuck
+            orphaned = False
             try:
-                remaining, _ = proc.communicate(timeout=5)
-                if remaining:
-                    output = remaining.decode(errors="replace") if isinstance(remaining, bytes) else remaining
-            except Exception:
-                pass
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    pass
+                ret = proc.poll()
+                orphaned = True
 
             task = tasks[tid]
-            if ret == 0:
+            if orphaned or (ret is not None and ret < 0):
+                task.status = "orphaned"
+                print(f"  ⚠ Task {tid} orphaned (SIGKILL)", flush=True)
+            elif ret == 0:
                 task.status = "completed"
                 print(f"  ✅ Task {tid} completed", flush=True)
             else:

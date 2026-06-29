@@ -124,7 +124,11 @@ class TestPollUntilWaveDone:
         """All tasks poll as completed."""
         mock_proc = MagicMock()
         mock_proc.poll.return_value = 0
-        mock_proc.communicate.return_value = (b"ok", None)
+        # Non-blocking drain: stdout returns one chunk then empty
+        mock_stdout = MagicMock()
+        mock_stdout.read.side_effect = [b"ok", b""]
+        mock_proc.stdout = mock_stdout
+        mock_proc.wait.return_value = 0
         running = {"1": mock_proc}
         tasks = {
             "1": type("T", (), {"status": "pending", "output": "", "id": "1"})()
