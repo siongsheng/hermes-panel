@@ -37,12 +37,12 @@
 
 ### Task 8: Add --release to HELP_TEXT in utils.py
 **Files:** utils.py
-**Dependencies:** 54
+**Dependencies:** [none]
 **Description:** Add --release to HELP_TEXT in utils.py
 
 ### Task 9: Add --release to CLI_METADATA in utils.py
 **Files:** utils.py
-**Dependencies:** 96
+**Dependencies:** [none]
 **Description:** Add --release to CLI_METADATA in utils.py
 
 ### Task 10: Create tests for --release
