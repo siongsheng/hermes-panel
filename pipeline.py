@@ -1445,16 +1445,22 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
     ║ Before submitting, search your output for ### Task.        ║
     ╚═════════════════════════════════════════════════════════════╝
 
-    1. DECISION TABLE: For novel/complex features, compare \u22652 approaches. For features with an obvious pattern match (visual change, config, docs, standard CRUD), use "SINGLE APPROACH: <one sentence>" — skip the comparison table.
+    1. DECISION TABLE: For novel/complex features, compare ≥2 approaches. For features with an obvious pattern match (visual change, config, docs, standard CRUD), use "SINGLE APPROACH: <one sentence>" — skip the comparison table.
 
-    2. Impact: <one sentence — what changes for users/developers.>
+    2. ## N. Impact — a section header (e.g., ## 3. Impact) with a paragraph describing what changes for users/developers. Use a real section header, not "Impact: MEDIUM" inline metadata. Example:
+       ## 3. Impact
 
-    3. What Changed: <bullet list of key files and what they do. Max 6 bullets.>
-       - <file>: <what changed>
+       Maintainers can release with one command. Auto-generated changelogs grouped by feat/fix/docs. No more manual tagging.
 
-    4. CONFIDENCE + IMPACT markers (REQUIRED):
-       Confidence: (High)/(Medium)/(Low)
-       Impact: (LOW)/(MEDIUM)/(HIGH)
+    3. ## N. What Changed — a section header with a bullet list of key files and what they do. Max 6 bullets. Example:
+       ## 4. What Changed
+
+       - `dokima`: Add --release flag and dispatch
+       - `utils.py`: Add bump_version(), generate_changelog(), do_release()
+
+    4. CONFIDENCE + IMPACT markers (REQUIRED — inline metadata, separate from sections above):
+       **Confidence:** (High)/(Medium)/(Low)
+       **Impact:** (LOW)/(MEDIUM)/(HIGH)
 
     5. API/INTERFACE PROPOSAL: Only if this feature adds/changes APIs, routes, or data structures. For visual-only, docs-only, config-only, or CSS-only changes, write EXACTLY: "N/A — visual/docs/config change only." No further text.
 
