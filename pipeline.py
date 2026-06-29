@@ -1447,6 +1447,8 @@ The existing spec is TRUTH unless it contradicts the current codebase state.
 
     TASK GRANULARITY: Each task should be 50-150 LOC. If a logical change is smaller than 30 LOC, merge it with the next related change in the same file. Do NOT create tasks smaller than 30 LOC — the panel spawns one coder per task, and sub-30-LOC tasks waste CI overhead.
 
+    PARALLELIZABLE RULE: If you mark a task **Parallelizable:** yes, it must touch completely different files from every other task in its wave. If two tasks share any file, one must be sequential (different wave) or both must be **Parallelizable:** no. The panel will reject specs where parallel tasks have file overlap.
+
     1. DECISION TABLE: For novel/complex features, compare ≥2 approaches. For features with an obvious pattern match (visual change, config, docs, standard CRUD), use "SINGLE APPROACH: <one sentence>" — skip the comparison table.
 
     2. ## N. Impact — a section header (e.g., ## 3. Impact) with a paragraph describing what changes for users/developers. Use a real section header, not "Impact: MEDIUM" inline metadata. Example:

@@ -503,6 +503,24 @@ def verify_spec_quality(spec_text: str, confidence: str = "Medium") -> tuple:
         if not par_m or not par_m.group(1).strip():
             failures.append(f"Task {tid}: missing Parallelizable field")
 
+    # Check 5: Parallel tasks must have zero file overlap
+    parallel_tasks = {}
+    for m in task_block_pattern.finditer(spec_text):
+        tid = m.group(1)
+        body = m.group(3)
+        par_m = re.search(r'^\s*(?:\*\*)?Parallelizable?:?(?:\*\*)?[ \t]*(.*?)\s*$', body, re.MULTILINE | re.IGNORECASE)
+        if par_m and par_m.group(1).strip().lower() == "yes":
+            files_m = re.search(r'^\s*(?:\*\*)?Files?:?(?:\*\*)?[ \t]*(.*?)\s*$', body, re.MULTILINE)
+            if files_m:
+                files = [f.strip().rstrip(',') for f in files_m.group(1).split(',') if f.strip()]
+                parallel_tasks[tid] = set(files)
+    task_ids = sorted(parallel_tasks.keys(), key=int)
+    for i in range(len(task_ids)):
+        for j in range(i + 1, len(task_ids)):
+            overlap = parallel_tasks[task_ids[i]] & parallel_tasks[task_ids[j]]
+            if overlap:
+                failures.append(f"Task {task_ids[i]} + Task {task_ids[j]}: file overlap on parallel tasks — {', '.join(sorted(overlap))}")
+
     passed = len(failures) == 0
     return passed, failures
 
