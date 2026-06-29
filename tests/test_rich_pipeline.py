@@ -67,6 +67,12 @@ def _setup_project(tmpdir, panel, features=1):
 
 def _apply_rich_patches(fn):
     """Pipeline patch decorator with configurable mock outputs."""
+    def _git_src_side_effect(*args):
+        """Return source diff when git diff --stat is called, else empty."""
+        if args and args[0] == "diff" and any("--stat" in str(a) for a in args):
+            return (" a.py  | 1 +\n 1 file changed, 1 insertion(+)", "", 0)
+        return ("", "", 0)
+
     def wrapper(*args, **kwargs):
         mock_run = type("RunResult", (), {"returncode": 0, "stdout": "", "stderr": ""})()
         # gh: return empty for pr list (no existing PR), URL for pr create
@@ -84,7 +90,7 @@ def _apply_rich_patches(fn):
         mock_subprocess_run = type("RunResult", (), {"returncode": 0, "stdout": "mock", "stderr": ""})()
         with patch("dokima._agent.call_agent", return_value={"content": "M", "tokens": 1}), \
              patch("dokima._set_gh_token"), \
-             patch("dokima.git", return_value=("", "", 0)), \
+             patch("dokima.git", side_effect=_git_src_side_effect), \
              patch("dokima.gh", side_effect=gh_side_effect), \
              patch("dokima.load_key", return_value="fk"), \
              patch("dokima.load_github_token", return_value="ft"), \

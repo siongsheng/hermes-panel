@@ -152,7 +152,7 @@ class TestMergeWorktree:
                 return ("", "CONFLICT", 1)
             return ("", "", 0)
         tasks = {
-            "1": type("T", (), {"id": "1", "branch": "feat/t1", "status": "completed", "description": "Test task"})(),
+            "1": type("T", (), {"id": "1", "branch": "feat/t1", "status": "completed", "description": "Test task", "files": ["a.py"]})(),
         }
         wt_mgr = MagicMock()
         with patch.object(panel, "git", side_effect=fake_git), \

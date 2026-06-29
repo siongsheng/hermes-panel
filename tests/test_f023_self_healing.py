@@ -11,6 +11,13 @@ import pytest
 from unittest.mock import patch, Mock
 
 
+def _git_with_source_diff(*args):
+    """Return source diff when git diff --stat is called, else empty."""
+    if args and args[0] == "diff" and any("--stat" in str(a) for a in args):
+        return (" a.py  | 1 +\n 1 file changed, 1 insertion(+)", "", 0)
+    return ("", "", 0)
+
+
 # ── Task 1+5: Lock-age auto-cleanup in acquire_lock ─────────────────────
 
 def test_lock_age_old_lock_with_live_pid_removed(panel, tmpdir_path, monkeypatch):
@@ -360,7 +367,7 @@ def test_vet_hash_cycle_different_output_proceeds(panel, tmpdir_path, monkeypatc
             args=[], returncode=0,
             stdout="4 passed, 0 failed", stderr="")
 
-    with patch.object(panel, 'git', return_value=("", "", 0)), \
+    with patch.object(panel, 'git', side_effect=_git_with_source_diff), \
          patch.object(panel, '_safe_run', side_effect=mock_safe_run), \
          patch.object(panel._agent, 'spawn_agent') as mock_spawn, \
          patch.object(panel, 'detect_commands', return_value=(
@@ -371,7 +378,7 @@ def test_vet_hash_cycle_different_output_proceeds(panel, tmpdir_path, monkeypatc
         result = panel.run_phase3_vet(
             feature="test-feature",
             branch="test-branch",
-            pr_sections="## What Changed\ntest",
+            pr_sections="## What Changed\\ntest",
             impact="LOW",
             spec_path=""
         )
