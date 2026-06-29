@@ -106,8 +106,11 @@ class TestExtractTlBlockers:
 
     def test_noisy_output_still_gets_structured_blockers(self, panel):
         blockers = panel._extract_tl_blockers(NOISY_TL)
-        structured = [b for b in blockers if b.startswith("**")]
-        assert len(structured) >= 2
+        # Should find at least 2 structured blockers (no ** markers after F022b fix)
+        assert len(blockers) >= 2
+        # Verify clean format: each starts with "N. " (stripped of ** markers)
+        for b in blockers:
+            assert b[0].isdigit() and b[1] == ".", f"Expected 'N. ...', got: {b[:20]}"
 
     def test_multiple_verdicts_extracts_last_verdict(self, panel):
         """The function should still work — verdict extraction is separate but

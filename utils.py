@@ -1598,68 +1598,92 @@ def _extract_tl_verdict(tl_output: str) -> str:
 def _extract_tl_blockers(tl_output: str) -> list[str]:
     """Extract structured BLOCKER findings from TL output, filtering monologue.
 
-    Returns only real findings — strips lines like 'Now let me check...',
-    'However, N BLOCKERs remain...', and raw severity markers without context.
-    Prefers lines from structured ### BLOCKERS section or bold-numbered items.
+    Handles varied TL output formats:
+    - ### BLOCKERs (must fix before merge) — flexible header matching
+    - ### Blockers — case-insensitive
+    - Fallback: bold-numbered items near BLOCKER mentions
+
+    Returns clean, human-readable blocker descriptions.
     """
     if not tl_output or not tl_output.strip():
         return []
 
     lines = tl_output.split("\n")
     blockers = []
+    noise_patterns = [
+        "now let me", "however,", "let me check", "let me look",
+        "let me read", "let me verify", "this coverage gap",
+        "previous reviewer", "previous review", "unfixed by",
+        "severity: 🔴 blocker", "- severity: 🔴",
+        "severity: blocker", "blocker:", "blockers found",
+        "what the coder needs", "move ", "remove ", "add tests",
+    ]
 
-    # Look for structured ### BLOCKERS section first
+    # ── Pass 1: find ### section containing "BLOCKER" (flexible) ──
     in_blockers_section = False
+    section_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if in_blockers_section:
+                section_lines.append("")  # preserve paragraph breaks
+            continue
+
+        # Section header: any ### line containing BLOCKER (case-insensitive)
+        if stripped.startswith("###") and "BLOCKER" in stripped.upper():
+            in_blockers_section = True
+            continue
+
+        # Next section ends it (## or ### without BLOCKER)
+        if in_blockers_section:
+            if stripped.startswith("###") or stripped.startswith("## "):
+                in_blockers_section = False
+                continue
+            if not any(p in stripped.lower() for p in noise_patterns):
+                section_lines.append(stripped)
+
+    # ── Pass 2: if section found, extract numbered + detail items ──
+    if section_lines:
+        current = None
+        for sl in section_lines:
+            # Bold-numbered item: **1. Title**
+            if sl.startswith("**") and len(sl) > 4 and sl[2:3].isdigit():
+                if current:
+                    blockers.append(current)
+                current = sl
+            elif sl.startswith("- ") and current:
+                # Detail line under current blocker
+                detail = sl.lstrip("- ").rstrip(".")
+                if " — " not in current:
+                    current = current + " — " + detail
+                elif detail not in current:
+                    current = current + "; " + detail
+            elif current and sl and not sl.startswith("#"):
+                # Continuation line
+                if not current.endswith(sl[:30]):
+                    current = current + " " + sl.rstrip(".")
+        if current:
+            blockers.append(current)
+
+    # ── Pass 3: fallback — line-level heuristics (original approach, relaxed) ──
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
-
-        # Section header
-        if stripped.startswith("### BLOCKERS") or stripped.startswith("### Blockers"):
-            in_blockers_section = True
+        upper = stripped.upper()
+        if "BLOCKER" not in upper and "MUST FIX" not in upper:
             continue
-        # Next section ends it
-        if in_blockers_section and (
-            stripped.startswith("### ") or stripped.startswith("## ")
+        if any(p in stripped.lower() for p in noise_patterns):
+            continue
+        if (
+            stripped.startswith("**") or
+            (stripped.startswith("- ") and ":" in stripped[2:40]) or
+            stripped.startswith("1.") or stripped.startswith("2.") or
+            stripped.startswith("3.")
         ):
-            in_blockers_section = False
-            continue
-
-        if in_blockers_section and stripped:
             blockers.append(stripped)
-            continue
 
-    # If no structured section found, fall back to line-level heuristics
-    if not blockers:
-        noise_patterns = [
-            "now let me", "however,", "let me check", "let me look",
-            "let me read", "let me verify", "this coverage gap",
-            "previous reviewer", "previous review", "unfixed by",
-            "severity: 🔴 blocker", "- severity: 🔴",
-            "severity: blocker",
-        ]
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            upper = stripped.upper()
-            # Must mention BLOCKER or MUST FIX
-            if "BLOCKER" not in upper and "MUST FIX" not in upper:
-                continue
-            # Filter noise
-            if any(p in stripped.lower() for p in noise_patterns):
-                continue
-            # Keep structured findings (bold-numbered, dash-prefixed with colon)
-            if (
-                stripped.startswith("**") or
-                (stripped.startswith("- ") and ":" in stripped[2:40]) or
-                stripped.startswith("1.") or stripped.startswith("2.") or
-                stripped.startswith("3.")
-            ):
-                blockers.append(stripped)
-
-    # Merge: each bold-numbered title + its following detail line → one entry
+    # Merge bold-numbered title + detail
     merged = []
     for b in blockers:
         if b.startswith("**") and b[2:3].isdigit():
@@ -1668,9 +1692,11 @@ def _extract_tl_blockers(tl_output: str) -> list[str]:
             merged[-1] = merged[-1] + " — " + b.lstrip("- ").rstrip(".")
         else:
             merged.append(b)
-    blockers = merged
 
-    return blockers[:10]
+    # Strip ** markers from final output for clean PR formatting
+    merged = [m.replace("**", "") for m in merged]
+
+    return merged[:10]
 
 # ── Profile configuration defaults (F012) ──
 _PROFILE_CONFIGS = {
