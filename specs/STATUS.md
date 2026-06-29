@@ -14,7 +14,7 @@
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
 - **F006: Error Recovery & Resume** — in progress since 2026-06-28 23:56, branch `feat/f006-error-recovery--resume` [panel]
-- **F024: Auto-Release — Tagging, Changelog, and GitHub Releases** — in progress since 2026-06-29 23:20, branch `feat/f024-auto-release--tagging-changelog-and-e4a08de0` [panel]
+- **F024: Auto-Release — Tagging, Changelog, and GitHub Releases** — in progress since 2026-06-30 00:07, branch `feat/f024-auto-release--tagging-changelog-and-e4a08de0` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
