@@ -26,6 +26,7 @@ from utils import (slugify, git, gh, _safe_run, _sanitize_prompt, _validate_proj
                    validate_checkpoint, acquire_lock, _cleanup_lock, _signal_handler,
                    try_auto_merge, _supplement_pr_sections, _detect_default_branch,
                    _set_gh_token, show_help, show_help_json, check_upgrade, _version_newer,
+                   do_release,
                    _parse_status_md, _make_status_entry, update_status_md,
                    _check_pid, _verify_pid_owner, _get_lock_state,
                    handle_status, handle_stop, handle_kill, handle_list_crons,
@@ -100,6 +101,8 @@ def main():
     is_status = False
     is_version = False
     is_upgrade = False
+    is_release = False
+    release_bump = None
     is_list_crons = False
     is_fix = False
     is_map = False
@@ -171,6 +174,15 @@ def main():
         if arg == "--add":
             is_add = True
             continue
+        if arg == "--release":
+            is_release = True
+            continue
+        if is_release and release_bump is None:
+            if arg not in ("patch", "minor", "major"):
+                print(f"ERROR: Invalid bump type '{arg}'. Use: patch, minor, or major", flush=True)
+                sys.exit(1)
+            release_bump = arg
+            continue
         if arg.startswith("--priority="):
             add_priority = arg.split("=", 1)[1].upper()
             if add_priority not in ("P0", "P1", "P2", "P3"):
@@ -212,6 +224,10 @@ def main():
             skip_next = True
             continue
         filtered_argv.append(arg)
+
+    # ── Release flag: missing bump type check ──
+    if is_release and release_bump is None:
+        print("ERROR: --release requires a bump type: patch, minor, or major", flush=True)
 
     # ── Env var fallbacks for flags (flag wins if set, then env var, then default) ──
     if not fix_all and os.environ.get("PANEL_FIX_ALL") == "1":
@@ -269,8 +285,8 @@ def main():
             break
 
     # ── Determine PROJECT_DIR and feature ──
-    if is_next or is_stop or is_kill or is_status or is_fix or is_map:
-        if is_stop or is_kill or is_status or is_map:
+    if is_next or is_stop or is_kill or is_status or is_fix or is_map or is_release:
+        if is_stop or is_kill or is_status or is_map or is_release:
             if len(filtered_argv) >= 1:
                 PROJECT_DIR = os.path.abspath(filtered_argv[0])
             else:
@@ -291,7 +307,7 @@ def main():
                 PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
-        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade:
+        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade and not is_release:
             print("ERROR: Feature description required")
             sys.exit(1)
         feature = filtered_argv[0] if filtered_argv else ""
@@ -305,6 +321,8 @@ def main():
     # ── CONTROL FLAGS: early exit (priority order) ──
     if is_upgrade:
         check_upgrade()
+    if is_release:
+        do_release(release_bump, PROJECT_DIR)
     if is_version:
         print(f"dokima v{VERSION}")
         sys.exit(0)

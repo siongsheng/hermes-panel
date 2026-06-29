@@ -3,7 +3,7 @@
 All functions extracted from dokima monolith (F022: Modular Architecture).
 Module-level globals are set by main() in the dokima entry script before any function calls.
 """
-import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal, datetime
+import sys, json, subprocess, os, pwd, time, shlex, re, fcntl, signal, datetime, tempfile
 
 # shutil imported dynamically where needed (deploy_profile_skills)
 
@@ -68,6 +68,8 @@ CONTROL:
   dokima --list-crons                    List all scheduled pipelines
   dokima --version                       Print version and exit
   dokima --upgrade                       Check for newer version and show upgrade instructions
+  dokima --release <patch|minor|major>   Bump version, generate changelog, tag, and publish GitHub Release
+                                          (add --dry-run to preview without making changes)
 
 FLAGS:
   --interactive        Show human gate (with --next/--continuous)
@@ -109,6 +111,7 @@ CLI_METADATA = {
         {"name": "--list-crons", "syntax": "dokima --list-crons", "description": "List all scheduled pipelines"},
         {"name": "--version", "syntax": "dokima --version", "description": "Print version and exit"},
         {"name": "--upgrade", "syntax": "dokima --upgrade", "description": "Check for newer version and show upgrade instructions"},
+        {"name": "--release", "syntax": "dokima --release <patch|minor|major> [--dry-run] [project_dir]", "description": "Bump version, generate changelog, tag, and publish GitHub Release"},
     ],
     "flags": [
         {"flag": "--interactive", "args": None, "env_var": None, "description": "Show human gate (with --next/--continuous)"},
@@ -962,6 +965,318 @@ def _version_newer(a, b):
         return parts_a > parts_b
     except (ValueError, AttributeError):
         return False
+
+
+def _bump_version(current, bump):
+    """Return new semver string after applying bump type.
+
+    Args:
+        current: Semver string like '1.2.1' or 'v1.2.1' (strips 'v' prefix
+                 and whitespace).
+        bump: One of 'patch', 'minor', 'major'.
+
+    Returns:
+        New 'X.Y.Z' string (no 'v' prefix).
+
+    Raises:
+        ValueError: If bump is invalid or version string is not parseable.
+    """
+    current = current.strip().lstrip("v")
+    valid_bumps = {"patch", "minor", "major"}
+    if bump not in valid_bumps:
+        raise ValueError(f"Invalid bump type '{bump}'; expected one of {sorted(valid_bumps)}")
+    try:
+        parts = [int(x) for x in current.split(".")]
+    except (ValueError, AttributeError):
+        raise ValueError(f"Invalid version string '{current}'")
+    if len(parts) != 3:
+        raise ValueError(f"Invalid version string '{current}': expected X.Y.Z format")
+    if bump == "patch":
+        parts[2] += 1
+    elif bump == "minor":
+        parts[1] += 1
+        parts[2] = 0
+    elif bump == "major":
+        parts[0] += 1
+        parts[1] = 0
+        parts[2] = 0
+    return f"{parts[0]}.{parts[1]}.{parts[2]}"
+
+
+def _prune_old_tags(keep_count=10):
+    """Prune old release tags, keeping the `keep_count` newest vX.Y.Z tags.
+
+    Runs ``git tag --sort=-v:refname``, filters to tags matching the
+    ``v<major>.<minor>.<patch>`` pattern, and deletes every tag beyond
+    the first *keep_count* via ``git push origin --delete``.
+
+    Warns once per deleted tag.  If there are no tags to prune the
+    function is a silent no-op.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "tag", "--sort=-v:refname"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            universal_newlines=True, timeout=10)
+    except (subprocess.TimeoutExpired, OSError):
+        return  # can't reach git → treat as no tags
+
+    if result.returncode != 0:
+        return
+
+    raw = result.stdout.strip()
+    if not raw:
+        return
+
+    all_tags = raw.split("\n")
+    # Keep only release-style tags: vX.Y.Z
+    semver_tags = [t for t in all_tags if re.match(r'^v\d+\.\d+\.\d+$', t)]
+
+    if len(semver_tags) <= keep_count:
+        return
+
+    # Tags sorted newest-first; prune everything beyond keep_count
+    to_prune = semver_tags[keep_count:]
+
+    for tag in to_prune:
+        print(f"Pruning old release tag: {tag}")
+        try:
+            subprocess.run(
+                ["git", "push", "origin", "--delete", tag],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=30)
+        except (subprocess.TimeoutExpired, OSError):
+            pass  # best-effort; warn but don't abort
+
+
+def do_release(bump, project_dir, dry_run=False):
+    """Automate the release workflow: bump VERSION, tag, push, and create GitHub Release.
+
+    bump must be one of: patch, minor, major.
+    On dry_run=True, prints the plan without making any changes.
+    Exits with code 1 and a clear message on any precondition failure.
+    """
+    import shutil as _shutil
+
+    # ── 0. Validate bump type ──────────────────────────────────────────
+    valid_bumps = {"patch", "minor", "major"}
+    if bump not in valid_bumps:
+        print(f"Invalid bump type: {bump!r}. Must be one of: patch, minor, major")
+        sys.exit(1)
+
+    # ── 1. Validate project_dir is a git repo ──────────────────────────
+    git_dir = os.path.join(project_dir, ".git")
+    if not os.path.isdir(git_dir):
+        print(f"Not a git repository: {project_dir}")
+        sys.exit(1)
+
+    # ── 2. gh CLI must be available ────────────────────────────────────
+    if not _shutil.which("gh"):
+        print("gh CLI required for --release. Install: https://cli.github.com")
+        sys.exit(1)
+
+    # ── 3. Detect default branch ───────────────────────────────────────
+    default_branch = _detect_default_branch(project_dir)
+
+    # ── 4. Validate: on default branch ─────────────────────────────────
+    try:
+        br_result = subprocess.run(
+            ["git", "-C", project_dir, "rev-parse", "--abbrev-ref", "HEAD"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=10
+        )
+        current_branch = br_result.stdout.strip()
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"Could not determine current branch: {e}")
+        sys.exit(1)
+
+    if current_branch != default_branch:
+        print(
+            f"Not on default branch. "
+            f"Current: {current_branch}, expected: {default_branch}"
+        )
+        sys.exit(1)
+
+    # ── 5. Validate: clean working tree ────────────────────────────────
+    try:
+        dirty_result = subprocess.run(
+            ["git", "-C", project_dir, "diff-index", "--quiet", "HEAD", "--"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        if dirty_result.returncode != 0:
+            print("Working tree is dirty. Commit or stash changes first.")
+            # Show git status for context
+            try:
+                st = subprocess.run(
+                    ["git", "-C", project_dir, "status", "--short"],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    universal_newlines=True, timeout=10
+                )
+                if st.stdout.strip():
+                    print(st.stdout)
+            except Exception:
+                pass
+            sys.exit(1)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"Could not check working tree: {e}")
+        sys.exit(1)
+
+    # ── 6. Validate: up to date with origin ────────────────────────────
+    try:
+        subprocess.run(
+            ["git", "-C", project_dir, "fetch", "origin"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=30
+        )
+        behind_result = subprocess.run(
+            ["git", "-C", project_dir, "rev-list", f"HEAD..origin/{default_branch}"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            universal_newlines=True, timeout=10
+        )
+        behind = behind_result.stdout.strip()
+        if behind:
+            behind_count = len(behind.split("\n"))
+            print(
+                f"Behind origin/{default_branch} by {behind_count} commit(s). "
+                "Pull latest changes first."
+            )
+            sys.exit(1)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"Could not reach origin: {e}")
+        sys.exit(1)
+
+    # ── 7. Read current VERSION ────────────────────────────────────────
+    version_path = os.path.join(project_dir, "VERSION")
+    if not os.path.isfile(version_path):
+        print(f"VERSION file not found: {version_path}")
+        sys.exit(1)
+
+    try:
+        with open(version_path) as f:
+            current_version = f.read().strip()
+    except OSError as e:
+        print(f"Could not read VERSION file: {e}")
+        sys.exit(1)
+
+    # ── 8. Compute new version ─────────────────────────────────────────
+    try:
+        new_version = _bump_version(current_version, bump)
+    except ValueError as e:
+        print(f"Version bump failed: {e}")
+        sys.exit(1)
+
+    tag_name = f"v{new_version}"
+    commit_msg = f"chore: bump version to {tag_name}"
+
+    # ── 9. Dry-run: print plan and exit ────────────────────────────────
+    if dry_run:
+        print(f"[DRY RUN] Would bump VERSION: {current_version} -> {new_version}")
+        print(f"[DRY RUN] Would commit:  {commit_msg}")
+        print(f"[DRY RUN] Would tag:     {tag_name}")
+        print(f"[DRY RUN] Would push:    origin/{default_branch} + {tag_name}")
+        print(
+            f"[DRY RUN] Would release: "
+            f"gh release create {tag_name} --generate-notes "
+            f"--title \"{tag_name}\" --target {default_branch}"
+        )
+        print("[DRY RUN] No changes made.")
+        return
+
+    # ── 10. Write new VERSION (atomic: temp + rename) ───────────────────
+    try:
+        version_dir = os.path.dirname(version_path)
+        fd, tmp_path = tempfile.mkstemp(
+            suffix=".version", prefix="dokima-releas", dir=version_dir
+        )
+        with os.fdopen(fd, "w") as tf:
+            tf.write(new_version + "\n")
+        os.rename(tmp_path, version_path)
+    except OSError as e:
+        print(f"Could not write VERSION file: {e}")
+        sys.exit(1)
+
+    # ── 11. Git: add VERSION, commit, tag ──────────────────────────────
+    git_cmds = [
+        (["add", "VERSION"], "git add VERSION"),
+        (["commit", "-m", commit_msg], f"git commit -m \"{commit_msg}\""),
+        (["tag", "-a", tag_name, "-m", f"Release {tag_name}"],
+         f"git tag -a {tag_name}"),
+    ]
+    for args, desc in git_cmds:
+        try:
+            result = subprocess.run(
+                ["git", "-C", project_dir] + args,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True, timeout=30
+            )
+            if result.returncode != 0:
+                err = _redact_secrets(result.stderr.strip())
+                print(f"{desc} failed: {err}")
+                sys.exit(1)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"{desc} failed: {e}")
+            sys.exit(1)
+
+    # ── 12. Push branch ────────────────────────────────────────────────
+    try:
+        push_result = subprocess.run(
+            ["git", "-C", project_dir, "push", "origin", default_branch],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=60
+        )
+        if push_result.returncode != 0:
+            err = _redact_secrets(push_result.stderr.strip())
+            print(f"Push failed: {err}")
+            sys.exit(1)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"Push failed: {e}")
+        sys.exit(1)
+
+    # ── 13. Push tag ───────────────────────────────────────────────────
+    try:
+        push_tag_result = subprocess.run(
+            ["git", "-C", project_dir, "push", "origin", tag_name],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=30
+        )
+        if push_tag_result.returncode != 0:
+            err = _redact_secrets(push_tag_result.stderr.strip())
+            print(f"Tag push failed: {err}")
+            sys.exit(1)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"Tag push failed: {e}")
+        sys.exit(1)
+
+    # ── 14. Prune old tags ─────────────────────────────────────────────
+    try:
+        _prune_old_tags()
+    except Exception:
+        pass  # non-fatal — tag already pushed
+
+    # ── 15. GitHub Release ─────────────────────────────────────────────
+    stdout, stderr, rc = gh(
+        "release", "create", tag_name,
+        "--generate-notes",
+        "--title", tag_name,
+        "--target", default_branch,
+    )
+    if rc != 0:
+        print(f"gh release create failed: {_redact_secrets(stderr)}")
+        sys.exit(1)
+
+    # ── 16. Summary ────────────────────────────────────────────────────
+    # Extract the release URL from gh output
+    release_url = ""
+    for line in stdout.split("\n"):
+        line = line.strip()
+        if line.startswith("https://"):
+            release_url = line
+            break
+    if release_url:
+        print(f"Released dokima {tag_name} — {release_url}")
+    else:
+        print(f"Released dokima {tag_name}")
+
 
 def _parse_status_md(status_path: str) -> tuple:
     """Parse STATUS.md into (header, active_entries, archived_entries).
