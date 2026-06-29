@@ -963,6 +963,199 @@ def _version_newer(a, b):
     except (ValueError, AttributeError):
         return False
 
+def do_release(bump, project_dir, dry_run=False):
+    """--release handler: bump VERSION, tag, push, create GitHub Release.
+
+    Validates preconditions (git repo, default branch, clean tree, up to
+    date with origin), bumps VERSION via _bump_version, commits, tags,
+    prunes old tags, pushes, and runs gh release create --generate-notes.
+
+    If dry_run=True, prints planned actions and exits without changes.
+    """
+    # Validate bump type
+    if bump not in ("patch", "minor", "major"):
+        print(f"ERROR: Invalid bump type '{bump}'. Must be one of: patch, minor, major")
+        print("Usage: dokima --release <patch|minor|major> [--dry-run] [project_dir]")
+        sys.exit(1)
+
+    # Validate project_dir is a git repo
+    if not os.path.isdir(os.path.join(project_dir, ".git")):
+        print(f"ERROR: {project_dir} is not a valid git repository (no .git directory found).")
+        sys.exit(1)
+
+    # Detect default branch
+    default_branch = _detect_default_branch(project_dir)
+
+    # Validate on default branch
+    try:
+        current_branch = subprocess.run(
+            ["git", "-C", project_dir, "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+    except Exception:
+        current_branch = "unknown"
+    if current_branch != default_branch:
+        print(f"ERROR: Must be on {default_branch} branch (currently on {current_branch}).")
+        sys.exit(1)
+
+    # Validate clean working tree
+    diff_result = subprocess.run(
+        ["git", "-C", project_dir, "diff-index", "--quiet", "HEAD"],
+        capture_output=True, timeout=10
+    )
+    if diff_result.returncode != 0:
+        print("ERROR: Working tree is not clean. Please commit or stash changes before releasing.")
+        subprocess.run(["git", "-C", project_dir, "status", "--short"])
+        sys.exit(1)
+
+    # Validate up to date with origin
+    try:
+        subprocess.run(["git", "-C", project_dir, "fetch", "origin"],
+                       capture_output=True, timeout=30)
+        behind_result = subprocess.run(
+            ["git", "-C", project_dir, "rev-list", f"HEAD..origin/{default_branch}"],
+            capture_output=True, text=True, timeout=10
+        )
+        if behind_result.stdout.strip():
+            count = len(behind_result.stdout.strip().split("\n"))
+            print(f"ERROR: Local {default_branch} is {count} commit(s) behind origin/{default_branch}.")
+            print("  Pull latest changes first: git pull origin {default_branch}")
+            sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print("ERROR: Could not reach origin. Check your network connection.")
+        sys.exit(1)
+
+    # Read current VERSION
+    version_path = os.path.join(project_dir, "VERSION")
+    if not os.path.exists(version_path):
+        print(f"ERROR: VERSION file not found at {version_path}")
+        sys.exit(1)
+    try:
+        with open(version_path) as f:
+            current_version = f.read().strip()
+    except OSError:
+        print(f"ERROR: Could not read VERSION file at {version_path}")
+        sys.exit(1)
+
+    # Compute new version using _bump_version (if available) or inline
+    try:
+        new_version = _bump_version(current_version, bump)
+    except NameError:
+        # _bump_version not yet available (stub path for Task 5)
+        parts = [int(x) for x in current_version.split(".")]
+        if len(parts) != 3:
+            print(f"ERROR: VERSION '{current_version}' is not valid semver (X.Y.Z).")
+            sys.exit(1)
+        if bump == "patch":
+            parts[2] += 1
+        elif bump == "minor":
+            parts[1] += 1
+            parts[2] = 0
+        elif bump == "major":
+            parts[0] += 1
+            parts[1] = 0
+            parts[2] = 0
+        new_version = ".".join(str(p) for p in parts)
+
+    tag_name = f"v{new_version}"
+
+    if dry_run:
+        print(f"[DRY RUN] Would release dokima {tag_name}")
+        print(f"  Bump: {current_version} -> {new_version} ({bump})")
+        print(f"  Commit: chore: bump version to {tag_name}")
+        print(f"  Tag: git tag -a {tag_name} -m 'Release {tag_name}'")
+        print(f"  Push: git push origin {default_branch}")
+        print(f"  Push tag: git push origin {tag_name}")
+        print(f"  Release: gh release create {tag_name} --generate-notes --title '{tag_name}' --target {default_branch}")
+        sys.exit(0)
+
+    # Write new VERSION (atomic: temp file + rename)
+    temp_path = version_path + ".tmp"
+    try:
+        with open(temp_path, "w") as f:
+            f.write(new_version + "\n")
+        os.rename(temp_path, version_path)
+    except OSError as e:
+        print(f"ERROR: Could not write VERSION file: {e}")
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        sys.exit(1)
+
+    # git add VERSION + commit
+    subprocess.run(["git", "-C", project_dir, "add", "VERSION"], capture_output=True)
+    commit_msg = f"chore: bump version to {tag_name}"
+    commit_result = subprocess.run(
+        ["git", "-C", project_dir, "commit", "-m", commit_msg],
+        capture_output=True, text=True
+    )
+    if commit_result.returncode != 0:
+        print(f"ERROR: Failed to commit: {commit_result.stderr.strip()}")
+        sys.exit(1)
+
+    # git tag
+    tag_result = subprocess.run(
+        ["git", "-C", project_dir, "tag", "-a", tag_name, "-m", f"Release {tag_name}"],
+        capture_output=True, text=True
+    )
+    if tag_result.returncode != 0:
+        print(f"ERROR: Failed to create tag {tag_name}: {tag_result.stderr.strip()}")
+        # Rollback: undo the commit
+        subprocess.run(["git", "-C", project_dir, "reset", "--soft", "HEAD~1"], capture_output=True)
+        sys.exit(1)
+
+    # Prune old tags (keep last 10), if _prune_old_tags available
+    try:
+        _prune_old_tags(project_dir, keep_count=10)
+    except NameError:
+        # _prune_old_tags not yet available (stub path for Task 5)
+        pass
+
+    # git push branch
+    push_result = subprocess.run(
+        ["git", "-C", project_dir, "push", "origin", default_branch],
+        capture_output=True, text=True, timeout=60
+    )
+    if push_result.returncode != 0:
+        print(f"ERROR: Push failed: {push_result.stderr.strip()}")
+        print(f"  Tag {tag_name} created locally but not pushed.")
+        print(f"  Push manually: git push origin {default_branch}")
+        print(f"  Then: git push origin {tag_name}")
+        sys.exit(1)
+
+    # git push tag
+    tag_push_result = subprocess.run(
+        ["git", "-C", project_dir, "push", "origin", tag_name],
+        capture_output=True, text=True, timeout=60
+    )
+    if tag_push_result.returncode != 0:
+        print(f"ERROR: Tag push failed: {tag_push_result.stderr.strip()}")
+        print(f"  Branch pushed but tag {tag_name} was not.")
+        print(f"  Push tag manually: git push origin {tag_name}")
+        sys.exit(1)
+
+    # gh release create
+    gh_result = subprocess.run(
+        ["gh", "release", "create", tag_name,
+         "--generate-notes", "--title", tag_name,
+         "--target", default_branch],
+        capture_output=True, text=True, timeout=60
+    )
+    if gh_result.returncode != 0:
+        print(f"ERROR: GitHub Release creation failed: {gh_result.stderr.strip()}")
+        print(f"  Branch and tag pushed. Create release manually:")
+        print(f"  gh release create {tag_name} --generate-notes --title '{tag_name}' --target {default_branch}")
+        sys.exit(1)
+
+    # Print summary
+    print(f"Released dokima {tag_name}")
+    # Extract URL from gh output if possible
+    for line in gh_result.stdout.split("\n") + gh_result.stderr.split("\n"):
+        if "https://github.com" in line:
+            print(f"  {line.strip()}")
+            break
+
+    sys.exit(0)
+
 def _parse_status_md(status_path: str) -> tuple:
     """Parse STATUS.md into (header, active_entries, archived_entries).
        Returns defaults if file doesn't exist."""
