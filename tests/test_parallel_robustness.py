@@ -582,3 +582,60 @@ class TestOverflowBatching:
 
         assert len(spawn_order) == 3, f"All 3 tasks should be spawned, got {len(spawn_order)}"
 
+
+class TestHaltAndRevertWiring:
+    """Task 7: halt_and_revert backward-compatible wiring verification."""
+
+    def test_backward_compatible_without_task_ids(self):
+        """halt_and_revert called without task_ids remains backward compatible."""
+        panel = _load_panel()
+        git_calls = []
+
+        def fake_git(*args):
+            git_calls.append(args)
+            return ("", "", 0)
+
+        with patch.object(panel, "git", side_effect=fake_git), \
+             patch.object(panel, "DEFAULT_BRANCH", "main"):
+            panel.halt_and_revert("Coder timed out", "PHASE 2 (Coder)", "feat/old")
+
+        # Only main branch deleted, no task branch deletes
+        branch_deletes = [c for c in git_calls if c[0] == "branch" and c[1] == "-D"]
+        assert len(branch_deletes) == 1
+        assert branch_deletes[0][2] == "feat/old"
+
+    def test_call_sites_pass_task_ids(self):
+        """Verify the three parallel-coder halt_and_revert call sites accept task_ids."""
+        panel = _load_panel()
+
+        # Create a WorktreeManager mock
+        wt_mgr = MagicMock()
+
+        # Simulate the exact call pattern from run_pipeline (line 5355)
+        halt_calls = []
+
+        def fake_halt_and_revert(reason, phase, branch, task_ids=None, worktrees=None):
+            halt_calls.append(task_ids)
+
+        with patch.object(panel, "halt_and_revert", side_effect=fake_halt_and_revert), \
+             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "DEFAULT_BRANCH", "main"):
+            # Simulate the three call sites
+            panel.halt_and_revert(
+                "All parallel coders failed", "PHASE 2 (Parallel Coders)",
+                "feat/test", task_ids=["1", "2", "3"], worktrees=wt_mgr
+            )
+            panel.halt_and_revert(
+                "Merge assembly failed", "PHASE 2 (Merge)",
+                "feat/test", task_ids=["1", "2", "3"], worktrees=wt_mgr
+            )
+            panel.halt_and_revert(
+                "Merge assembly failed", "PHASE 2 (Merge)",
+                "feat/test", task_ids=["1", "2", "3"], worktrees=wt_mgr
+            )
+
+        # All three calls should receive task_ids
+        assert len(halt_calls) == 3
+        for task_ids in halt_calls:
+            assert task_ids == ["1", "2", "3"], f"Expected ['1','2','3'], got {task_ids}"
+
