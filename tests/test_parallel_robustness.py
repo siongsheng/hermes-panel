@@ -465,3 +465,121 @@ class TestTaskLockStaleCleanup:
 
         assert lock.tasks_dir == tasks_dir
 
+
+class TestOverflowBatching:
+    """Task 6: Overflow tasks batched into sub-waves instead of sequential."""
+
+    def test_overflow_tasks_batched_not_sequential(self):
+        """12 tasks, max_parallel=5 → overflow polled as 5+2, not 12×1."""
+        panel = _load_panel()
+
+        task_list = {}
+        for i in range(1, 13):
+            t = panel.Task(str(i), f"Task {i}", [f"file_{i}.py"], [], True)
+            t.branch = f"feat/test-t{i}"
+            task_list[str(i)] = t
+
+        waves = [["1","2","3","4","5","6","7","8","9","10","11","12"]]
+        poll_calls = []
+
+        class TrackingWorktreeManager:
+            def __init__(self, project_root):
+                self.project_root = project_root
+            def create(self, task_id, branch):
+                return f"/tmp/fake-wt-{task_id}"
+            def cleanup_all(self, task_ids):
+                pass
+
+        class MockTaskLock:
+            def __init__(self, panel_dir):
+                pass
+            def claim(self, task_id, agent_id):
+                return True
+            def release(self, task_id):
+                pass
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0
+        mock_proc.stdout = MagicMock()
+        mock_proc.stdout.read.side_effect = [b"ok", b""]
+        mock_proc.wait.return_value = 0
+
+        def mock_poll_done(wave, running, tasks, locks, timeout=600):
+            poll_calls.append(list(wave))  # Track the wave size
+            for tid in wave:
+                tasks[tid].status = "completed"
+            for tid in list(running.keys()):
+                del running[tid]
+
+        with patch.object(panel, "WorktreeManager", return_value=TrackingWorktreeManager("/tmp/t")), \
+             patch.object(panel, "TaskLock", return_value=MockTaskLock("/tmp/t")), \
+             patch.object(panel, "_poll_until_wave_done", side_effect=mock_poll_done), \
+             patch.object(panel.subprocess, "Popen", return_value=mock_proc), \
+             patch("os.makedirs"):
+            panel.run_parallel_coders(task_list, waves, "/tmp/t", "/tmp/spec.md")
+
+        # Old behavior: first poll with 5 tasks in wave list, then 7 overflow polls with 1 task each
+        # New behavior: first poll with 5 tasks, then overflow polls with batches of 5 then 2
+        # Check that overflow tasks were NOT polled one-by-one
+        overflow_polls = [w for w in poll_calls if len(w) < 5]
+        single_polls = [w for w in overflow_polls if len(w) == 1]
+        assert len(single_polls) == 0, (
+            f"Overflow tasks should be batched, not polled 1-by-1. "
+            f"Got {len(single_polls)} single-task polls. All polls: {poll_calls}"
+        )
+        # Total tasks across all polls should be 12
+        total_polled = sum(len(w) for w in poll_calls)
+        assert total_polled == 12, f"Should poll 12 tasks total, got {total_polled}"
+
+    def test_max_parallel_one_all_sequential(self):
+        """max_parallel=1 → all tasks sequential (degenerate case)."""
+        panel = _load_panel()
+
+        task_list = {}
+        for i in range(1, 4):
+            t = panel.Task(str(i), f"Task {i}", [f"file_{i}.py"], [], True)
+            t.branch = f"feat/test-t{i}"
+            task_list[str(i)] = t
+
+        waves = [["1","2","3"]]
+        spawn_order = []
+
+        class TrackingWorktreeManager:
+            def __init__(self, project_root):
+                self.project_root = project_root
+            def create(self, task_id, branch):
+                return f"/tmp/fake-wt-{task_id}"
+            def cleanup_all(self, task_ids):
+                pass
+
+        class MockTaskLock:
+            def __init__(self, panel_dir):
+                pass
+            def claim(self, task_id, agent_id):
+                spawn_order.append(int(task_id))
+                return True
+            def release(self, task_id):
+                pass
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0
+        mock_proc.stdout = MagicMock()
+        mock_proc.stdout.read.side_effect = [b"ok", b""]
+        mock_proc.wait.return_value = 0
+
+        def mock_poll_done(wave, running, tasks, locks, timeout=600):
+            for tid in wave:
+                tasks[tid].status = "completed"
+            for tid in list(running.keys()):
+                del running[tid]
+
+        with patch.object(panel, "WorktreeManager", return_value=TrackingWorktreeManager("/tmp/t")), \
+             patch.object(panel, "TaskLock", return_value=MockTaskLock("/tmp/t")), \
+             patch.object(panel, "_poll_until_wave_done", side_effect=mock_poll_done), \
+             patch.object(panel.subprocess, "Popen", return_value=mock_proc), \
+             patch("os.makedirs"), \
+             patch.object(panel, "max_parallel_override", 1):
+            panel.run_parallel_coders(task_list, waves, "/tmp/t", "/tmp/spec.md")
+
+        assert len(spawn_order) == 3, f"All 3 tasks should be spawned, got {len(spawn_order)}"
+
