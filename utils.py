@@ -1044,14 +1044,21 @@ def _get_lock_state(project_dir):
     roadmap_path = os.path.join(project_dir, "specs", "roadmap.md")
     if os.path.exists(roadmap_path):
         try:
+            # Lazy import from dokima monolith — parse_roadmap lives there until
+            # it's extracted into a roadmap.py module (future refactor).
+            import importlib
+            dokima_mod = importlib.import_module('dokima')
+            parse_roadmap = dokima_mod.parse_roadmap
             features = parse_roadmap(roadmap_path)
             current = [f for f in features if f.status == "in_progress"]
             if current:
                 info["feature"] = f"{current[0].id}: {current[0].title}"
             info["done"] = sum(1 for f in features if f.status == "done")
             info["total"] = len(features)
+        except ImportError:
+            pass  # dokima not importable (fresh extraction context)
         except Exception:
-            pass
+            pass  # roadmap parsing errors are non-fatal for lock state
     # Read log tail for phase
     if os.path.exists(OUTPUT_LOG):
         try:
@@ -1664,6 +1671,37 @@ def _extract_tl_blockers(tl_output: str) -> list[str]:
     blockers = merged
 
     return blockers[:10]
+
+# ── Profile configuration defaults (F012) ──
+_PROFILE_CONFIGS = {
+    "strategist": {
+        "model.default": "deepseek-v4-pro",
+        "model.provider": "deepseek",
+        "agent.max_turns": "150",
+        "agent.reasoning_effort": "high",
+        "terminal.env_passthrough": "[GH_TOKEN, GITHUB_TOKEN, HERMES_HOME, HOME]",
+    },
+    "coder": {
+        "model.default": "deepseek-v4-pro",
+        "model.provider": "deepseek",
+        "agent.max_turns": "150",
+        "terminal.env_passthrough": "[GH_TOKEN, GITHUB_TOKEN, HERMES_HOME, HOME]",
+    },
+    "tech-lead": {
+        "model.default": "deepseek-v4-pro",
+        "model.provider": "deepseek",
+        "agent.max_turns": "150",
+        "terminal.env_passthrough": "[GH_TOKEN, GITHUB_TOKEN, HERMES_HOME, HOME]",
+    },
+    "nm": {
+        "model.default": "deepseek-v4-pro",
+        "model.provider": "deepseek",
+        "agent.max_turns": "150",
+        "terminal.env_passthrough": "[GH_TOKEN, GITHUB_TOKEN, HERMES_HOME, HOME]",
+    },
+}
+_PROFILE_ORDER = ["strategist", "coder", "tech-lead", "nm"]
+
 
 def ensure_profiles():
     """Create agent profiles (strategist, coder, tech-lead, nm) if they don't exist.
