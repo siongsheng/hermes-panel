@@ -101,6 +101,9 @@ def main():
     is_version = False
     is_upgrade = False
     is_list_crons = False
+    is_release = False
+    release_bump = None
+    is_dry_run = False
     is_fix = False
     is_map = False
     map_full = False
@@ -119,6 +122,12 @@ def main():
     skip_next = False
     for arg in sys.argv[1:]:
         if skip_next:
+            if is_release and release_bump is None:
+                # The arg after --release is the bump type
+                release_bump = arg
+                if release_bump not in ("patch", "minor", "major"):
+                    print(f"  ⚠ Invalid release bump: {release_bump!r} (expected patch, minor, or major)", flush=True)
+                    sys.exit(1)
             skip_next = False
             continue
         if arg in ("--help", "-h"):
@@ -154,6 +163,13 @@ def main():
             continue
         if arg == "--list-crons":
             is_list_crons = True
+            continue
+        if arg == "--release":
+            is_release = True
+            skip_next = True
+            continue
+        if arg == "--dry-run":
+            is_dry_run = True
             continue
         if arg == "--answers":
             skip_next = True
@@ -291,7 +307,7 @@ def main():
                 PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
-        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade:
+        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade and not is_release:
             print("ERROR: Feature description required")
             sys.exit(1)
         feature = filtered_argv[0] if filtered_argv else ""
