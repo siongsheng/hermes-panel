@@ -14,6 +14,7 @@
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
 - **F006: Error Recovery & Resume** — in progress since 2026-06-28 23:56, branch `feat/f006-error-recovery--resume` [panel]
+- **F010: Parallel Coder Robustness** — in progress since 2026-06-29 09:07, branch `feat/f010-parallel-coder-robustness` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
@@ -29,5 +30,4 @@
 - **F023: Pipeline Self-Healing** — done 2026-06-29 08:42, PR [#29](https://github.com/siongsheng/dokima/pull/29) [auto-repair]
 - **F022: Modular Architecture** — done 2026-06-29 08:42, PR [#30](https://github.com/siongsheng/dokima/pull/30) [auto-repair]
 - **F021: Semantic Versioning + GitHub Releases** — done 2026-06-29 08:56, PR [#41](https://github.com/siongsheng/dokima/pull/41) [panel]
-- **F010: Parallel Coder Robustness** — done 2026-06-29 08:57, PR [#28](https://github.com/siongsheng/dokima/pull/28) [auto-repair]
 - **F013: Vendor-Agnostic Model Config** — done 2026-06-29 09:05, PR [#42](https://github.com/siongsheng/dokima/pull/42) [panel]

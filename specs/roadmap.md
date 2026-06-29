@@ -63,7 +63,7 @@
 ### F010: Parallel Coder Robustness
 **Priority:** P1
 **Dependencies:** None
-**Status:** [ ] Pending
+**Status:** [~] In Progress
 **User Story:** As a panel operator, parallel coders never conflict on the same file, worktree cleanup is reliable, and timeout/dead agents don't block the wave.
 
 ### F019: Data-Driven Execution Mode (Orchestrator Computes)
