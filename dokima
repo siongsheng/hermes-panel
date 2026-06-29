@@ -106,6 +106,8 @@ def main():
     map_full = False
     is_add = False
     add_priority = None
+    is_release = False
+    release_bump = None
     # --fix mode toggles (flags with env var fallbacks)
     fix_all = False
     skip_autofix = False
@@ -132,6 +134,10 @@ def main():
             continue
         if arg == "--upgrade":
             is_upgrade = True
+            continue
+        if arg == "--release":
+            is_release = True
+            skip_next = True
             continue
         if arg == "--next":
             is_next = True
@@ -213,6 +219,21 @@ def main():
             continue
         filtered_argv.append(arg)
 
+    # ── Extract --release bump type and validate ──
+    if is_release:
+        for i, arg in enumerate(sys.argv):
+            if arg == "--release" and i + 1 < len(sys.argv):
+                release_bump = sys.argv[i + 1]
+                break
+        if release_bump is None:
+            print("ERROR: --release requires a bump type (patch, minor, or major)")
+            print("Usage: dokima --release <patch|minor|major> [project_dir]")
+            sys.exit(1)
+        if release_bump not in ("patch", "minor", "major"):
+            print(f"ERROR: Invalid release bump type: {release_bump}")
+            print("Valid bump types: patch, minor, major")
+            sys.exit(1)
+
     # ── Env var fallbacks for flags (flag wins if set, then env var, then default) ──
     if not fix_all and os.environ.get("PANEL_FIX_ALL") == "1":
         fix_all = True
@@ -291,7 +312,7 @@ def main():
                 PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
-        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade:
+        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade and not is_release:
             print("ERROR: Feature description required")
             sys.exit(1)
         feature = filtered_argv[0] if filtered_argv else ""
@@ -312,6 +333,10 @@ def main():
         show_help_json()
     if is_help:
         show_help()
+    if is_release:
+        # Task 4: flag scanning — dispatch to do_release added in Task 5
+        print(f"  Release mode: {release_bump} (dispatch in Task 5)")
+        sys.exit(0)
     if is_kill:
         handle_kill(PROJECT_DIR)
     if is_add:
