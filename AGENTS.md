@@ -13,8 +13,8 @@ This repo IS the panel — you don't run the panel on itself.
 - Test: `python3 -m pytest tests/ -q`
 - Build: `python3 -c "compile(open('dokima').read(), 'dokima', 'exec')"`
 - Lint: `python3 -m py_compile dokima`
-- Verify nm script: `bash -n ~/bin/nm`
-- Verify vet script: `bash -n ~/bin/vet`
+- Verify nm script: `bash -n scripts/nm`
+- Verify vet script: `bash -n scripts/vet`
 
 ## Testing
 673 tests pass, 6 skipped, 679 total (pytest). Coverage: core functions + control panel + edge cases.

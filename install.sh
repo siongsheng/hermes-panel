@@ -53,7 +53,7 @@ fi
 
 # ── 4. Symlink nm and vet ────────────────────────────────────────────
 for script in nm vet; do
-    src="$PANEL_DIR/bin/$script"
+    src="$PANEL_DIR/scripts/$script"
     dest="$BIN_DIR/$script"
     if [ -f "$src" ]; then
         bash -n "$src" 2>/dev/null || warn "$script has syntax errors — symlinking anyway"
@@ -110,10 +110,10 @@ esac
 # ── Done ─────────────────────────────────────────────────────────────
 echo ""
 echo "  Dokima installed: $BIN_DIR/dokima"
-if [ -f "$PANEL_DIR/bin/nm" ]; then
+if [ -f "$PANEL_DIR/scripts/nm" ]; then
     echo "  nm installed:     $BIN_DIR/nm"
 fi
-if [ -f "$PANEL_DIR/bin/vet" ]; then
+if [ -f "$PANEL_DIR/scripts/vet" ]; then
     echo "  vet installed:    $BIN_DIR/vet"
 fi
 echo ""

@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# vet — Zero-AI-token build + test verification
+# Reads commands from AGENTS.md, runs them, reports pass/fail.
+# Usage: vet [project-dir]
+#   project-dir: project root containing AGENTS.md (default: cwd)
+
+set -euo pipefail
+
+PROJECT_DIR="${1:-$(pwd)}"
+AGENTS_FILE="$PROJECT_DIR/AGENTS.md"
+TEST_CMD=""
+BUILD_CMD=""
+
+# ANSI codes
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo "═══ vet — Build + Test Verification ═══"
+echo ""
+
+# ── Read commands from AGENTS.md ──
+if [[ -f "$AGENTS_FILE" ]]; then
+    echo "  Reading commands from AGENTS.md..."
+
+    # Parse test command: look for "Test:" or "Tests:" pattern
+    while IFS= read -r line; do
+        # Strip list prefix: "- Test: ...", "* Test: ..."
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*[-*] //')
+        if [[ $stripped =~ ^(Unit\ )?Tests?:\ \`(.+)\`$ ]]; then
+            TEST_CMD="${BASH_REMATCH[2]}"
+            echo "    Test: $TEST_CMD"
+        fi
+        if [[ $stripped =~ ^(Full\ )?Build:\ \`(.+)\`$ ]]; then
+            BUILD_CMD="${BASH_REMATCH[2]}"
+            echo "    Build: $BUILD_CMD"
+        fi
+    done < "$AGENTS_FILE"
+else
+    echo "  ⚠ No AGENTS.md found at $AGENTS_FILE"
+    exit 1
+fi
+
+# Fallback defaults if not specified
+if [[ -z "$TEST_CMD" ]]; then
+    # Try common defaults
+    if [[ -f "$PROJECT_DIR/package.json" ]]; then
+        echo "  ⚠ No test command in AGENTS.md, defaulting to npm test"
+        TEST_CMD="npm test"
+    elif [[ -f "$PROJECT_DIR/Cargo.toml" ]]; then
+        echo "  ⚠ No test command in AGENTS.md, defaulting to cargo test"
+        TEST_CMD="cargo test"
+    else
+        echo "  ⚠ No test command in AGENTS.md"
+        exit 1
+    fi
+fi
+if [[ -z "$BUILD_CMD" ]]; then
+    if [[ -f "$PROJECT_DIR/package.json" ]]; then
+        echo "  ⚠ No build command in AGENTS.md, defaulting to npm run build"
+        BUILD_CMD="npm run build"
+    elif [[ -f "$PROJECT_DIR/Cargo.toml" ]]; then
+        echo "  ⚠ No build command in AGENTS.md, defaulting to cargo build"
+        BUILD_CMD="cargo build"
+    else
+        echo "  ⚠ No build command in AGENTS.md"
+        exit 1
+    fi
+fi
+
+echo ""
+ALL_PASS=true
+
+# ── Run test suite ──
+echo "  ⏳ Running test suite..."
+if eval "$TEST_CMD" 2>&1; then
+    echo -e "  ${GREEN}✅ Tests passed${NC}"
+else
+    echo -e "  ${RED}❌ Tests FAILED${NC}"
+    ALL_PASS=false
+fi
+
+echo ""
+
+# ── Run build ──
+echo "  ⏳ Running build..."
+if eval "$BUILD_CMD" 2>&1; then
+    echo -e "  ${GREEN}✅ Build passed${NC}"
+else
+    echo -e "  ${RED}❌ Build FAILED${NC}"
+    ALL_PASS=false
+fi
+
+echo ""
+if $ALL_PASS; then
+    echo -e "${GREEN}✓ Verification passed${NC}"
+    exit 0
+else
+    echo -e "${RED}🔴 Verification FAILED${NC}"
+    exit 1
+fi

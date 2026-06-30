@@ -985,7 +985,7 @@ def run_phase4_nm(feature, branch, impact, pr_url_in):
     global PROJECT_DIR, REPO
     print("\n── Phase 4: nm (adversarial review) ──", flush=True)
     print("  ⏳ Spawning fresh Hermes session with different model family...", flush=True)
-    nm_cmd = os.path.expanduser("~/bin/nm") + " --skip-tests"
+    nm_cmd = os.path.join(PROJECT_DIR, "scripts", "nm") + " --skip-tests"
     nm_result = _safe_run(nm_cmd, cwd=PROJECT_DIR, timeout=600)
     nm_stdout = nm_result.stdout or ""
     print(f"  ✓ nm finished ({len(nm_stdout)} chars)", flush=True)

@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# nm — No-Mistakes validation pipeline
+# Spawns a fresh Hermes session to review current changes with clean context.
+# Usage: nm [--skip-tests]
+
+set -euo pipefail
+
+SKIP_TESTS=false
+if [[ "${1:-}" == "--skip-tests" ]]; then
+    SKIP_TESTS=true
+fi
+
+REPO=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")
+BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+# Check for uncommitted changes first, then fall back to last commit
+FILES=$(git diff --name-only 2>/dev/null | tr '\n' ' ' || echo "")
+DIFF=$(git diff -- . ':(exclude)*.tsbuildinfo' ':(exclude)package-lock.json' 2>/dev/null | head -500 || echo "")
+COMMITTED=false
+
+if [ -z "$DIFF" ]; then
+    # No uncommitted changes — validate the most recent commit
+    DIFF=$(git diff HEAD~1 -- . ':(exclude)*.tsbuildinfo' ':(exclude)package-lock.json' 2>/dev/null | head -500 || echo "")
+    FILES=$(git diff HEAD~1 --name-only 2>/dev/null | tr '\n' ' ' || echo "")
+    if [ -z "$DIFF" ]; then
+        echo "nm: no changes to validate (no uncommitted changes and no prior commit)"
+        exit 0
+    fi
+    COMMITTED=true
+    echo "nm: validating most recent commit (already committed)"
+else
+    echo "nm: validating uncommitted changes"
+fi
+
+SKIP_FLAG=""
+if $SKIP_TESTS; then
+    SKIP_FLAG="SKIP STAGE 5 (TESTS) — the user will run them separately."
+fi
+
+# Write the prompt to a temp file to avoid shell quoting issues
+PROMPT_FILE=$(mktemp)
+trap 'rm -f "$PROMPT_FILE"' EXIT
+cat > "$PROMPT_FILE" << 'PROMPTEOF'
+You are running the no-mistakes validation pipeline on a code change.
+Load the no-mistakes skill and execute ALL 7 stages.
+
+CRITICAL RULES:
+- You are in a FRESH context. You did NOT write this code. Review it with fresh eyes.
+- Follow the skill EXACTLY. Do not skip stages.
+- Do not ask the user questions — they expect this to run autonomously.
+- Run Stage 4 (fresh-context review) INLINE in this session. Do NOT use delegate_task — it creates an async race.
+- Produce a compact final report with risk assessment.
+
+CONTEXT:
+- Repository: REPO_PLACEHOLDER
+- Branch: BRANCH_PLACEHOLDER
+- Changed files: FILES_PLACEHOLDER
+- SKIP_FLAG_PLACEHOLDER
+
+DIFF TO REVIEW:
+PROMPTEOF
+
+# Replace placeholders
+sed -i "s|REPO_PLACEHOLDER|$REPO|" "$PROMPT_FILE"
+sed -i "s|BRANCH_PLACEHOLDER|$BRANCH|" "$PROMPT_FILE"
+sed -i "s|FILES_PLACEHOLDER|$FILES|" "$PROMPT_FILE"
+sed -i "s|SKIP_FLAG_PLACEHOLDER|$SKIP_FLAG|" "$PROMPT_FILE"
+
+# Append the diff
+echo "$DIFF" >> "$PROMPT_FILE"
+
+echo "nm: spawning fresh Hermes session to review $REPO ($(echo "$FILES" | wc -w) files changed)..."
+echo "nm: this runs in the background — you'll see output when it completes"
+echo ""
+
+# Source secrets from .env if available (required for gh CLI auth)
+ENV_FILE="${HOME}/.hermes/.env"
+if [[ -f "$ENV_FILE" ]]; then
+    set -a && source "$ENV_FILE" && set +a
+else
+    echo "nm: warning — $ENV_FILE not found. gh CLI may fail without GH_TOKEN." >&2
+fi
+
+# Run in a fresh Hermes session — completely separate from current
+PROMPT=$(cat "$PROMPT_FILE")
+hermes chat -q "$PROMPT" -s no-mistakes -s ai-coding-best-practices --yolo
+
+rm -f "$PROMPT_FILE"
+echo ""
+echo "nm: pipeline complete"

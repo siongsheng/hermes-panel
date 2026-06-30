@@ -44,7 +44,7 @@ fi
 
 
 def _make_git_repo(path):
-    """Create a minimal git repo at path containing dokima, bin/nm, and bin/vet."""
+    """Create a minimal git repo at path containing dokima, scripts/nm, and scripts/vet."""
     os.makedirs(path, exist_ok=True)
     subprocess.run(["git", "init", "-b", "main", path], capture_output=True, check=True)
     # Create a minimal dokima script
@@ -52,11 +52,11 @@ def _make_git_repo(path):
     with open(dokima_path, "w") as f:
         f.write("#!/usr/bin/env python3\nprint('dokima')\n")
     os.chmod(dokima_path, 0o755)
-    # Create bin/nm and bin/vet
-    bin_dir = os.path.join(path, "bin")
-    os.makedirs(bin_dir, exist_ok=True)
+    # Create scripts/nm and scripts/vet
+    scripts_dir = os.path.join(path, "scripts")
+    os.makedirs(scripts_dir, exist_ok=True)
     for name in ("nm", "vet"):
-        script_path = os.path.join(bin_dir, name)
+        script_path = os.path.join(scripts_dir, name)
         with open(script_path, "w") as f:
             f.write("#!/usr/bin/env bash\necho '{} ok'\n".format(name))
         os.chmod(script_path, 0o755)
@@ -173,7 +173,7 @@ class TestHappyPath:
 
 
 class TestNmAndVet:
-    """install.sh symlinks bin/nm and bin/vet into ~/.local/bin."""
+    """install.sh symlinks scripts/nm and scripts/vet into ~/.local/bin."""
 
     def test_symlinks_nm_and_vet(self, tmp_path):
         """After install, nm and vet are symlinked into ~/.local/bin."""
@@ -193,7 +193,7 @@ class TestNmAndVet:
         for script in ("nm", "vet"):
             symlink = os.path.join(home, ".local", "bin", script)
             assert os.path.islink(symlink), "Expected symlink for {}".format(script)
-            assert os.path.realpath(symlink) == os.path.join(clone_dir, "bin", script)
+            assert os.path.realpath(symlink) == os.path.join(clone_dir, "scripts", script)
 
     def test_nm_vet_availability_printed(self, tmp_path):
         """install.sh prints that nm and vet are available."""
