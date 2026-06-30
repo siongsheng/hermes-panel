@@ -2099,6 +2099,88 @@ def _prune_old_tags(keep_count=10):
             # Continue with remaining tags even if one fails
 
 
+def _update_docs_cache(new_version):
+    """Clone dokima-docs repo, regenerate cli-help.json, commit, and push.
+
+    Non-blocking: warns on failure but never raises. Does nothing if
+    gh CLI is not available or the docs repo cannot be reached.
+
+    Args:
+        new_version: The new version string (e.g. '1.2.5').
+    """
+    import tempfile, shutil, subprocess as _sp
+
+    # Determine the dokima script path (same directory as utils.py)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dokima_path = os.path.join(script_dir, "dokima")
+
+    clone_dir = None
+    try:
+        # a. Clone dokima-docs shallow
+        print("  Updating docs cache...", flush=True)
+        clone_dir = tempfile.mkdtemp(prefix="dokima-docs-")
+        result = _sp.run(
+            ["gh", "repo", "clone", "siongsheng/dokima-docs", clone_dir,
+             "--", "--depth=1"],
+            stdout=_sp.PIPE, stderr=_sp.PIPE, universal_newlines=True, timeout=60
+        )
+        if result.returncode != 0:
+            print(f"  WARNING: Could not clone dokima-docs: {result.stderr.strip()}", flush=True)
+            return
+
+        # b. Generate cli-help.json
+        output_path = os.path.join(clone_dir, "scripts", "cli-help.json")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        result = _sp.run(
+            [sys.executable, dokima_path, "--help-json"],
+            stdout=_sp.PIPE, stderr=_sp.PIPE, universal_newlines=True, timeout=30
+        )
+        if result.returncode != 0:
+            print(f"  WARNING: dokima --help-json failed: {result.stderr.strip()}", flush=True)
+            return
+
+        with open(output_path, "w") as f:
+            f.write(result.stdout)
+
+        # c. git add
+        _sp.run(
+            ["git", "-C", clone_dir, "add", "scripts/cli-help.json"],
+            stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=30
+        )
+
+        # d. git commit
+        result = _sp.run(
+            ["git", "-C", clone_dir, "commit", "-m",
+             f"chore: update CLI reference for v{new_version}"],
+            stdout=_sp.PIPE, stderr=_sp.PIPE, universal_newlines=True, timeout=30
+        )
+        if result.returncode != 0:
+            if "nothing to commit" in (result.stdout + result.stderr):
+                return  # No changes — OK
+            print(f"  WARNING: Docs commit failed: {result.stderr.strip()}", flush=True)
+            return
+
+        # e. git push
+        result = _sp.run(
+            ["git", "-C", clone_dir, "push"],
+            stdout=_sp.PIPE, stderr=_sp.PIPE, universal_newlines=True, timeout=60
+        )
+        if result.returncode != 0:
+            print(f"  WARNING: Docs push failed: {result.stderr.strip()}", flush=True)
+            # Non-blocking: release still succeeds
+        else:
+            print("  \u2713 Updated CLI reference cache for dokima-docs", flush=True)
+
+    except FileNotFoundError:
+        # gh CLI not installed or not found
+        print("  WARNING: gh CLI not found, skipping docs cache update", flush=True)
+    except Exception as e:
+        print(f"  WARNING: Docs cache update failed: {e}", flush=True)
+    finally:
+        if clone_dir is not None:
+            shutil.rmtree(clone_dir, ignore_errors=True)
+
+
 def do_release(bump, project_dir, dry_run=False):
     """Bump version, tag, generate changelog, and publish GitHub Release.
 
@@ -2187,6 +2269,7 @@ def do_release(bump, project_dir, dry_run=False):
         print(f"  [DRY RUN] Would push to origin/{default_branch}")
         print(f"  [DRY RUN] Would create GitHub Release: {tag_name}")
         print(f"  [DRY RUN] Command: gh release create {tag_name} --generate-notes --title \"{tag_name}\" --target {default_branch}")
+        print(f"  [DRY RUN] Would update docs cache")
         return
 
     # 9. Write new VERSION atomically (temp + rename)
@@ -2252,7 +2335,10 @@ def do_release(bump, project_dir, dry_run=False):
         print(f"ERROR: GitHub Release creation failed: {stderr}", flush=True)
         sys.exit(1)
 
-    # 17. Print summary
+    # 17. Update docs cache (non-blocking)
+    _update_docs_cache(new_version)
+
+    # 18. Print summary
     print(f"\n  ✓ Released dokima {tag_name}")
     if stdout:
         # gh release create outputs the release URL
