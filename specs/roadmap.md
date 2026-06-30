@@ -108,6 +108,12 @@
 **Status:** [x] Done
 **User Story:** As a maintainer, `dokima --release [patch|minor|major]` bumps the version, auto-generates a changelog from merged PRs grouped by conventional commit prefix, creates a git tag, and publishes a GitHub Release — all in one command. Validates clean tree, default branch, and git sync before releasing.
 
+### F026: Auto-Update Docs CLI Cache on Release
+**Priority:** P2
+**Dependencies:** F021, F024, dokima-docs repo
+**Status:** [ ] Pending
+**User Story:** Running `dokima --release` auto-updates the docs site's CLI reference cache. No manual `--help-json > scripts/cli-help.json` step needed.
+
 ---
 
 ## Phase 3: Distribution & Portability
