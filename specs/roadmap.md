@@ -111,7 +111,7 @@
 ### F026: Auto-Update Docs CLI Cache on Release
 **Priority:** P2
 **Dependencies:** F021, F024, dokima-docs repo
-**Status:** [ ] Pending
+**Status:** [~] In Progress
 **User Story:** Running `dokima --release` auto-updates the docs site's CLI reference cache. No manual `--help-json > scripts/cli-help.json` step needed.
 
 ---
