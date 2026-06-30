@@ -1,8 +1,9 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-30 00:56:25 (incremental | 80 files)
+## Generated: 2026-07-01 00:41:39 (incremental | 83 files)
 
 ## Tree
+├── .pipeline-status.json
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
 ├── MAINTAINERS.md  — Dokima — Maintainer's Reference
 ├── README.md  — Dokima
@@ -10,6 +11,7 @@
 ├── install.sh  — Dokima Installer — one-command setup
 ├── pipeline.py  — Set by conftest._load_panel() — see utils.py _IMPORTING_PANEL docstring (F022b).
 ├── roadmap.py  — Exports: parse_roadmap
+├── status.py  — Exports: TaskStatus, PhaseTiming, PipelineStatus
 ├── tasks.py  — Exports: WorktreeManager
 ├── utils.py  — shutil imported dynamically where needed (deploy_profile_skills)
 └── utils_debug.py  — shutil imported dynamically where needed (deploy_profile_skills)
@@ -63,6 +65,7 @@
 ├── test_f022_utils_complete.py  — Exports: test_utils_has_halt_and_revert, test_utils_has_archive_specs_for_feature
 ├── test_f023_self_healing.py  — Exports: _git_with_source_diff, test_lock_age_old_lock_with_live_pid_removed
 ├── test_f024_release.py  — Ensure the project root is on the path so we can import utils
+├── test_f025_dashboard.py  — Exports: TestPipelineStatus, TestSaveLoad
 ├── test_final_coverage.py  — Exports: _setup
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════

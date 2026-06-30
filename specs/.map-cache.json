@@ -1,6 +1,10 @@
 {
+  ".pipeline-status.json": {
+    "hash": "439fc0dfbb7991b126e752ca2b223542",
+    "desc": ""
+  },
   "AGENTS.md": {
-    "hash": "86a30a4c807bbb7baa0f202245b256bc",
+    "hash": "48a7af705829b8aa0325ae3eeb4e3808",
     "desc": "Dokima \u2014 Multi-Agent Orchestration Engine"
   },
   "MAINTAINERS.md": {
@@ -16,23 +20,27 @@
     "desc": "\u2500\u2500 Module-level globals (set by main()) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
   },
   "install.sh": {
-    "hash": "e4e5f7bccc855f364b6d29c2bb5cf391",
+    "hash": "25a6c3e4e7e33ef2ddc1e9a9c13b70dc",
     "desc": "Dokima Installer \u2014 one-command setup"
   },
   "pipeline.py": {
-    "hash": "9132626fd0840dbd84862c8259180297",
+    "hash": "60297acaaf175d2315c66eebf95983d6",
     "desc": "Set by conftest._load_panel() \u2014 see utils.py _IMPORTING_PANEL docstring (F022b)."
   },
   "roadmap.py": {
     "hash": "0e674ce502784c0031a1525a713dc44a",
     "desc": "Exports: parse_roadmap"
   },
+  "status.py": {
+    "hash": "bed92ed77b605d764ae28f4a94a2c07b",
+    "desc": "Exports: TaskStatus, PhaseTiming, PipelineStatus"
+  },
   "tasks.py": {
-    "hash": "181ee853ae78465fed39a4a5767260d0",
+    "hash": "8b653a9c1cd477939e965ea657fe7d8b",
     "desc": "Exports: WorktreeManager"
   },
   "utils.py": {
-    "hash": "05d89d15ba7dfa9d355300bbf70e0b38",
+    "hash": "6c7c26288a065f08e9fea34ca5db5eae",
     "desc": "shutil imported dynamically where needed (deploy_profile_skills)"
   },
   "utils_debug.py": {
@@ -196,8 +204,12 @@
     "desc": "Exports: _git_with_source_diff, test_lock_age_old_lock_with_live_pid_removed"
   },
   "tests/test_f024_release.py": {
-    "hash": "8c58174587a4a1d516057afb07eadcd2",
+    "hash": "98ce59477d868774fc111a2d4a6d99d5",
     "desc": "Ensure the project root is on the path so we can import utils"
+  },
+  "tests/test_f025_dashboard.py": {
+    "hash": "0a2035004d5dfca30a5d4ba0dd47f449",
+    "desc": "Exports: TestPipelineStatus, TestSaveLoad"
   },
   "tests/test_final_coverage.py": {
     "hash": "fce4946929107bbda29ff535a543a3ec",
@@ -224,7 +236,7 @@
     "desc": "Exports: test_make_status_entry_pending, test_make_status_entry_done_with_pr, test_make_status_entry_in_progress, test_commit_roadmap_update_dry, test_auto_repair_status_empty"
   },
   "tests/test_installer.py": {
-    "hash": "45fb799caccd3fbe0bc702ecde8ef0df",
+    "hash": "4258fe7dee1f0f15a80b03ad3c6684fc",
     "desc": "Exports: _make_fake_cmd, _make_fake_hermes, _make_git_repo"
   },
   "tests/test_lock_paths.py": {
