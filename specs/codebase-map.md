@@ -1,6 +1,6 @@
 ## Project: dokima
 ## Tech: detected at runtime
-## Generated: 2026-06-30 00:07:42 (incremental | 79 files)
+## Generated: 2026-06-30 00:56:25 (incremental | 80 files)
 
 ## Tree
 ├── AGENTS.md  — Dokima — Multi-Agent Orchestration Engine
@@ -61,7 +61,8 @@
 ├── test_f022_tasks.py  — Exports: test_tasks_module_importable, test_tasks_has_worktree_manager, test_tasks_has_task_lock, test_tasks_has_task_class, test_tasks_has_roadmap_feature
 ├── test_f022_utils.py  — Exports: test_slugify_simple, test_slugify_special_chars, test_slugify_short, test_slugify_long, test_slugify_empty
 ├── test_f022_utils_complete.py  — Exports: test_utils_has_halt_and_revert, test_utils_has_archive_specs_for_feature
-├── test_f023_self_healing.py  — Exports: test_lock_age_old_lock_with_live_pid_removed
+├── test_f023_self_healing.py  — Exports: _git_with_source_diff, test_lock_age_old_lock_with_live_pid_removed
+├── test_f024_release.py  — Ensure the project root is on the path so we can import utils
 ├── test_final_coverage.py  — Exports: _setup
 ├── test_final_edge.py  — Exports: _setup
 ├── test_fix_mode.py  — ═══════════════════════════════════════════════════════════════════
@@ -70,7 +71,7 @@
 ├── test_helpers.py  — Exports: test_make_status_entry_pending, test_make_status_entry_done_with_pr, test_make_status_entry_in_progress, test_commit_roadmap_update_dry, test_auto_repair_status_empty
 ├── test_installer.py  — Exports: _make_fake_cmd, _make_fake_hermes, _make_git_repo
 ├── test_lock_paths.py  — Exports: test_explicit_project_dir_lock, test_explicit_project_dir_stop, test_implicit_from_global, test_trailing_slash_normalized, test_no_project_dir_no_arg
-├── test_main_integration.py  — Exports: _make_safe_run_result, _setup_test_project, _mock_spawn
+├── test_main_integration.py  — Exports: _git_with_source_diff, _make_safe_run_result, _setup_test_project
 ├── test_parallel_robustness.py  — Reuse conftest's _load_panel to get a fresh dokima module
 ├── test_pick_next.py  — Exports: make_feat, test_empty_list, test_all_done, test_single_pending_no_deps, test_p0_beats_p1
 ├── test_pick_next_feature.py  — Helper to build RoadmapFeature objects for testing

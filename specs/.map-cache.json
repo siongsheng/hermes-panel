@@ -20,7 +20,7 @@
     "desc": "Dokima Installer \u2014 one-command setup"
   },
   "pipeline.py": {
-    "hash": "40a10a8186b3088015c1faa598d02c0b",
+    "hash": "9132626fd0840dbd84862c8259180297",
     "desc": "Set by conftest._load_panel() \u2014 see utils.py _IMPORTING_PANEL docstring (F022b)."
   },
   "roadmap.py": {
@@ -32,7 +32,7 @@
     "desc": "Exports: WorktreeManager"
   },
   "utils.py": {
-    "hash": "749c5eb478b8a08ffd0997117d6780b8",
+    "hash": "05d89d15ba7dfa9d355300bbf70e0b38",
     "desc": "shutil imported dynamically where needed (deploy_profile_skills)"
   },
   "utils_debug.py": {
@@ -124,7 +124,7 @@
     "desc": "Exports: _setup"
   },
   "tests/test_execution_mode_dispatch.py": {
-    "hash": "4cce0811274f5ca095f72ae4f25a8647",
+    "hash": "4582df7a29cd9a7f23976b519171306c",
     "desc": "Exports: _reset_called, _mock_run_phase2_coder, _mock_run_phase2_coder_capture, _mock_run_parallel_coders, _mock_halt_and_revert"
   },
   "tests/test_extract_agent.py": {
@@ -192,8 +192,12 @@
     "desc": "Exports: test_utils_has_halt_and_revert, test_utils_has_archive_specs_for_feature"
   },
   "tests/test_f023_self_healing.py": {
-    "hash": "833afff1c48d581078129b29ed1fb601",
-    "desc": "Exports: test_lock_age_old_lock_with_live_pid_removed"
+    "hash": "178c3a8112b9dc53411194108d6bcfe6",
+    "desc": "Exports: _git_with_source_diff, test_lock_age_old_lock_with_live_pid_removed"
+  },
+  "tests/test_f024_release.py": {
+    "hash": "8c58174587a4a1d516057afb07eadcd2",
+    "desc": "Ensure the project root is on the path so we can import utils"
   },
   "tests/test_final_coverage.py": {
     "hash": "fce4946929107bbda29ff535a543a3ec",
@@ -228,8 +232,8 @@
     "desc": "Exports: test_explicit_project_dir_lock, test_explicit_project_dir_stop, test_implicit_from_global, test_trailing_slash_normalized, test_no_project_dir_no_arg"
   },
   "tests/test_main_integration.py": {
-    "hash": "d126295e2d5ec37c3f48256f597b7d03",
-    "desc": "Exports: _make_safe_run_result, _setup_test_project, _mock_spawn"
+    "hash": "94f4d320ac216a922334464de73559d8",
+    "desc": "Exports: _git_with_source_diff, _make_safe_run_result, _setup_test_project"
   },
   "tests/test_parallel_robustness.py": {
     "hash": "e463e915ca81c88e63cbd96f5d1a61ac",
@@ -256,7 +260,7 @@
     "desc": "Exports: _fresh_panel, TestEnsureProfiles"
   },
   "tests/test_rich_pipeline.py": {
-    "hash": "33cab01aad7b53f6c6adf990b7177fa7",
+    "hash": "e865ddf31da4c36e4afeba0eb29c5fce",
     "desc": "Exports: _setup_project"
   },
   "tests/test_roadmap_parse.py": {
@@ -300,7 +304,7 @@
     "desc": "\u2500\u2500 Bug 1: Spec archive \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
   },
   "tests/test_unit_helpers.py": {
-    "hash": "f2748c1f11c4407187fb54db42d6509e",
+    "hash": "a988df5e5f6772c94566671b42f73035",
     "desc": "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550"
   },
   "tests/htmlcov/coverage_html_cb_dd2e7eb5.js": {

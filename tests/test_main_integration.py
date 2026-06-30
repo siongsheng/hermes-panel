@@ -13,6 +13,13 @@ os.environ.setdefault("PANEL_MAX_RETRIES", "0")
 os.environ.setdefault("PANEL_SKIP_HUMAN_GATE", "1")
 
 
+def _git_with_source_diff(*args):
+    """Return source diff when git diff --stat is called, else empty."""
+    if args and args[0] == "diff" and any("--stat" in str(a) for a in args):
+        return (" a.py  | 1 +\n 1 file changed, 1 insertion(+)", "", 0)
+    return ("", "", 0)
+
+
 def _make_safe_run_result(returncode=0, stdout=""):
     """Create a mock subprocess.CompletedProcess for _safe_run patches."""
     import subprocess as _sp
@@ -213,14 +220,14 @@ class TestVetPhase:
         panel = _load()
         project_dir = _setup_test_project(panel, str(tmpdir))
 
-        with patch.object(panel, 'git', return_value=("", "", 0)):
+        with patch.object(panel, 'git', side_effect=_git_with_source_diff):
             with patch.object(panel, 'gh', return_value=("https://pr.url", "", 0)):
                 with patch.object(panel._agent, 'spawn_agent', return_value="ok"):
                     with patch.object(panel, 'halt_and_revert'):
                         result = panel.run_phase3_vet(
                             feature="Test Feature",
                             branch="feat/test-feat",
-                            pr_sections="## What Changed\nTest",
+                            pr_sections="## What Changed\\nTest",
                             impact="MEDIUM",
                             spec_path=""
                         )

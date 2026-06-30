@@ -14,7 +14,6 @@
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
 - **F006: Error Recovery & Resume** — in progress since 2026-06-28 23:56, branch `feat/f006-error-recovery--resume` [panel]
-- **F024: Auto-Release — Tagging, Changelog, and GitHub Releases** — in progress since 2026-06-30 00:56, branch `feat/f024-auto-release--tagging-changelog-and-e4a08de0` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
@@ -37,3 +36,4 @@
 - **F016: Config Validation (`dokima doctor`)** — done 2026-06-29 12:12 [auto-repair]
 - **F017: Dokima-as-Service** — done 2026-06-29 12:12 [auto-repair]
 - **F018: Multi-Repo Orchestration** — done 2026-06-29 12:12 [auto-repair]
+- **F024: Auto-Release — Tagging, Changelog, and GitHub Releases** — done 2026-06-30 01:08, PR [#53](https://github.com/siongsheng/dokima/pull/53) [panel]

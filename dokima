@@ -26,6 +26,7 @@ from utils import (slugify, git, gh, _safe_run, _sanitize_prompt, _validate_proj
                    validate_checkpoint, acquire_lock, _cleanup_lock, _signal_handler,
                    try_auto_merge, _supplement_pr_sections, _detect_default_branch,
                    _set_gh_token, show_help, show_help_json, check_upgrade, _version_newer,
+                   do_release,
                    _parse_status_md, _make_status_entry, update_status_md,
                    _check_pid, _verify_pid_owner, _get_lock_state,
                    handle_status, handle_stop, handle_kill, handle_list_crons,
@@ -101,6 +102,9 @@ def main():
     is_version = False
     is_upgrade = False
     is_list_crons = False
+    is_release = False
+    release_bump = None
+    is_dry_run = False
     is_fix = False
     is_map = False
     map_full = False
@@ -119,6 +123,12 @@ def main():
     skip_next = False
     for arg in sys.argv[1:]:
         if skip_next:
+            if is_release and release_bump is None:
+                # The arg after --release is the bump type
+                release_bump = arg
+                if release_bump not in ("patch", "minor", "major"):
+                    print(f"  ⚠ Invalid release bump: {release_bump!r} (expected patch, minor, or major)", flush=True)
+                    sys.exit(1)
             skip_next = False
             continue
         if arg in ("--help", "-h"):
@@ -154,6 +164,13 @@ def main():
             continue
         if arg == "--list-crons":
             is_list_crons = True
+            continue
+        if arg == "--release":
+            is_release = True
+            skip_next = True
+            continue
+        if arg == "--dry-run":
+            is_dry_run = True
             continue
         if arg == "--answers":
             skip_next = True
@@ -291,7 +308,7 @@ def main():
                 PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
             PANEL_FEATURE = feature
     else:
-        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade:
+        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade and not is_release:
             print("ERROR: Feature description required")
             sys.exit(1)
         feature = filtered_argv[0] if filtered_argv else ""
@@ -329,6 +346,13 @@ def main():
         handle_status(PROJECT_DIR)
     if is_list_crons:
         handle_list_crons()
+    if is_release:
+        if release_bump is None:
+            print("ERROR: --release requires a bump type (patch, minor, or major)", flush=True)
+            print("Usage: dokima --release <patch|minor|major> [--dry-run] [project_dir]", flush=True)
+            sys.exit(1)
+        do_release(release_bump, os.getcwd() if is_release and len(filtered_argv) == 0 else PROJECT_DIR, dry_run=is_dry_run)
+        return
     if is_map:
         generate_codebase_map(PROJECT_DIR, full=map_full)
         return

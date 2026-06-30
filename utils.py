@@ -68,6 +68,7 @@ CONTROL:
   dokima --list-crons                    List all scheduled pipelines
   dokima --version                       Print version and exit
   dokima --upgrade                       Check for newer version and show upgrade instructions
+  dokima --release [patch|minor|major] [--dry-run] [dir]  Bump version, tag, changelog, and GitHub Release
 
 FLAGS:
   --interactive        Show human gate (with --next/--continuous)
@@ -109,6 +110,7 @@ CLI_METADATA = {
         {"name": "--list-crons", "syntax": "dokima --list-crons", "description": "List all scheduled pipelines"},
         {"name": "--version", "syntax": "dokima --version", "description": "Print version and exit"},
         {"name": "--upgrade", "syntax": "dokima --upgrade", "description": "Check for newer version and show upgrade instructions"},
+        {"name": "--release", "syntax": "dokima --release <patch|minor|major> [--dry-run] [project_dir]", "description": "Bump version, generate changelog, tag, and publish GitHub Release"},
     ],
     "flags": [
         {"flag": "--interactive", "args": None, "env_var": None, "description": "Show human gate (with --next/--continuous)"},
@@ -2021,6 +2023,217 @@ def archive_specs_for_feature(spec_path, branch, pr_url):
     except Exception:
         pass
     return False
+
+# ── F024: Auto-Release ───────────────────────────
+
+def _bump_version(current, bump):
+    """Bump a semver string (X.Y.Z) by patch/minor/major.
+    Returns the new version string. Raises ValueError on invalid input."""
+    if bump not in ("patch", "minor", "major"):
+        raise ValueError(f"Invalid bump type: {bump!r} (expected patch, minor, or major)")
+    try:
+        parts = [int(x) for x in current.split(".")]
+    except (ValueError, AttributeError):
+        raise ValueError(f"Invalid version string: {current!r}")
+    if len(parts) != 3:
+        raise ValueError(f"Invalid version string: {current!r} (expected X.Y.Z)")
+
+    x, y, z = parts
+    if bump == "patch":
+        z += 1
+    elif bump == "minor":
+        y += 1
+        z = 0
+    elif bump == "major":
+        x += 1
+        y = 0
+        z = 0
+    return f"{x}.{y}.{z}"
+
+
+def _prune_old_tags(keep_count=10):
+    """Prune old vX.Y.Z tags beyond keep_count from origin.
+    Keeps the newest keep_count release tags, deletes the rest via
+    git push origin --delete. Non-vX.Y.Z tags are ignored.
+    Warns for each deleted tag. Silent no-op if ≤keep_count tags."""
+    stdout, stderr, rc = git("tag", "--sort=-v:refname")
+    if rc != 0 or not stdout.strip():
+        return
+
+    # Filter to vX.Y.Z tags only (already sorted newest-first)
+    semver_pattern = re.compile(r'^v\d+\.\d+\.\d+$')
+    version_tags = [t.strip() for t in stdout.split("\n") if semver_pattern.match(t.strip())]
+
+    # Keep the first keep_count, delete the rest
+    if len(version_tags) <= keep_count:
+        return
+
+    to_delete = version_tags[keep_count:]
+    for tag in to_delete:
+        print(f"  Pruning old tag: {tag}", flush=True)
+        _, stderr, rc = git("push", "origin", "--delete", tag)
+        if rc != 0:
+            print(f"  ⚠ Failed to delete tag {tag}: {stderr}", flush=True)
+            # Continue with remaining tags even if one fails
+
+
+def do_release(bump, project_dir, dry_run=False):
+    """Bump version, tag, generate changelog, and publish GitHub Release.
+
+    Args:
+        bump: 'patch', 'minor', or 'major'
+        project_dir: Path to the git repository
+        dry_run: If True, print the plan and exit without making changes
+
+    Exits with code 1 on any precondition failure.
+    """
+    import shutil, tempfile
+
+    # 1. Validate bump type
+    if bump not in ("patch", "minor", "major"):
+        print(f"ERROR: Invalid bump type: {bump!r} (expected patch, minor, or major)", flush=True)
+        sys.exit(1)
+
+    # 2. Validate project_dir is a git repo
+    if not _validate_project_dir(project_dir):
+        print(f"ERROR: {project_dir} is not a valid git repository", flush=True)
+        sys.exit(1)
+
+    # 3. Detect default branch
+    default_branch = _detect_default_branch(project_dir)
+
+    # 4. Check we're on the default branch
+    stdout, _, rc = git("-C", project_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    current_branch = stdout.strip() if rc == 0 else ""
+    if current_branch != default_branch:
+        print(f"ERROR: Must be on {default_branch} branch to release (currently on {current_branch or 'detached HEAD'})", flush=True)
+        sys.exit(1)
+
+    # 5. Validate clean working tree
+    _, _, rc = git("-C", project_dir, "diff-index", "--quiet", "HEAD", "--")
+    if rc != 0:
+        print("ERROR: Working tree is not clean. Commit or stash changes before releasing.", flush=True)
+        # Show git status for context
+        stdout, _, _ = git("-C", project_dir, "status", "--short")
+        if stdout:
+            print(stdout)
+        sys.exit(1)
+
+    # 6. Validate up to date with origin
+    print("  Fetching origin...", flush=True)
+    _, _, rc = git("-C", project_dir, "fetch", "origin")
+    if rc != 0:
+        print("ERROR: Could not reach origin", flush=True)
+        sys.exit(1)
+
+    behind, _, rc = git("-C", project_dir, "rev-list", f"HEAD..origin/{default_branch}", "--count")
+    if rc == 0 and behind.strip() and behind.strip() != "0":
+        count = behind.strip()
+        print(f"ERROR: Behind origin/{default_branch} by {count} commit(s). Pull latest changes first.", flush=True)
+        sys.exit(1)
+
+    # 7. Read current VERSION and compute new version
+    version_path = os.path.join(project_dir, "VERSION")
+    if not os.path.exists(version_path):
+        print(f"ERROR: VERSION file not found at {version_path}", flush=True)
+        sys.exit(1)
+
+    with open(version_path) as f:
+        current_version = f.read().strip()
+    if not current_version:
+        print("ERROR: VERSION file is empty", flush=True)
+        sys.exit(1)
+
+    try:
+        new_version = _bump_version(current_version, bump)
+    except ValueError as e:
+        print(f"ERROR: {e}", flush=True)
+        sys.exit(1)
+
+    tag_name = f"v{new_version}"
+
+    # 8. Dry run: print plan and exit
+    if dry_run:
+        print(f"  [DRY RUN] Would bump: {current_version} → {new_version} ({bump})")
+        print(f"  [DRY RUN] Would commit: chore: bump version to {tag_name}")
+        print(f"  [DRY RUN] Would tag: {tag_name}")
+        print(f"  [DRY RUN] Would push to origin/{default_branch}")
+        print(f"  [DRY RUN] Would create GitHub Release: {tag_name}")
+        print(f"  [DRY RUN] Command: gh release create {tag_name} --generate-notes --title \"{tag_name}\" --target {default_branch}")
+        return
+
+    # 9. Write new VERSION atomically (temp + rename)
+    print(f"  Bumping version: {current_version} → {new_version} ({bump})", flush=True)
+    fd, tmp_path = tempfile.mkstemp(dir=project_dir, prefix=".VERSION.")
+    try:
+        os.write(fd, f"{new_version}\n".encode())
+        os.close(fd)
+        os.replace(tmp_path, version_path)
+    except Exception:
+        os.close(fd)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    # 10. git add VERSION
+    git("-C", project_dir, "add", "VERSION")
+
+    # 11. git commit
+    commit_msg = f"chore: bump version to {tag_name}"
+    stdout, stderr, rc = git("-C", project_dir, "commit", "-m", commit_msg)
+    if rc != 0:
+        print(f"ERROR: Commit failed: {stderr}", flush=True)
+        sys.exit(1)
+
+    # 12. git tag
+    stdout, stderr, rc = git("-C", project_dir, "tag", "-a", tag_name, "-m", f"Release {tag_name}")
+    if rc != 0:
+        if "already exists" in (stdout + stderr):
+            print(f"ERROR: Tag {tag_name} already exists", flush=True)
+        else:
+            print(f"ERROR: Tag creation failed: {stderr}", flush=True)
+        sys.exit(1)
+
+    # 13. Prune old tags
+    _prune_old_tags()
+
+    # 14. Push branch
+    print(f"  Pushing to origin/{default_branch}...", flush=True)
+    stdout, stderr, rc = git("-C", project_dir, "push", "origin", default_branch)
+    if rc != 0:
+        print(f"ERROR: Push failed: {stderr}", flush=True)
+        sys.exit(1)
+
+    # 15. Push tag
+    print(f"  Pushing tag {tag_name}...", flush=True)
+    stdout, stderr, rc = git("-C", project_dir, "push", "origin", tag_name)
+    if rc != 0:
+        print(f"ERROR: Tag push failed: {stderr}", flush=True)
+        sys.exit(1)
+
+    # 16. Create GitHub Release
+    print(f"  Creating GitHub Release {tag_name}...", flush=True)
+    stdout, stderr, rc = gh(
+        "release", "create", tag_name,
+        "--generate-notes",
+        "--title", tag_name,
+        "--target", default_branch
+    )
+    if rc != 0:
+        print(f"ERROR: GitHub Release creation failed: {stderr}", flush=True)
+        sys.exit(1)
+
+    # 17. Print summary
+    print(f"\n  ✓ Released dokima {tag_name}")
+    if stdout:
+        # gh release create outputs the release URL
+        for line in stdout.split("\n"):
+            if line.startswith("https://"):
+                print(f"  Release: {line}")
+                break
+
 
 # Module-level original references for delegation checks (F022 modular refactor)
 _ENSURE_PROFILES_ORIGINAL = ensure_profiles

@@ -46,8 +46,17 @@ def _mock_run_parallel_coders(tasks, waves, project_dir, spec_path, tasks_extrac
     return True
 
 
-def _mock_halt_and_revert(msg, phase, branch):
+def _mock_halt_and_revert(msg, phase, branch, **kwargs):
     raise RuntimeError(f"halt_and_revert called: {msg}")
+
+
+# Git mock that returns source-file diff for vet phase diff check,
+# so the "no source code changes" guard doesn't trigger halt_and_revert.
+def _git_src_side_effect(*args):
+    """Return source diff when git diff --stat is called, else empty."""
+    if args and args[0] == "diff" and any("--stat" in str(a) for a in args):
+        return (" a.py  | 1 +\n 1 file changed, 1 insertion(+)", "", 0)
+    return ("", "", 0)
 
 
 def _mock_merge_worktree_branches(branch, tasks, wtm, project_dir):
@@ -132,7 +141,7 @@ class TestExecutionModeDispatch:
 
         strat = _make_strat_result(panel, parallel_enabled=True, spec_has_tasks=True)
         with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
-             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "git", side_effect=_git_src_side_effect), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
              patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
@@ -208,7 +217,7 @@ Test impact.
         strat["spec"] = spec
 
         with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
-             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "git", side_effect=_git_src_side_effect), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
              patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
@@ -266,7 +275,7 @@ Test impact.
         strat["spec"] = spec
 
         with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
-             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "git", side_effect=_git_src_side_effect), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
              patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
@@ -324,7 +333,7 @@ Test impact.
         strat["spec"] = spec
 
         with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
-             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "git", side_effect=_git_src_side_effect), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
              patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
@@ -364,7 +373,7 @@ Test impact.
         strat = _make_strat_result(panel, parallel_enabled=True, spec_has_tasks=False)
 
         with patch.object(panel._pipeline, "run_phase1_strategist", return_value=strat), \
-             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "git", side_effect=_git_src_side_effect), \
              patch.object(panel, "gh", return_value=("", "", 0)), \
              patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
@@ -434,7 +443,7 @@ class TestDepthMatrixCells:
         # the orchestration gate computes depth from the spec.
 
         with patch.object(panel._agent, "spawn_agent", return_value=spec_text), \
-             patch.object(panel, "git", return_value=("", "", 0)), \
+             patch.object(panel, "git", side_effect=_git_src_side_effect), \
              patch.object(panel._agent, "call_agent", return_value={"content": "M", "tokens": 1}), \
              patch.object(panel, "load_key", return_value="fk"), \
              patch.object(panel, "load_github_token", return_value="ft"), \
