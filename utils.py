@@ -1180,17 +1180,39 @@ def _get_lock_state(project_dir):
     return True, pid, info
 
 def handle_status(project_dir):
-    """--status handler."""
+    """--status handler. Shows live dashboard if pipeline is running."""
+    # Try live dashboard first (F025)
+    try:
+        from status import load_status, render
+    except ImportError:
+        load_status = None
+    if load_status:
+        s = load_status(project_dir)
+        if s and s.current_phase != "init":
+            print(render(s))
+            # If --watch flag, poll every 2s
+            if "--watch" in sys.argv:
+                import time as _t
+                try:
+                    while True:
+                        _t.sleep(2)
+                        s = load_status(project_dir)
+                        if s:
+                            print("\033[2J\033[H" + render(s))  # clear screen
+                except KeyboardInterrupt:
+                    print("\n  (watch stopped)")
+            return
+
+    # Fallback: simple lock-based status
     running, pid, info = _get_lock_state(project_dir)
     print(f"── Panel Status: {os.path.basename(os.path.abspath(project_dir))} ──")
     if running:
-        # Compute elapsed
         elapsed = ""
         try:
             import time as _t
             st = os.stat(f"/proc/{pid}").st_ctime
             mins = int((_t.time() - st) // 60)
-            elapsed = f"{mins}min" if mins < 120 else f"{mins//60}h{min%60}m"
+            elapsed = f"{mins}min" if mins < 120 else f"{mins//60}h{mins%60}m"
         except Exception:
             elapsed = "?"
         print(f"State:       RUNNING (PID {pid}, {elapsed} elapsed)")

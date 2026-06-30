@@ -42,6 +42,21 @@ from roadmap import (RoadmapFeature, parse_roadmap, pick_next_feature,
                      update_roadmap_status, commit_roadmap_update,
                      auto_repair_status, run_add_to_roadmap,
                      run_next_setup, run_init)
+from status import (PipelineStatus, save_status, load_status,
+                    update_phase, add_task, update_task)
+
+def _status_update(**kwargs):
+    """Load status, apply updates, save. Best-effort — never crashes pipeline."""
+    try:
+        s = load_status(PROJECT_DIR)
+        if s is None:
+            s = PipelineStatus()
+        for k, v in kwargs.items():
+            if hasattr(s, k):
+                setattr(s, k, v)
+        save_status(s, PROJECT_DIR)
+    except Exception:
+        pass
 
 def run_post_pipeline(feature, is_next, is_continuous, continue_loop, pr_url, verdict, impact, branch, spec_path, strat_output, mode):
     """Post-pipeline: report, roadmap update, auto-merge. Returns continue_loop."""
@@ -1849,6 +1864,10 @@ Output NOTHING ELSE."""
     branch = f"feat/{slugify(feature)}"
     print(f"  Branch: {branch}", flush=True)
 
+    # Update live status
+    _status_update(branch=branch, depth=depth, risk=impact, mode=mode,
+                   feature=feature, project=PROJECT_DIR, log_path=OUTPUT_LOG)
+
     # Human gate
     if sys.stdin.isatty() and not SKIP_HUMAN_GATE:
         print(f"\n{'─' * 55}", flush=True)
@@ -1974,6 +1993,9 @@ def run_pipeline(feature, is_next, is_continuous, user_answers_prefill, resume=N
     # Sanitize feature description before it enters any agent prompt
     feature = _sanitize_prompt(feature)
     feature_slug = slugify(feature)
+
+    # ── Live status dashboard ──
+    _status_update(feature=feature, project=PROJECT_DIR, log_path=OUTPUT_LOG)
 
     # ── Resume / Checkpoint Handling ──
     phases_completed = []
