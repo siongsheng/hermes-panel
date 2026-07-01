@@ -418,3 +418,142 @@ class TestDoRelease:
                 assert False, "Expected SystemExit"
             except SystemExit as e:
                 assert e.code == 1
+
+
+class TestUpdateDocsCache:
+    """Tests for _update_docs_cache() — F026: Auto-Update Docs CLI Cache on Release."""
+
+    def test_helper_function_exists(self):
+        """_update_docs_cache is importable from utils."""
+        assert hasattr(utils, "_update_docs_cache"), \
+            "Expected _update_docs_cache to be defined in utils"
+
+    def test_helper_clone_fails_nonblocking(self):
+        """If gh repo clone fails, _update_docs_cache returns without error."""
+        import subprocess as sp
+
+        def fake_run(*args, **kwargs):
+            cmd = args[0] if args else kwargs.get("args", [])
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
+            if "gh" in cmd_str and "clone" in cmd_str:
+                result = sp.CompletedProcess(cmd, returncode=1)
+                result.stdout = ""
+                result.stderr = "fatal: repository not found"
+                return result
+            return sp.CompletedProcess(cmd, returncode=0)
+
+        with patch("subprocess.run", side_effect=fake_run), \
+             patch("shutil.rmtree"):
+            # Should not raise
+            utils._update_docs_cache("1.2.5")
+
+    def test_helper_push_fails_nonblocking(self):
+        """If git push to docs fails, _update_docs_cache continues without error."""
+        import subprocess as sp
+        call_seq = []
+
+        def fake_run(*args, **kwargs):
+            cmd = args[0] if args else kwargs.get("args", [])
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
+            call_seq.append(cmd_str)
+
+            if "gh" in cmd_str and "clone" in cmd_str:
+                return sp.CompletedProcess(cmd, returncode=0)
+            if "push" in cmd_str:
+                result = sp.CompletedProcess(cmd, returncode=1)
+                result.stdout = ""
+                result.stderr = "error: failed to push"
+                return result
+            result = sp.CompletedProcess(cmd, returncode=0)
+            result.stdout = '{"tool":"dokima","version":"1.2.5"}'
+            result.stderr = ""
+            return result
+
+        with patch("subprocess.run", side_effect=fake_run), \
+             patch("builtins.open", create=True), \
+             patch("shutil.rmtree"), \
+             patch("os.makedirs"):
+            # Should not raise — non-blocking
+            utils._update_docs_cache("1.2.5")
+
+            # Verify push was attempted
+            assert any("push" in c for c in call_seq), \
+                f"Expected git push to be attempted, got calls: {call_seq}"
+
+    def test_helper_success_runs_expected_commands(self):
+        """_update_docs_cache clones, generates help-json, commits, and pushes."""
+        import subprocess as sp
+        call_seq = []
+
+        def fake_run(*args, **kwargs):
+            cmd = args[0] if args else kwargs.get("args", [])
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
+            call_seq.append(cmd_str)
+            result = sp.CompletedProcess(cmd, returncode=0)
+            result.stdout = '{"tool":"dokima","version":"1.2.5"}'
+            result.stderr = ""
+            return result
+
+        with patch("subprocess.run", side_effect=fake_run), \
+             patch("builtins.open", create=True), \
+             patch("shutil.rmtree"), \
+             patch("os.makedirs"):
+            utils._update_docs_cache("1.2.5")
+
+            # Verify clone was first
+            assert any("gh" in c and "clone" in c and "dokima-docs" in c
+                       for c in call_seq), f"No clone call in: {call_seq}"
+
+            # Verify help-json was generated
+            assert any("--help-json" in c for c in call_seq), \
+                f"No --help-json call in: {call_seq}"
+
+            # Verify git add + commit + push
+            assert any("add" in c and "cli-help.json" in c for c in call_seq), \
+                f"No git add in: {call_seq}"
+            assert any("commit" in c for c in call_seq), \
+                f"No git commit in: {call_seq}"
+            assert any("push" in c for c in call_seq), \
+                f"No git push in: {call_seq}"
+
+    def test_do_release_dry_run_prints_docs_message(self):
+        """do_release with dry_run=True prints docs cache dry-run message."""
+        from io import StringIO
+
+        git_calls = []
+
+        def fake_git(*args):
+            git_calls.append(args)
+            # git is always called as git("-C", project_dir, subcommand, ...)
+            subcmd = args[2] if len(args) > 2 else args[0]
+            if subcmd == "diff-index":
+                return ("", "", 0)
+            if subcmd == "fetch":
+                return ("", "", 0)
+            if subcmd == "rev-list":
+                return ("", "", 0)
+            if subcmd == "rev-parse":
+                return ("main", "", 0)  # On default branch
+            return ("", "", 0)
+
+        def fake_gh(*args):
+            return ("", "", 0)
+
+        mock_stdout = StringIO()
+        # Reset idempotency guard from any prior test
+        if hasattr(utils.do_release, '_called'):
+            del utils.do_release._called
+        with patch.object(utils, "git", side_effect=fake_git), \
+             patch.object(utils, "gh", side_effect=fake_gh), \
+             patch.object(utils, "_detect_default_branch", return_value="main"), \
+             patch.object(utils, "_validate_project_dir", return_value=True), \
+             patch("builtins.open", create=True) as mock_open, \
+             patch("os.path.exists", return_value=True), \
+             patch.object(utils, "VERSION", "1.2.1"), \
+             patch.object(utils, "PROJECT_DIR", "/tmp/test"), \
+             patch("sys.stdout", mock_stdout):
+            mock_open.return_value.__enter__.return_value.read.return_value = "1.2.1\n"
+            utils.do_release("patch", "/tmp/test", dry_run=True)
+            output = mock_stdout.getvalue()
+            assert "[DRY RUN] Would update docs cache" in output, \
+                f"Expected docs dry-run message, got: {output}"
