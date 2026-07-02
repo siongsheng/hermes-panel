@@ -157,7 +157,7 @@ def test_fix_flag_dispatches_to_run_fix_mode(panel, tmpdir):
     old_cwd = os.getcwd
     run_fix_args = []
     try:
-        sys.argv = ['dokima', '--fix', project_dir]
+        sys.argv = ['dokima', 'fix', project_dir]
 
         def mock_run_fix(**kwargs):
             run_fix_args.append(kwargs.get('project_dir', ''))
@@ -193,7 +193,7 @@ def test_fix_mode_skips_auto_archive(panel, tmpdir):
     old_argv = sys.argv
     archive_called = [False]
     try:
-        sys.argv = ['dokima', '--fix', project_dir]
+        sys.argv = ['dokima', 'fix', project_dir]
 
         # Track if auto-archive block runs
         with patch.object(panel, 'acquire_lock', return_value=(None, None)):
@@ -223,7 +223,7 @@ def test_fix_answers_warning(panel):
     old_argv = sys.argv
     captured = []
     try:
-        sys.argv = ['dokima', '--fix', '--answers', '/nonexistent/answers.json']
+        sys.argv = ['dokima', 'fix']  # --answers not on fix subcommand
         with patch.object(panel, 'acquire_lock', return_value=(None, None)):
             with patch.object(panel._pipeline, 'run_fix_mode'):
                 with patch.object(panel, 'load_key', return_value="test-key"):

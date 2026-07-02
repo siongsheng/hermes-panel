@@ -82,153 +82,179 @@ from utils import HELP_TEXT
 
 def main():
     global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE, DEFAULT_BRANCH, lock_fd, SKIP_AUTOFIX, FORCE_FULL, SKIP_HUMAN_GATE, max_parallel_override, FALLBACK_MODELS, RESUME
-    import shutil
-    if len(sys.argv) < 2:
-        print("Usage: dokima [--next|--continuous|--fix] [--fix-all] [--skip-autofix] [--force-full] [--skip-auto-archive] [--skip-human-gate] [--resume|--no-resume] [--max-parallel=N] [--interactive] [--answers <json>] 'Feature' [dir]")
-        print("  dokima --next [project_dir]             # one feature, manual merge")
-        print("  dokima --continuous [project_dir]       # full sprint, auto-merge, loop")
-        print("  dokima init 'description' [project_dir]")
-        sys.exit(1)
+    import argparse, shutil
 
-    # ── FLAG SCANNING ──
-    is_next = False
-    is_continuous = False
-    is_interactive = False
+    # ── Pre-check: top-level flags that don't require a subcommand ──
+    # These must be handled BEFORE argparse because subparsers.required=True
+    # demands a subcommand. We pre-scan for these and dispatch early.
     is_help = False
     is_help_json = False
-    is_stop = False
-    is_kill = False
-    is_status = False
-    is_version = False
-    is_upgrade = False
-    is_list_crons = False
-    is_release = False
-    release_bump = None
-    is_dry_run = False
-    is_fix = False
     is_map = False
     map_full = False
-    is_add = False
-    add_priority = None
-    # --fix mode toggles (flags with env var fallbacks)
-    fix_all = False
-    skip_autofix = False
-    force_full = False
-    skip_auto_archive = False
-    skip_human_gate = False
-    max_parallel_override = None
-    feature = ""
-    user_answers_prefill = None
-    filtered_argv = []
-    skip_next = False
-    for arg in sys.argv[1:]:
-        if skip_next:
-            if is_release and release_bump is None:
-                # The arg after --release is the bump type
-                release_bump = arg
-                if release_bump not in ("patch", "minor", "major"):
-                    print(f"  ⚠ Invalid release bump: {release_bump!r} (expected patch, minor, or major)", flush=True)
-                    sys.exit(1)
-            skip_next = False
-            continue
-        if arg in ("--help", "-h"):
-            is_help = True
-            continue
-        if arg == "--help-json":
-            is_help_json = True
-            continue
-        if arg in ("--version", "-v"):
-            is_version = True
-            continue
-        if arg == "--upgrade":
-            is_upgrade = True
-            continue
-        if arg == "--next":
-            is_next = True
-            continue
-        if arg == "--continuous":
-            is_continuous = True
-            is_next = True
-            continue
-        if arg == "--interactive":
-            is_interactive = True
-            continue
-        if arg == "--stop":
-            is_stop = True
-            continue
-        if arg == "--kill":
-            is_kill = True
-            continue
-        if arg == "--status":
-            is_status = True
-            continue
-        if arg == "--list-crons":
-            is_list_crons = True
-            continue
-        if arg == "--release":
-            is_release = True
-            skip_next = True
-            continue
-        if arg == "--dry-run":
-            is_dry_run = True
-            continue
-        if arg == "--answers":
-            skip_next = True
-            continue
-        if arg == "--fix":
-            is_fix = True
-            continue
-        if arg == "--map":
-            is_map = True
-            continue
-        if arg == "--map-full":
-            is_map = True
-            map_full = True
-            continue
-        if arg == "--add":
-            is_add = True
-            continue
-        if arg.startswith("--priority="):
-            add_priority = arg.split("=", 1)[1].upper()
-            if add_priority not in ("P0", "P1", "P2", "P3"):
-                print(f"  ⚠ Invalid --priority value: {add_priority} (use P0, P1, P2, or P3)", flush=True)
-                add_priority = None
-            continue
-        if arg == "--fix-all":
-            fix_all = True
-            is_fix = True
-            continue
-        if arg == "--skip-autofix":
-            skip_autofix = True
-            SKIP_AUTOFIX = True
-            continue
-        if arg == "--force-full":
-            force_full = True
-            FORCE_FULL = True
-            continue
-        if arg == "--skip-auto-archive":
-            skip_auto_archive = True
-            continue
-        if arg == "--skip-human-gate":
-            skip_human_gate = True
-            SKIP_HUMAN_GATE = True
-            continue
-        if arg == "--resume":
-            RESUME = True
-            continue
-        if arg == "--no-resume":
-            RESUME = False
-            continue
-        if arg.startswith("--max-parallel="):
-            try:
-                max_parallel_override = int(arg.split("=", 1)[1])
-            except ValueError:
-                print(f"  ⚠ Invalid --max-parallel value: {arg}", flush=True)
-            continue
-        if arg == "--base-branch":
-            skip_next = True
-            continue
-        filtered_argv.append(arg)
+    flat_argv = set(sys.argv[1:])
+    if '--help-json' in flat_argv:
+        is_help_json = True
+    if '-h' in flat_argv or '--help' in flat_argv:
+        is_help = True
+    if '--map' in flat_argv:
+        is_map = True
+    if '--map-full' in flat_argv:
+        is_map = True
+        map_full = True
+
+    # ── argparse subparser setup (for subcommands only) ──
+    parser = argparse.ArgumentParser(prog='dokima', add_help=False)
+    # We still register these so argparse doesn't choke, but they're
+    # pre-handled above so their values are ignored.
+    parser.add_argument('-h', '--help', action='store_true', dest='_show_help')
+    parser.add_argument('--help-json', action='store_true', dest='_show_help_json')
+    parser.add_argument('--map', action='store_true', dest='_show_map')
+    parser.add_argument('--map-full', action='store_true', dest='_show_map_full')
+
+    subparsers = parser.add_subparsers(dest='command')
+    subparsers.required = False  # Allow --help/--help-json without subcommand
+
+    # ── add ──
+    add_p = subparsers.add_parser('add', add_help=False)
+    add_p.add_argument('feature_text', nargs='?', default='')
+    add_p.add_argument('--priority', choices=['P0', 'P1', 'P2', 'P3'], default=None)
+    add_p.add_argument('project_dir', nargs='?')
+
+    # ── next ──
+    next_p = subparsers.add_parser('next', add_help=False)
+    next_p.add_argument('--continuous', action='store_true')
+    next_p.add_argument('--interactive', action='store_true')
+    next_p.add_argument('--force-full', action='store_true')
+    next_p.add_argument('--skip-autofix', action='store_true')
+    next_p.add_argument('--skip-auto-archive', action='store_true')
+    next_p.add_argument('--skip-human-gate', action='store_true')
+    next_p.add_argument('--resume', action='store_true', dest='resume_flag')
+    next_p.add_argument('--no-resume', action='store_true', dest='no_resume_flag')
+    next_p.add_argument('--max-parallel', type=int, default=None)
+    next_p.add_argument('--base-branch', default=None, dest='base_branch_override')
+    next_p.add_argument('--answers', default=None, dest='answers_path')
+    next_p.add_argument('feature_hint', nargs='?')
+    next_p.add_argument('project_dir', nargs='?')
+
+    # ── fix ──
+    fix_p = subparsers.add_parser('fix', add_help=False)
+    fix_p.add_argument('--fix-all', action='store_true')
+    fix_p.add_argument('--skip-human-gate', action='store_true')
+    fix_p.add_argument('project_dir', nargs='?')
+
+    # ── status / stop / kill ──
+    for cmd in ('status', 'stop', 'kill'):
+        p = subparsers.add_parser(cmd, add_help=False)
+        p.add_argument('project_dir', nargs='?')
+
+    # ── list-crons / version / upgrade ──
+    for cmd in ('list-crons', 'version', 'upgrade'):
+        p = subparsers.add_parser(cmd, add_help=False)
+        p.add_argument('-h', '--help', action='store_true', dest=f'_{cmd}_help')
+        p.add_argument('extra', nargs='*', help='Ignored extra arguments')
+
+    # ── release ──
+    rel_p = subparsers.add_parser('release', add_help=False)
+    rel_p.add_argument('bump', nargs='?', choices=['patch', 'minor', 'major'])
+    rel_p.add_argument('--dry-run', action='store_true')
+    rel_p.add_argument('project_dir', nargs='?')
+
+    # ── If argparse rejected the first arg (not a subcommand), fall back
+    # to default pipeline where all args are positional. ──
+    # We detect this: argparse exits 2 for parse errors. But we pre-scanned
+    # for --help/--help-json already, so any SystemExit(2) here means the
+    # first arg isn't a valid subcommand → treat as default pipeline.
+    # However, parse_args() already raised SystemExit if it failed, so we
+    # wrap it.
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        if e.code == 2:
+            # Default pipeline: all args after script name are positional
+            # Rebuild filtered_argv from sys.argv (skip script name)
+            filtered_argv = sys.argv[1:]
+            # Clear subcommand flags — this is a default pipeline run
+            command = None
+            is_next = False; is_continuous = False; is_fix = False
+            is_add = False; is_stop = False; is_kill = False
+            is_status = False; is_list_crons = False; is_version = False
+            is_upgrade = False; is_release = False; is_dry_run = False
+            release_bump = None; add_priority = None
+            fix_all = False; skip_autofix = False; force_full = False
+            skip_auto_archive = False; skip_human_gate = False
+            answers_path = None; user_answers_prefill = None
+            base_branch_override = os.environ.get("PANEL_BASE_BRANCH") or None
+            feature = ""
+            # Jump past argparse mapping to the feature/PROJECT_DIR logic
+            pass
+        else:
+            raise
+    else:
+        # ── Map argparse namespace to existing state variables ──
+        # Note: is_help, is_help_json, is_map, map_full are pre-set above
+        command = args.command
+
+        is_next = (command == 'next')
+        is_continuous = is_next and args.continuous
+        is_interactive = is_next and args.interactive
+        is_fix = (command == 'fix')
+        is_add = (command == 'add')
+        is_stop = (command == 'stop')
+        is_kill = (command == 'kill')
+        is_status = (command == 'status')
+        is_list_crons = (command == 'list-crons')
+        is_version = (command == 'version')
+        is_upgrade = (command == 'upgrade')
+        is_release = (command == 'release')
+        is_dry_run = False
+        release_bump = None
+
+        if is_release:
+            release_bump = args.bump
+            is_dry_run = args.dry_run
+
+        add_priority = getattr(args, 'priority', None) if is_add else None
+
+        fix_all = is_fix and getattr(args, 'fix_all', False)
+        skip_autofix = False
+        force_full = False
+        skip_auto_archive = False
+        skip_human_gate = False
+        base_branch_override = os.environ.get("PANEL_BASE_BRANCH") or None
+        answers_path = None
+        user_answers_prefill = None
+
+        if is_next:
+            skip_autofix = args.skip_autofix
+            force_full = args.force_full
+            skip_auto_archive = args.skip_auto_archive
+            skip_human_gate = args.skip_human_gate
+            if args.resume_flag:
+                RESUME = True
+            elif args.no_resume_flag:
+                RESUME = False
+            max_parallel_override = args.max_parallel
+            if args.base_branch_override:
+                base_branch_override = args.base_branch_override
+            answers_path = args.answers_path
+            filtered_argv = [x for x in (args.feature_hint, args.project_dir) if x is not None]
+        elif is_fix:
+            skip_human_gate = args.skip_human_gate
+            filtered_argv = [args.project_dir] if args.project_dir else []
+        elif is_add:
+            filtered_argv = [args.feature_text] if args.feature_text else []
+            if args.project_dir:
+                filtered_argv.append(args.project_dir)
+        elif command in ('status', 'stop', 'kill'):
+            filtered_argv = [args.project_dir] if args.project_dir else []
+        elif is_release:
+            filtered_argv = [args.project_dir] if args.project_dir else []
+        else:
+            # Default pipeline or no subcommand — use catch-all positional
+            filtered_argv = list(args.positional) if hasattr(args, 'positional') else []
+
+        feature = ""
+
 
     # ── Env var fallbacks for flags (flag wins if set, then env var, then default) ──
     if not fix_all and os.environ.get("PANEL_FIX_ALL") == "1":
@@ -255,26 +281,12 @@ def main():
         elif os.environ.get("PANEL_NO_RESUME") == "1":
             RESUME = False
 
-    # ── --base-branch flag ──
-    base_branch_override = os.environ.get("PANEL_BASE_BRANCH") or None
-    for i, arg in enumerate(sys.argv):
-        if arg == "--base-branch" and i + 1 < len(sys.argv):
-            base_branch_override = sys.argv[i + 1]
-            break
 
-    answers_idx = None
-    answers_path = None
-    for i, arg in enumerate(sys.argv):
-        if arg == "--answers" and i + 1 < len(sys.argv):
-            answers_idx = i
-            answers_path = sys.argv[i + 1]
-            try:
-                with open(answers_path) as f:
-                    interview_state = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
-                print(f"  ⚠ Failed to load answers file '{answers_path}': {e}", flush=True)
-                answers_path = None
-                break
+    # ── If answers_path was set via argparse (next subcommand), load the file ──
+    if answers_path and not user_answers_prefill:
+        try:
+            with open(answers_path) as f:
+                interview_state = json.load(f)
             answers_list = interview_state.get("answers", [])
             questions = interview_state.get("questions", [])
             if answers_list and questions:
@@ -283,7 +295,9 @@ def main():
                     for q, a in zip(questions, answers_list)
                 )
                 print(f"  ✓ Loaded {len(answers_list)} answer(s) from {answers_path}", flush=True)
-            break
+        except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
+            print(f"  ⚠ Failed to load answers file '{answers_path}': {e}", flush=True)
+            answers_path = None
 
     # ── Determine PROJECT_DIR and feature ──
     if is_next or is_stop or is_kill or is_status or is_fix or is_map:

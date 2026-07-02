@@ -249,24 +249,24 @@ class TestReleaseHelpText:
         """--help output includes --release in COMMANDS section."""
         rc, out, err = self._run("--help")
         assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-        assert "--release" in out, f"Expected --release in help output, got:\n{out}"
+        assert "dokima release" in out, f"Expected dokima release in help output, got:\n{out}"
 
     def test_help_json_includes_release(self):
         """--help-json output includes --release entry."""
         rc, out, err = self._run("--help-json")
         assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-        assert "--release" in out, f"Expected --release in --help-json output, got:\n{out}"
+        assert "release" in out, f"Expected release in --help-json output, got:\n{out}"
 
     def test_release_invalid_bump_exits_1(self):
         """dokima --release invalid exits 1 with usage error."""
-        rc, out, err = self._run("--release", "invalid")
+        rc, out, err = self._run("release", "invalid")
         assert rc != 0, f"Expected non-zero exit for invalid bump, got {rc}"
         assert "patch" in (out + err).lower() or "invalid" in (out + err).lower(), \
             f"Expected error message about bump type, got out={out} err={err}"
 
     def test_release_patch_exits_0(self):
         """dokima --release patch exits 0 (or errors clearly if not on default branch)."""
-        rc, out, err = self._run("--release", "patch")
+        rc, out, err = self._run("release", "patch")
         # Should either succeed (0) or fail with a clear error message
         # (not a generic "Feature description required")
         combined = out + err
@@ -275,7 +275,7 @@ class TestReleaseHelpText:
 
     def test_release_dry_run_output(self):
         """dokima --release patch --dry-run either shows [DRY RUN] plan or clear error."""
-        rc, out, err = self._run("--release", "patch", "--dry-run")
+        rc, out, err = self._run("release", "patch", "--dry-run")
         combined = out + err
         # Dry-run either succeeds (prints plan) or fails with clear precondition error
         assert ("[DRY RUN]" in combined or "ERROR:" in combined), \
