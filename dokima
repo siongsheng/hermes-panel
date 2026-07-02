@@ -83,198 +83,185 @@ from utils import HELP_TEXT
 def main():
     global API_KEY, PROJECT_DIR, REPO, TEST_CMD, BUILD_CMD, LINT_CMD, PANEL_FEATURE, DEFAULT_BRANCH, lock_fd, SKIP_AUTOFIX, FORCE_FULL, SKIP_HUMAN_GATE, max_parallel_override, FALLBACK_MODELS, RESUME
     import shutil
+    import argparse as _ap
+
+    # ── ARGPARSE PARSER ──────────────────────────────────
+    parser = _ap.ArgumentParser(
+        prog="dokima", add_help=False,
+        description="Dokima — Multi-agent orchestration engine",
+    )
+    parser.add_argument("--help", "-h", action="store_true", default=False)
+    parser.add_argument("--help-json", action="store_true", default=False)
+    parser.add_argument("--map", action="store_true", default=False)
+    parser.add_argument("--map-full", action="store_true", default=False)
+
+    sub = parser.add_subparsers(dest="command")
+
+    # init subcommand
+    p_init = sub.add_parser("init")
+    p_init.add_argument("description", nargs="?", default="")
+    p_init.add_argument("dir", nargs="?", default=None)
+
+    # add subcommand
+    p_add = sub.add_parser("add")
+    p_add.add_argument("feature_desc", nargs="*", default=[])
+    p_add.add_argument("--priority", default=None)
+    p_add.add_argument("dir", nargs="?", default=None)
+
+    # next subcommand
+    p_next = sub.add_parser("next")
+    p_next.add_argument("--continuous", action="store_true", default=False)
+    p_next.add_argument("--force-full", action="store_true", default=False)
+    p_next.add_argument("--interactive", action="store_true", default=False)
+    p_next.add_argument("--skip-autofix", action="store_true", default=False)
+    p_next.add_argument("--skip-auto-archive", action="store_true", default=False)
+    p_next.add_argument("--skip-human-gate", action="store_true", default=False)
+    p_next.add_argument("--resume", action="store_true", default=False)
+    p_next.add_argument("--no-resume", action="store_true", default=False)
+    p_next.add_argument("--max-parallel", type=int, default=None)
+    p_next.add_argument("--answers", type=str, default=None)
+    p_next.add_argument("--base-branch", type=str, default=None)
+    p_next.add_argument("dir", nargs="?", default=None)
+    p_next.add_argument("feature", nargs="?", default=None)
+
+    # fix subcommand
+    p_fix = sub.add_parser("fix")
+    p_fix.add_argument("--fix-all", action="store_true", default=False)
+    p_fix.add_argument("--skip-autofix", action="store_true", default=False)
+    p_fix.add_argument("--skip-human-gate", action="store_true", default=False)
+    p_fix.add_argument("--answers", type=str, default=None)
+    p_fix.add_argument("dir", nargs="?", default=None)
+
+    # status subcommand
+    p_status = sub.add_parser("status")
+    p_status.add_argument("dir", nargs="?", default=None)
+
+    # stop subcommand
+    p_stop = sub.add_parser("stop")
+    p_stop.add_argument("dir", nargs="?", default=None)
+
+    # kill subcommand
+    p_kill = sub.add_parser("kill")
+    p_kill.add_argument("dir", nargs="?", default=None)
+
+    # list-crons subcommand
+    p_list_crons = sub.add_parser("list-crons")
+
+    # version subcommand
+    p_version = sub.add_parser("version")
+
+    # upgrade subcommand
+    p_upgrade = sub.add_parser("upgrade")
+
+    # release subcommand
+    p_release = sub.add_parser("release")
+    p_release.add_argument("bump", choices=["patch", "minor", "major"])
+    p_release.add_argument("--dry-run", action="store_true", default=False)
+    p_release.add_argument("dir", nargs="?", default=None)
+
+    # ── Parse: catch unknown subcommand for default pipeline ──
+    try:
+        args = parser.parse_args()
+        unknown = []
+    except SystemExit as e:
+        # argparse exits 2 on unknown subcommand; exit 0 for --help
+        if e.code == 2 and len(sys.argv) > 1:
+            if sys.argv[1] in ("--help", "-h", "--help-json", "--map", "--map-full"):
+                # Known flag with extra positionals — re-parse ignoring extras
+                flag_parser = _ap.ArgumentParser(add_help=False, prog="dokima")
+                flag_parser.add_argument("--help", "-h", action="store_true", default=False)
+                flag_parser.add_argument("--help-json", action="store_true", default=False)
+                flag_parser.add_argument("--map", action="store_true", default=False)
+                flag_parser.add_argument("--map-full", action="store_true", default=False)
+                args, _ = flag_parser.parse_known_args()
+                args.command = None
+                unknown = []
+            elif not sys.argv[1].startswith("-"):
+                # Unknown subcommand — treat as default pipeline positional args
+                pipeline_p = _ap.ArgumentParser(add_help=False, prog="dokima")
+                pipeline_p.add_argument("--help", "-h", action="store_true", default=False)
+                pipeline_p.add_argument("--help-json", action="store_true", default=False)
+                pipeline_p.add_argument("--map", action="store_true", default=False)
+                pipeline_p.add_argument("--map-full", action="store_true", default=False)
+                pipeline_p.add_argument("feature", nargs="?", default="")
+                pipeline_p.add_argument("dir", nargs="?", default=None)
+                pipeline_p.add_argument("--answers", type=str, default=None)
+                pipeline_p.add_argument("--base-branch", type=str, default=None)
+                args = pipeline_p.parse_args(sys.argv[1:])
+                args.command = None  # mark as default pipeline
+                args.continuous = False
+                args.interactive = False
+                args.force_full = False
+                args.skip_autofix = False
+                args.skip_auto_archive = False
+                args.skip_human_gate = False
+                args.resume = False
+                args.no_resume = False
+                args.max_parallel = None
+                args.fix_all = False
+                args.dry_run = False
+                unknown = []
+            else:
+                raise
+        else:
+            raise
+
+    # Flatten: if no args at all (no subcommand, no flags)
     if len(sys.argv) < 2:
-        print("Usage: dokima [--next|--continuous|--fix] [--fix-all] [--skip-autofix] [--force-full] [--skip-auto-archive] [--skip-human-gate] [--resume|--no-resume] [--max-parallel=N] [--interactive] [--answers <json>] 'Feature' [dir]")
-        print("  dokima --next [project_dir]             # one feature, manual merge")
-        print("  dokima --continuous [project_dir]       # full sprint, auto-merge, loop")
-        print("  dokima init 'description' [project_dir]")
+        parser.print_usage()
         sys.exit(1)
 
-    # ── FLAG SCANNING ──
-    is_next = False
-    is_continuous = False
-    is_interactive = False
-    is_help = False
-    is_help_json = False
-    is_stop = False
-    is_kill = False
-    is_status = False
-    is_version = False
-    is_upgrade = False
-    is_list_crons = False
-    is_release = False
-    release_bump = None
-    is_dry_run = False
-    is_fix = False
-    is_map = False
-    map_full = False
-    is_add = False
-    add_priority = None
-    # --fix mode toggles (flags with env var fallbacks)
-    fix_all = False
-    skip_autofix = False
-    force_full = False
-    skip_auto_archive = False
-    skip_human_gate = False
-    max_parallel_override = None
-    feature = ""
-    user_answers_prefill = None
-    filtered_argv = []
-    skip_next = False
-    for arg in sys.argv[1:]:
-        if skip_next:
-            if is_release and release_bump is None:
-                # The arg after --release is the bump type
-                release_bump = arg
-                if release_bump not in ("patch", "minor", "major"):
-                    print(f"  ⚠ Invalid release bump: {release_bump!r} (expected patch, minor, or major)", flush=True)
-                    sys.exit(1)
-            skip_next = False
-            continue
-        if arg in ("--help", "-h"):
-            is_help = True
-            continue
-        if arg == "--help-json":
-            is_help_json = True
-            continue
-        if arg in ("--version", "-v"):
-            is_version = True
-            continue
-        if arg == "--upgrade":
-            is_upgrade = True
-            continue
-        if arg == "--next":
-            is_next = True
-            continue
-        if arg == "--continuous":
-            is_continuous = True
-            is_next = True
-            continue
-        if arg == "--interactive":
-            is_interactive = True
-            continue
-        if arg == "--stop":
-            is_stop = True
-            continue
-        if arg == "--kill":
-            is_kill = True
-            continue
-        if arg == "--status":
-            is_status = True
-            continue
-        if arg == "--list-crons":
-            is_list_crons = True
-            continue
-        if arg == "--release":
-            is_release = True
-            skip_next = True
-            continue
-        if arg == "--dry-run":
-            is_dry_run = True
-            continue
-        if arg == "--answers":
-            skip_next = True
-            continue
-        if arg == "--fix":
-            is_fix = True
-            continue
-        if arg == "--map":
-            is_map = True
-            continue
-        if arg == "--map-full":
-            is_map = True
-            map_full = True
-            continue
-        if arg == "--add":
-            is_add = True
-            continue
-        if arg.startswith("--priority="):
-            add_priority = arg.split("=", 1)[1].upper()
-            if add_priority not in ("P0", "P1", "P2", "P3"):
-                print(f"  ⚠ Invalid --priority value: {add_priority} (use P0, P1, P2, or P3)", flush=True)
-                add_priority = None
-            continue
-        if arg == "--fix-all":
-            fix_all = True
-            is_fix = True
-            continue
-        if arg == "--skip-autofix":
-            skip_autofix = True
-            SKIP_AUTOFIX = True
-            continue
-        if arg == "--force-full":
-            force_full = True
-            FORCE_FULL = True
-            continue
-        if arg == "--skip-auto-archive":
-            skip_auto_archive = True
-            continue
-        if arg == "--skip-human-gate":
-            skip_human_gate = True
-            SKIP_HUMAN_GATE = True
-            continue
-        if arg == "--resume":
-            RESUME = True
-            continue
-        if arg == "--no-resume":
-            RESUME = False
-            continue
-        if arg.startswith("--max-parallel="):
-            try:
-                max_parallel_override = int(arg.split("=", 1)[1])
-            except ValueError:
-                print(f"  ⚠ Invalid --max-parallel value: {arg}", flush=True)
-            continue
-        if arg == "--base-branch":
-            skip_next = True
-            continue
-        filtered_argv.append(arg)
-
     # ── Env var fallbacks for flags (flag wins if set, then env var, then default) ──
+    fix_all = getattr(args, 'fix_all', False)
     if not fix_all and os.environ.get("PANEL_FIX_ALL") == "1":
         fix_all = True
+    skip_autofix = getattr(args, 'skip_autofix', False)
     if not skip_autofix and os.environ.get("PANEL_SKIP_AUTOFIX") == "1":
         skip_autofix = True
         SKIP_AUTOFIX = True
+    force_full = getattr(args, 'force_full', False)
     if not force_full and os.environ.get("PANEL_FORCE_FULL") == "1":
         force_full = True
         FORCE_FULL = True
+    skip_auto_archive = getattr(args, 'skip_auto_archive', False)
     if not skip_auto_archive and os.environ.get("PANEL_SKIP_AUTO_ARCHIVE") == "1":
         skip_auto_archive = True
+    skip_human_gate = getattr(args, 'skip_human_gate', False)
     if not skip_human_gate and os.environ.get("PANEL_SKIP_HUMAN_GATE") == "1":
         skip_human_gate = True
         SKIP_HUMAN_GATE = True
+    max_parallel_override = getattr(args, 'max_parallel', None)
     if max_parallel_override is None:
         mp = os.environ.get("PANEL_MAX_PARALLEL")
         if mp and mp.isdigit():
             max_parallel_override = int(mp)
-    # Env var fallbacks for resume/no-resume (only if flag not explicitly set)
+    # resume/no-resume
     if RESUME is None:
-        if os.environ.get("PANEL_RESUME") == "1":
+        if getattr(args, 'resume', False):
+            RESUME = True
+        elif getattr(args, 'no_resume', False):
+            RESUME = False
+        elif os.environ.get("PANEL_RESUME") == "1":
             RESUME = True
         elif os.environ.get("PANEL_NO_RESUME") == "1":
             RESUME = False
 
     # ── --base-branch flag ──
     base_branch_override = os.environ.get("PANEL_BASE_BRANCH") or None
-    for i, arg in enumerate(sys.argv):
-        if arg == "--base-branch" and i + 1 < len(sys.argv):
-            base_branch_override = sys.argv[i + 1]
-            break
+    if getattr(args, 'base_branch', None):
+        base_branch_override = args.base_branch
 
-    answers_idx = None
-    answers_path = None
-    for i, arg in enumerate(sys.argv):
-        if arg == "--answers" and i + 1 < len(sys.argv):
-            answers_idx = i
-            answers_path = sys.argv[i + 1]
-            try:
-                with open(answers_path) as f:
-                    interview_state = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
-                print(f"  ⚠ Failed to load answers file '{answers_path}': {e}", flush=True)
-                answers_path = None
-                break
+    # ── --answers flag ──
+    user_answers_prefill = None
+    answers_path = getattr(args, 'answers', None)
+    if answers_path:
+        try:
+            with open(answers_path) as f:
+                interview_state = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, IOError) as err:
+            print(f"  \u26a0 Failed to load answers file '{answers_path}': {err}", flush=True)
+            answers_path = None
+        else:
             answers_list = interview_state.get("answers", [])
             questions = interview_state.get("questions", [])
             if answers_list and questions:
@@ -282,87 +269,99 @@ def main():
                     f"Clarification: {q}\nUser's answer: {a}"
                     for q, a in zip(questions, answers_list)
                 )
-                print(f"  ✓ Loaded {len(answers_list)} answer(s) from {answers_path}", flush=True)
-            break
+                print(f"  \u2713 Loaded {len(answers_list)} answer(s) from {answers_path}", flush=True)
 
-    # ── Determine PROJECT_DIR and feature ──
-    if is_next or is_stop or is_kill or is_status or is_fix or is_map:
-        if is_stop or is_kill or is_status or is_map:
-            if len(filtered_argv) >= 1:
-                PROJECT_DIR = os.path.abspath(filtered_argv[0])
-            else:
-                PROJECT_DIR = os.getcwd()
-        elif is_fix:
-            if len(filtered_argv) >= 1:
-                PROJECT_DIR = os.path.abspath(filtered_argv[0])
-            else:
-                PROJECT_DIR = os.getcwd()
-            PANEL_FEATURE = f"fix: {PROJECT_DIR}"
-        else:
-            # --next: if two+ args, first is feature, second is project dir
-            # If one arg, it's the project dir (feature comes from roadmap)
-            if len(filtered_argv) >= 2:
-                PROJECT_DIR = os.path.abspath(filtered_argv[1])
-                feature = filtered_argv[0]
-            else:
-                PROJECT_DIR = os.path.abspath(filtered_argv[0]) if filtered_argv else os.getcwd()
-            PANEL_FEATURE = feature
-    else:
-        if len(filtered_argv) < 1 and not is_help and not is_help_json and not is_list_crons and not is_version and not is_upgrade and not is_release:
-            print("ERROR: Feature description required")
-            sys.exit(1)
-        feature = filtered_argv[0] if filtered_argv else ""
-        PANEL_FEATURE = feature
-        # init uses different argv layout: "init" <description> [project_dir]
-        if feature == "init":
-            PROJECT_DIR = os.path.abspath(filtered_argv[2]) if len(filtered_argv) >= 3 else os.getcwd()
-        else:
-            PROJECT_DIR = os.path.abspath(filtered_argv[1]) if len(filtered_argv) >= 2 else os.getcwd()
+    cmd = getattr(args, 'command', None)
+    feature = ""
 
-    # ── CONTROL FLAGS: early exit (priority order) ──
-    if is_upgrade:
-        check_upgrade()
-    if is_version:
+    # ── CONTROL FLAGS: early exit (before project setup, priority order) ──
+    if getattr(args, 'help_json', False):
+        show_help_json()
+    if getattr(args, 'help', False):
+        show_help()
+    if cmd == "version":
         print(f"dokima v{VERSION}")
         sys.exit(0)
-    if is_help_json:
-        show_help_json()
-    if is_help:
-        show_help()
-    if is_kill:
-        handle_kill(PROJECT_DIR)
-    if is_add:
-        add_feature = " ".join(filtered_argv) if filtered_argv else ""
-        if not add_feature:
-            print("ERROR: --add requires a feature description.")
-            print("Usage: dokima --add 'Feature description' [--priority=P0] [dir]")
-            sys.exit(1)
-        run_add_to_roadmap(add_feature, PROJECT_DIR, priority_hint=add_priority)
-        print("\n  Roadmap updated. Run 'dokima --next' to build the next feature.")
-        sys.exit(0)
-    if is_stop:
-        handle_stop(PROJECT_DIR)
-    if is_status:
-        handle_status(PROJECT_DIR)
-    if is_list_crons:
+    if cmd == "upgrade":
+        check_upgrade()
+    if cmd == "list-crons":
         handle_list_crons()
-    if is_release:
-        if release_bump is None:
-            print("ERROR: --release requires a bump type (patch, minor, or major)", flush=True)
-            print("Usage: dokima --release <patch|minor|major> [--dry-run] [project_dir]", flush=True)
+    if cmd == "kill":
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        handle_kill(PROJECT_DIR)
+
+    # ── Extract feature for add command ──
+    add_feature = ""
+    if cmd == "add":
+        fd = getattr(args, 'feature_desc', [])
+        add_feature = " ".join(fd) if fd else ""
+        if not add_feature:
+            print("ERROR: add requires a feature description.")
+            print("Usage: dokima add 'Feature description' [--priority=P0] [dir]")
             sys.exit(1)
-        do_release(release_bump, os.getcwd() if is_release and len(filtered_argv) == 0 else PROJECT_DIR, dry_run=is_dry_run)
-        return
-    if is_map:
-        generate_codebase_map(PROJECT_DIR, full=map_full)
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        add_priority = getattr(args, 'priority', None)
+        if add_priority:
+            add_priority = add_priority.upper()
+            if add_priority not in ("P0", "P1", "P2", "P3"):
+                print(f"  ⚠ Invalid --priority value: {add_priority} (use P0, P1, P2, or P3)", flush=True)
+                add_priority = None
+        run_add_to_roadmap(add_feature, PROJECT_DIR, priority_hint=add_priority)
+        print("\n  Roadmap updated. Run 'dokima next' to build the next feature.")
+        sys.exit(0)
+
+    # ── Extract release bump ──
+    release_bump = None
+    if cmd == "release":
+        release_bump = getattr(args, 'bump', None)
+        if release_bump is None:
+            print("ERROR: release requires a bump type (patch, minor, or major)", flush=True)
+            print("Usage: dokima release <patch|minor|major> [--dry-run] [dir]", flush=True)
+            sys.exit(1)
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        is_dry_run = getattr(args, 'dry_run', False)
+        do_release(release_bump, PROJECT_DIR, dry_run=is_dry_run)
         return
 
+    if cmd == "stop":
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        handle_stop(PROJECT_DIR)
+    if cmd == "status":
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        handle_status(PROJECT_DIR)
+    if getattr(args, 'map', False):
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        map_full_flag = getattr(args, 'map_full', False)
+        generate_codebase_map(PROJECT_DIR, full=map_full_flag)
+        return
+
+    # ── Determine PROJECT_DIR for pipeline commands ──
+    if cmd == "init":
+        init_desc = getattr(args, 'description', '') or ""
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        feature = "init"
+        PANEL_FEATURE = init_desc
+    elif cmd == "fix":
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        PANEL_FEATURE = f"fix: {PROJECT_DIR}"
+    elif cmd == "next":
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+        feature = getattr(args, 'feature', '') or ""
+        PANEL_FEATURE = feature
+    elif cmd is None:
+        # Default pipeline: positional args are feature + dir
+        feature = getattr(args, 'feature', '') or ""
+        if not feature:
+            print("ERROR: Feature description required")
+            sys.exit(1)
+        PANEL_FEATURE = feature
+        PROJECT_DIR = os.path.abspath(args.dir) if getattr(args, 'dir', None) else os.getcwd()
+    else:
+        PROJECT_DIR = os.getcwd()
+
     # ── INIT MODE: discovery & constitution, no pipeline ──
-    if not is_next and feature == "init":
-        # init <description> [project_dir]
-        init_desc = filtered_argv[1] if len(filtered_argv) >= 2 else ""
-        init_project_dir = os.path.abspath(filtered_argv[2]) if len(filtered_argv) >= 3 else PROJECT_DIR
-        run_init(init_desc, init_project_dir)
+    if cmd == "init":
+        run_init(init_desc, PROJECT_DIR)
         return
 
     # ── LOCK ACQUISITION ──
@@ -401,7 +400,7 @@ def main():
     FALLBACK_MODELS = _load_fallback_config()
     if FALLBACK_MODELS:
         roles = ", ".join(FALLBACK_MODELS.keys())
-        print(f"  ✓ Fallback models configured for: {roles}", flush=True)
+        print(f"  \u2713 Fallback models configured for: {roles}", flush=True)
 
     REPO = detect_repo()
     if not REPO:
@@ -413,16 +412,16 @@ def main():
     DEFAULT_BRANCH = _detect_default_branch(PROJECT_DIR)
     if base_branch_override:
         DEFAULT_BRANCH = base_branch_override
-        print(f"  ⚡ Base branch override: {DEFAULT_BRANCH}", flush=True)
+        print(f"  \u26a1 Base branch override: {DEFAULT_BRANCH}", flush=True)
     _set_gh_token()
     TEST_CMD, BUILD_CMD, LINT_CMD = detect_commands()
 
     # ── --answers interaction for --fix ──
-    if is_fix and answers_path is not None:
-        print("  ⚠ --fix mode ignores --answers (no strategist interview). Continuing...", flush=True)
+    if cmd == "fix" and answers_path is not None:
+        print("  \u26a0 fix mode ignores --answers (no strategist interview). Continuing...", flush=True)
 
     # ── FIX MODE: early dispatch ──
-    if is_fix:
+    if cmd == "fix":
         # Use _pipeline reference so test patches on pipeline module take effect
         _pipeline.run_fix_mode(project_dir=PROJECT_DIR, fix_all=fix_all, skip_human_gate=skip_human_gate)
         _cleanup_lock()
@@ -454,13 +453,15 @@ def main():
             except Exception:
                 pass
         if merged_archived:
-            print(f"  Auto-archive: {merged_archived} merged spec(s) → specs/archive/")
+            print(f"  Auto-archive: {merged_archived} merged spec(s) \u2192 specs/archive/")
 
     # ── NEXT MODE: pick feature from roadmap ──
+    is_next = (cmd == "next")
     if is_next:
         git("checkout", DEFAULT_BRANCH)
         git("pull", "origin", DEFAULT_BRANCH)
-        feature_hint = filtered_argv[0] if len(filtered_argv) >= 2 else None
+        feature_hint = getattr(args, 'feature', None) or None
+        is_interactive = getattr(args, 'interactive', False)
         feature = run_next_setup(interactive=is_interactive, feature_hint=feature_hint)
         if feature is None:
             print("Nothing to do.")
@@ -471,7 +472,7 @@ def main():
     # ── Pre-pipeline stop file check ──
     sp = _stop_path(PROJECT_DIR)
     if os.path.exists(sp):
-        print("  ⚠ Stop file detected — halting before pipeline")
+        print("  \u26a0 Stop file detected \u2014 halting before pipeline")
         os.remove(sp)
         _cleanup_lock()
         return
@@ -480,23 +481,24 @@ def main():
     _sync_modules()
 
     # ── RUN PIPELINE ──
+    is_continuous = getattr(args, 'continuous', False)
     if is_continuous:
         roadmap_path = os.path.join(PROJECT_DIR, "specs", "roadmap.md")
         for iteration in range(1, MAX_CONTINUOUS + 1):
-            print(f"\n{'═'*60}")
-            print(f"  CONTINUOUS — Feature {iteration}")
-            print(f"{'═'*60}\n")
+            print(f"\n{'='*60}")
+            print(f"  CONTINUOUS \u2014 Feature {iteration}")
+            print(f"{'='*60}\n")
 
             run_pipeline(feature, is_next, True, user_answers_prefill, resume=RESUME)
 
             # Check stop file
             if os.path.exists(_stop_path()):
-                print("\n  ⚠ Stop file detected — halting continuous loop")
+                print("\n  \u26a0 Stop file detected \u2014 halting continuous loop")
                 os.remove(_stop_path())
                 break
 
             if iteration >= MAX_CONTINUOUS:
-                print(f"\n── Continuous: max iterations ({MAX_CONTINUOUS}) reached")
+                print(f"\n\u2500\u2500 Continuous: max iterations ({MAX_CONTINUOUS}) reached")
                 break
 
             # Pick next feature
@@ -507,7 +509,7 @@ def main():
             features = parse_roadmap(roadmap_path)
             next_feat = pick_next_feature(features)
             if not next_feat:
-                print("\n── Continuous: all features complete")
+                print("\n\u2500\u2500 Continuous: all features complete")
                 break
             feature = f"{next_feat.id}: {next_feat.title}"
             PANEL_FEATURE = feature
@@ -516,13 +518,12 @@ def main():
             status_path_c = os.path.join(PROJECT_DIR, "specs", "STATUS.md")
             branch_c = f"feat/{slugify(feature)[:50]}"
             update_status_md(status_path_c, next_feat.id, next_feat.title, "in_progress", branch=branch_c, source="panel")
-            print(f"\n  Next: {next_feat.id} — {next_feat.title}")
+            print(f"\n  Next: {next_feat.id} \u2014 {next_feat.title}")
     else:
         run_pipeline(feature, is_next, False, user_answers_prefill, resume=RESUME)
 
     _sync_modules()
     _cleanup_lock()
-
 def _sync_modules():
     """Propagate mutable globals to all module files (F022)."""
     try:

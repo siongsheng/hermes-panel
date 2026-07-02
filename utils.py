@@ -56,24 +56,23 @@ HELP_TEXT = """Dokima — Multi-Agent Orchestration Engine
 COMMANDS:
   dokima "Feature description" [dir]     Run full pipeline for a feature
   dokima init "description" [dir]        Project discovery & constitution
-  dokima --add "Feature" [--priority=P1] [dir]  Add feature to roadmap (auto-priority, auto-deps)
-  dokima --next [dir]                    Build next feature from roadmap
-  dokima --continuous [dir]              Full sprint: build + auto-merge + loop
-  dokima --fix [dir]                     Fix BLOCKED PR: detect blockers, fix, verify
+  dokima add "Feature" [--priority=P1] [dir]  Add feature to roadmap (auto-priority, auto-deps)
+  dokima next [--continuous] [--force-full] [--interactive] [dir]  Build next feature from roadmap
+  dokima fix [--fix-all] [dir]           Fix BLOCKED PR: detect blockers, fix, verify
 
 CONTROL:
-  dokima --status [dir]                  Show pipeline state
-  dokima --stop [dir]                    Graceful stop after current feature
-  dokima --kill [dir]                    Emergency kill (SIGTERM then SIGKILL)
-  dokima --list-crons                    List all scheduled pipelines
-  dokima --version                       Print version and exit
-  dokima --upgrade                       Check for newer version and show upgrade instructions
-  dokima --release [patch|minor|major] [--dry-run] [dir]  Bump version, tag, changelog, and GitHub Release
+  dokima status [dir]                    Show pipeline state
+  dokima stop [dir]                      Graceful stop after current feature
+  dokima kill [dir]                      Emergency kill (SIGTERM then SIGKILL)
+  dokima list-crons                      List all scheduled pipelines
+  dokima version                         Print version and exit
+  dokima upgrade                         Check for newer version and show upgrade instructions
+  dokima release [patch|minor|major] [--dry-run] [dir]  Bump version, tag, changelog, and GitHub Release
 
 FLAGS:
-  --interactive        Show human gate (with --next/--continuous)
+  --interactive        Show human gate (with `dokima next`)
   --answers <file>     Resume from saved interview state
-  --fix-all            Include SHOULD FIX items (with --fix)
+  --fix-all            Include SHOULD FIX items (with `dokima fix`)
   --skip-autofix       Disable auto-fix loopback (nm + TL phases)
   --force-full         Run all 5 phases regardless of depth gating
   --skip-auto-archive  Don't auto-archive merged specs
@@ -88,11 +87,11 @@ FLAGS:
 
 EXAMPLES:
   dokima init "trading dashboard" ~/huat
-  dokima --add "Dark mode toggle" ~/huat
-  dokima --next ~/huat
-  dokima --continuous ~/huat
-  dokima --fix ~/huat
-  dokima --status ~/huat"""
+  dokima add "Dark mode toggle" ~/huat
+  dokima next ~/huat
+  dokima next --continuous ~/huat
+  dokima fix ~/huat
+  dokima status ~/huat"""
 # KEEP IN SYNC with HELP_TEXT — add any new command/flag/env_var here too
 CLI_METADATA = {
     "tool": "dokima",
@@ -100,22 +99,21 @@ CLI_METADATA = {
     "commands": [
         {"name": "run", "syntax": "dokima \"Feature description\" [dir]", "description": "Run full pipeline for a feature"},
         {"name": "init", "syntax": "dokima init \"description\" [dir]", "description": "Project discovery & constitution"},
-        {"name": "--add", "syntax": "dokima --add \"Feature\" [--priority=P1] [dir]", "description": "Add feature to roadmap (auto-priority, auto-deps)"},
-        {"name": "--next", "syntax": "dokima --next [dir]", "description": "Build next feature from roadmap"},
-        {"name": "--continuous", "syntax": "dokima --continuous [dir]", "description": "Full sprint: build + auto-merge + loop"},
-        {"name": "--fix", "syntax": "dokima --fix [dir]", "description": "Fix BLOCKED PR: detect blockers, fix, verify"},
-        {"name": "--status", "syntax": "dokima --status [dir]", "description": "Show pipeline state"},
-        {"name": "--stop", "syntax": "dokima --stop [dir]", "description": "Graceful stop after current feature"},
-        {"name": "--kill", "syntax": "dokima --kill [dir]", "description": "Emergency kill (SIGTERM then SIGKILL)"},
-        {"name": "--list-crons", "syntax": "dokima --list-crons", "description": "List all scheduled pipelines"},
-        {"name": "--version", "syntax": "dokima --version", "description": "Print version and exit"},
-        {"name": "--upgrade", "syntax": "dokima --upgrade", "description": "Check for newer version and show upgrade instructions"},
-        {"name": "--release", "syntax": "dokima --release <patch|minor|major> [--dry-run] [project_dir]", "description": "Bump version, generate changelog, tag, and publish GitHub Release"},
+        {"name": "add", "syntax": "dokima add \"Feature\" [--priority=P1] [dir]", "description": "Add feature to roadmap (auto-priority, auto-deps)"},
+        {"name": "next", "syntax": "dokima next [--continuous] [--force-full] [--interactive] [dir]", "description": "Build next feature from roadmap"},
+        {"name": "fix", "syntax": "dokima fix [--fix-all] [dir]", "description": "Fix BLOCKED PR: detect blockers, fix, verify"},
+        {"name": "status", "syntax": "dokima status [dir]", "description": "Show pipeline state"},
+        {"name": "stop", "syntax": "dokima stop [dir]", "description": "Graceful stop after current feature"},
+        {"name": "kill", "syntax": "dokima kill [dir]", "description": "Emergency kill (SIGTERM then SIGKILL)"},
+        {"name": "list-crons", "syntax": "dokima list-crons", "description": "List all scheduled pipelines"},
+        {"name": "version", "syntax": "dokima version", "description": "Print version and exit"},
+        {"name": "upgrade", "syntax": "dokima upgrade", "description": "Check for newer version and show upgrade instructions"},
+        {"name": "release", "syntax": "dokima release [patch|minor|major] [--dry-run] [dir]", "description": "Bump version, generate changelog, tag, and publish GitHub Release"},
     ],
     "flags": [
-        {"flag": "--interactive", "args": None, "env_var": None, "description": "Show human gate (with --next/--continuous)"},
+        {"flag": "--interactive", "args": None, "env_var": None, "description": "Show human gate (with `dokima next`)"},
         {"flag": "--answers", "args": "<file>", "env_var": None, "description": "Resume from saved interview state"},
-        {"flag": "--fix-all", "args": None, "env_var": "PANEL_FIX_ALL", "description": "Include SHOULD FIX items (with --fix)"},
+        {"flag": "--fix-all", "args": None, "env_var": "PANEL_FIX_ALL", "description": "Include SHOULD FIX items (with `dokima fix`)"},
         {"flag": "--skip-autofix", "args": None, "env_var": "PANEL_SKIP_AUTOFIX", "description": "Disable auto-fix loopback (nm + TL phases)"},
         {"flag": "--force-full", "args": None, "env_var": "PANEL_FORCE_FULL", "description": "Run all 5 phases regardless of depth gating"},
         {"flag": "--skip-auto-archive", "args": None, "env_var": "PANEL_SKIP_AUTO_ARCHIVE", "description": "Don't auto-archive merged specs"},
