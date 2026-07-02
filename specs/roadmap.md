@@ -129,7 +129,7 @@
 ### F029: Auto-generate CLI reference page from cli-help.json during Vercel build instead of hand-written MDX. New flags and commands appear in docs automatically on every release.
 **Priority:** P2
 **Dependencies:** None
-**Status:** [~] In Progress
+**Status:** [x] Done Progress
 **User Story:** As a user, I can auto-generate cli reference page from cli-help.json during vercel build instead of hand-written mdx. new flags and commands appear in docs automatically on every release.
 
 ### F011: Installer Script

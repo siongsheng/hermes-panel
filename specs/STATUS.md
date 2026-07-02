@@ -14,7 +14,6 @@
 | F003: Edge Case & Robustness Tests | [x] Done | #13 | 2026-06-28 |
 | F001: Security Hardening | [~] In Progress | — | 2026-06-27 |
 - **F006: Error Recovery & Resume** — in progress since 2026-06-28 23:56, branch `feat/f006-error-recovery--resume` [panel]
-- **F029: Auto-generate CLI reference page from cli-help.json during Vercel build instead of hand-written MDX. New flags and commands appear in docs automatically on every release.** — in progress since 2026-07-02 23:53, branch `feat/f029-auto-generate-cli-reference-page-fr-b40a4ecb` [panel]
 
 ## Archived
 | Feature | Status | PR | Completed |
@@ -40,3 +39,4 @@
 - **F024: Auto-Release — Tagging, Changelog, and GitHub Releases** — done 2026-06-30 01:08, PR [#53](https://github.com/siongsheng/dokima/pull/53) [panel]
 - **F026: Auto-Update Docs CLI Cache on Release** — done 2026-07-01 00:53, PR [#54](https://github.com/siongsheng/dokima/pull/54) [panel]
 - **F027: Upgrade codebase-map.md to domain-aware format with Start Here, Domain Map, Impact Map, and Test Map sections. Inject map into strategist, coder-worktree, and tech-lead prompts.** — done 2026-07-02 20:04, PR [#60](https://github.com/siongsheng/dokima/pull/60) [panel]
+- **F029: Auto-generate CLI reference page from cli-help.json during Vercel build instead of hand-written MDX. New flags and commands appear in docs automatically on every release.** — done 2026-07-03 00:10, PR [#61](https://github.com/siongsheng/dokima/pull/61) [panel]
