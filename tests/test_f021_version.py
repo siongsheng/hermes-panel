@@ -47,10 +47,10 @@ def test_help_json_includes_version():
     assert "version" in data, f"No 'version' field in help-json: {data}"
     assert data["version"], f"version field is empty"
     commands = data.get("commands", [])
-    version_cmds = [c for c in commands if c.get("name") == "--version"]
-    assert version_cmds, f"--version not in commands array: {commands}"
-    upgrade_cmds = [c for c in commands if c.get("name") == "--upgrade"]
-    assert upgrade_cmds, f"--upgrade not in commands array: {commands}"
+    version_cmds = [c for c in commands if c.get("name") == "version"]
+    assert version_cmds, f"version not in commands array: {commands}"
+    upgrade_cmds = [c for c in commands if c.get("name") == "upgrade"]
+    assert upgrade_cmds, f"upgrade not in commands array: {commands}"
 
 
 def test_upgrade_no_install_dir_exits_0():

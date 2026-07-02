@@ -255,7 +255,7 @@ class TestReleaseHelpText:
         """--help-json output includes --release entry."""
         rc, out, err = self._run("--help-json")
         assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-        assert "--release" in out, f"Expected --release in --help-json output, got:\n{out}"
+        assert '"name": "release"' in out, f"Expected release command in --help-json output, got:\n{out}"
 
     def test_release_invalid_bump_exits_1(self):
         """dokima --release invalid exits 1 with usage error."""
