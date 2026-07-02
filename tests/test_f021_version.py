@@ -1,4 +1,4 @@
-"""Tests for F021: Semantic Versioning + GitHub Releases — --version and --upgrade flags."""
+"""Tests for F021: Semantic Versioning + GitHub Releases — version and upgrade subcommands."""
 import subprocess, os, sys, json
 
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dokima")
@@ -12,62 +12,65 @@ def _run(*args):
     return p.returncode, p.stdout.strip(), p.stderr.strip()
 
 
-def test_version_flag_prints_version_and_exits_0():
-    """dokima --version prints 'dokima vX.Y.Z' and exits 0."""
-    rc, out, err = _run("--version")
+# ── Version subcommand tests ────────────────────────────────────────
+
+def test_version_subcommand_prints_version_and_exits_0():
+    """dokima version prints 'dokima vX.Y.Z' and exits 0."""
+    rc, out, err = _run("version")
     assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
     assert out.startswith("dokima v"), f"Expected 'dokima v...', got: {out}"
-    # Should have a semver-like version after the 'v'
     parts = out.split("v", 1)
     assert len(parts) == 2, f"Expected 'dokima v<version>', got: {out}"
     version = parts[1]
-    # Should be something like X.Y.Z
     assert "." in version, f"Expected semver, got version: {version}"
 
 
-def test_help_includes_version_command():
-    """--help output includes --version in CONTROL section."""
-    rc, out, err = _run("--help")
-    assert rc == 0, f"Expected exit 0, got {rc}"
-    assert "dokima --version" in out, f"--version not in help output:\n{out}"
+def test_version_works_in_non_git_directory():
+    """dokima version works even in a non-git directory (no git dependency)."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        p = subprocess.run(
+            [sys.executable, SCRIPT, "version"],
+            capture_output=True, text=True, timeout=10, cwd=td
+        )
+        assert p.returncode == 0, f"Expected exit 0, got {p.returncode}. stderr: {p.stderr}"
+        assert p.stdout.strip().startswith("dokima v"), \
+            f"Expected 'dokima v...', got: {p.stdout.strip()!r}"
 
 
-def test_help_includes_upgrade_command():
-    """--help output includes --upgrade in CONTROL section."""
-    rc, out, err = _run("--help")
-    assert rc == 0, f"Expected exit 0, got {rc}"
-    assert "dokima --upgrade" in out, f"--upgrade not in help output:\n{out}"
+def test_version_help_shows_subcommand_usage():
+    """dokima version --help shows version-specific argparse help."""
+    rc, out, err = _run("version", "--help")
+    combined = out + err
+    assert "dokima version" in combined, \
+        f"version --help must show usage as 'dokima version':\nout={out}\nerr={err}"
 
 
-def test_help_json_includes_version():
-    """--help-json includes version field and --version command."""
-    rc, out, err = _run("--help-json")
+# ── Upgrade subcommand tests ───────────────────────────────────────
+
+def test_upgrade_subcommand_no_install_dir_exits_0():
+    """dokima upgrade exits 0 with helpful message when not installed via install.sh."""
+    rc, out, err = _run("upgrade")
     assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-    data = json.loads(out)
-    assert "version" in data, f"No 'version' field in help-json: {data}"
-    assert data["version"], f"version field is empty"
-    commands = data.get("commands", [])
-    version_cmds = [c for c in commands if c.get("name") == "--version"]
-    assert version_cmds, f"--version not in commands array: {commands}"
-    upgrade_cmds = [c for c in commands if c.get("name") == "--upgrade"]
-    assert upgrade_cmds, f"--upgrade not in commands array: {commands}"
-
-
-def test_upgrade_no_install_dir_exits_0():
-    """--upgrade exits 0 with helpful message when not installed via install.sh."""
-    rc, out, err = _run("--upgrade")
-    assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-    # Should mention install.sh or not installed
     lower = (out + err).lower()
     assert "install" in lower or "not installed" in lower, \
         f"Expected message about install, got: out={out!r} err={err!r}"
 
 
-def test_v_shorthand_works():
-    """-v shorthand prints version same as --version."""
-    rc, out, err = _run("-v")
-    assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-    assert out.startswith("dokima v"), f"Expected 'dokima v...', got: {out}"
+# ── --help / --help-json tests ──────────────────────────────────────
+
+def test_help_includes_version_subcommand():
+    """--help output includes 'dokima version' subcommand syntax."""
+    rc, out, err = _run("--help")
+    assert rc == 0, f"Expected exit 0, got {rc}"
+    assert "dokima version" in out, f"'dokima version' not in help output:\n{out}"
+
+
+def test_help_includes_upgrade_subcommand():
+    """--help output includes 'dokima upgrade' subcommand syntax."""
+    rc, out, err = _run("--help")
+    assert rc == 0, f"Expected exit 0, got {rc}"
+    assert "dokima upgrade" in out, f"'dokima upgrade' not in help output:\n{out}"
 
 
 def test_help_still_works():
@@ -77,31 +80,41 @@ def test_help_still_works():
     assert "Dokima" in out, f"Help output missing 'Dokima': {out[:100]}"
 
 
-def test_version_with_extra_args_exits_0():
-    """--version with extra args still exits 0, ignoring extra args."""
-    rc, out, err = _run("--version", "/some/path")
+def test_help_json_includes_version():
+    """--help-json includes version field and version/upgrade commands."""
+    rc, out, err = _run("--help-json")
     assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-    assert out.startswith("dokima v"), f"Expected 'dokima v...', got: {out}"
+    data = json.loads(out)
+    assert "version" in data, f"No 'version' field in help-json: {data}"
+    assert data["version"], f"version field is empty"
+    commands = data.get("commands", [])
+    version_cmds = [c for c in commands if c.get("name") == "version"]
+    assert version_cmds, f"'version' not in commands array: {commands}"
+    upgrade_cmds = [c for c in commands if c.get("name") == "upgrade"]
+    assert upgrade_cmds, f"'upgrade' not in commands array: {commands}"
 
 
-def test_version_works_in_non_git_directory():
-    """--version works even in a non-git directory (no git dependency)."""
-    import tempfile
-    with tempfile.TemporaryDirectory() as td:
-        p = subprocess.run(
-            [sys.executable, SCRIPT, "--version"],
-            capture_output=True, text=True, timeout=10, cwd=td
-        )
-        assert p.returncode == 0, f"Expected exit 0, got {p.returncode}. stderr: {p.stderr}"
-        assert p.stdout.strip().startswith("dokima v"), f"Expected 'dokima v...', got: {p.stdout.strip()!r}"
+# ── Old flag regression tests (must be rejected) ────────────────────
+
+def test_old_flag_version_is_rejected():
+    """dokima --version (old flag form) must fail with argparse."""
+    rc, out, err = _run("--version")
+    assert rc != 0, f"Old --version flag must fail with argparse, got exit {rc}"
 
 
-def test_version_first_flag_wins():
-    """--version --help: first flag wins, --version prints and exits."""
-    rc, out, err = _run("--version", "--help")
-    assert rc == 0, f"Expected exit 0, got {rc}. stderr: {err}"
-    assert out.startswith("dokima v"), f"Expected 'dokima v...', got: {out}"
+def test_old_v_shorthand_is_rejected():
+    """dokima -v (old shorthand) must fail — no longer valid."""
+    rc, out, err = _run("-v")
+    assert rc != 0, f"Old -v shorthand must fail with argparse, got exit {rc}"
 
+
+def test_old_flag_upgrade_is_rejected():
+    """dokima --upgrade (old flag form) must fail with argparse."""
+    rc, out, err = _run("--upgrade")
+    assert rc != 0, f"Old --upgrade flag must fail with argparse, got exit {rc}"
+
+
+# ── VERSION file integrity test ─────────────────────────────────────
 
 def test_version_file_is_valid():
     """VERSION file exists and contains valid semver."""
