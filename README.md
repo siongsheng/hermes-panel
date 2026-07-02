@@ -67,17 +67,20 @@ ln -sf ~/dokima/dokima ~/bin/dokima
 ### Usage
 
 ```bash
-# Run on any project with AGENTS.md + git remote
-dokima "Add rate limiting middleware" ~/project
+# Add feature to roadmap
+dokima --add "Add rate limiting middleware" --priority=P1 ~/project
+
+# Build next feature from roadmap
+dokima --next ~/project
+
+# Continuous: build all pending features from roadmap
+dokima --continuous ~/project
 
 # Fix a BLOCKED PR: detect blockers, fix, verify
 dokima --fix ~/project
 
 # Force all 5 phases (even for low-risk changes)
-PANEL_FORCE_FULL=1 dokima "Add payment webhook" ~/project
-
-# Resume after strategist interview
-dokima --answers /tmp/dokima-interview.json "Add API key auth" ~/project
+PANEL_FORCE_FULL=1 dokima --next ~/project
 ```
 
 > **Full setup guide:** [docs/setup.md](docs/setup.md) — one-time machine setup, per-project config, troubleshooting.
