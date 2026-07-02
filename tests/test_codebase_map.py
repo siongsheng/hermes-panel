@@ -240,3 +240,23 @@ def test_map_full_rebuild(tmp_project, panel):
     with open(cache_path) as f:
         cache = json.load(f)
     assert len(cache) >= 7  # AGENTS.md + package.json + 5 source files (exact count depends on walk order)
+
+
+# ── F027: Domain-aware map format ─────────────────────────────────
+
+def test_map_domain_aware_sections(tmp_project, panel):
+    """F027: Map must output 4 domain-aware sections instead of flat Tree + Commands."""
+    panel.generate_codebase_map(tmp_project, full=True)
+    map_path = os.path.join(tmp_project, "specs", "codebase-map.md")
+    with open(map_path) as f:
+        content = f.read()
+
+    # New section headers must exist
+    assert "## Start Here" in content, f"Missing Start Here section\n{content}"
+    assert "## Domain Map" in content, f"Missing Domain Map section\n{content}"
+    assert "## Impact Map" in content, f"Missing Impact Map section\n{content}"
+    assert "## Test Map" in content, f"Missing Test Map section\n{content}"
+
+    # Old format headers must NOT exist
+    assert "## Tree" not in content, f"Old ## Tree header still present\n{content}"
+    assert "## Commands" not in content, f"Old ## Commands header still present\n{content}"
