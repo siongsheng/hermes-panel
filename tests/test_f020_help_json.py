@@ -130,6 +130,74 @@ class TestHelpUnchanged:
         assert "COMMANDS:" in result.stdout
 
 
+class TestHelpJsonSubcommandNames:
+    """F030: --help-json output uses subcommand names (no -- prefix on commands)."""
+
+    EXPECTED_SUBCOMMANDS = {
+        "add":        "dokima add \"Feature\" [--priority=P1] [dir]",
+        "next":       "dokima next [--continuous] [--force-full] [--interactive] [dir]",
+        "fix":        "dokima fix [--fix-all] [dir]",
+        "status":     "dokima status [dir]",
+        "stop":       "dokima stop [dir]",
+        "kill":       "dokima kill [dir]",
+        "list-crons": "dokima list-crons",
+        "version":    "dokima version",
+        "upgrade":    "dokima upgrade",
+        "release":    "dokima release [patch|minor|major] [--dry-run] [dir]",
+    }
+
+    def _get_json(self):
+        _, stdout, _ = run_help_json()
+        return json.loads(stdout)
+
+    def test_no_command_name_starts_with_double_dash(self):
+        """No command 'name' field starts with '--'."""
+        data = self._get_json()
+        for cmd in data["commands"]:
+            assert not cmd["name"].startswith("--"), \
+                f"Command name '{cmd['name']}' starts with '--', expected subcommand format"
+
+    def test_all_expected_subcommands_present(self):
+        """All expected subcommand names appear in commands list."""
+        data = self._get_json()
+        cmd_names = {cmd["name"] for cmd in data["commands"]}
+        for name in self.EXPECTED_SUBCOMMANDS:
+            assert name in cmd_names, \
+                f"Expected subcommand '{name}' not found in --help-json commands"
+
+    def test_subcommand_syntax_uses_correct_format(self):
+        """Each subcommand syntax uses 'dokima <name>' not 'dokima --<name>'."""
+        data = self._get_json()
+        cmd_by_name = {cmd["name"]: cmd for cmd in data["commands"]}
+        for name, expected_syntax in self.EXPECTED_SUBCOMMANDS.items():
+            cmd = cmd_by_name.get(name)
+            assert cmd is not None, f"Subcommand '{name}' not found"
+            actual = cmd["syntax"]
+            assert actual == expected_syntax, \
+                f"Syntax for '{name}': expected '{expected_syntax}', got '{actual}'"
+
+    def test_run_and_init_keep_original_names(self):
+        """'run' and 'init' commands are unchanged (never had -- prefix)."""
+        data = self._get_json()
+        cmd_names = {cmd["name"] for cmd in data["commands"]}
+        for name in ("run", "init"):
+            assert name in cmd_names, f"Expected command '{name}' in --help-json output"
+
+    def test_flags_still_use_dash_prefix(self):
+        """Flag entries retain '--' prefix (subcommand change doesn't affect flags)."""
+        data = self._get_json()
+        for f in data["flags"]:
+            assert f["flag"].startswith("--"), \
+                f"Flag '{f['flag']}' should keep '--' prefix"
+
+    def test_continuous_is_not_separate_command(self):
+        """'continuous' is NOT a separate command (merged into 'next' as --continuous flag)."""
+        data = self._get_json()
+        cmd_names = {cmd["name"] for cmd in data["commands"]}
+        assert "continuous" not in cmd_names, \
+            "'continuous' should not be a separate command"
+
+
 class TestNoRegression:
     """Verify --help-json doesn't break anything."""
 
