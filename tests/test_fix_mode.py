@@ -157,7 +157,7 @@ def test_fix_flag_dispatches_to_run_fix_mode(panel, tmpdir):
     old_cwd = os.getcwd
     run_fix_args = []
     try:
-        sys.argv = ['dokima', '--fix', project_dir]
+        sys.argv = ['dokima', 'fix', project_dir]
 
         def mock_run_fix(**kwargs):
             run_fix_args.append(kwargs.get('project_dir', ''))
@@ -193,7 +193,7 @@ def test_fix_mode_skips_auto_archive(panel, tmpdir):
     old_argv = sys.argv
     archive_called = [False]
     try:
-        sys.argv = ['dokima', '--fix', project_dir]
+        sys.argv = ['dokima', 'fix', project_dir]
 
         # Track if auto-archive block runs
         with patch.object(panel, 'acquire_lock', return_value=(None, None)):
@@ -223,7 +223,7 @@ def test_fix_answers_warning(panel):
     old_argv = sys.argv
     captured = []
     try:
-        sys.argv = ['dokima', '--fix', '--answers', '/nonexistent/answers.json']
+        sys.argv = ['dokima', 'fix', '--answers', '/nonexistent/answers.json']
         with patch.object(panel, 'acquire_lock', return_value=(None, None)):
             with patch.object(panel._pipeline, 'run_fix_mode'):
                 with patch.object(panel, 'load_key', return_value="test-key"):
@@ -333,6 +333,7 @@ def test_run_fix_mode_architectural_only(panel):
 
 
 def test_help_text_includes_fix(panel):
-    """--fix should appear in HELP_TEXT."""
-    assert "--fix" in panel.HELP_TEXT or "dokima --fix" in panel.HELP_TEXT
+    """--fix or `dokima fix` should appear in HELP_TEXT."""
+    ht = panel.HELP_TEXT
+    assert "--fix" in ht or "dokima --fix" in ht or "dokima fix" in ht or "  fix " in ht
 
