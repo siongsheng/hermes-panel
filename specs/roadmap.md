@@ -118,6 +118,13 @@
 
 ## Phase 3: Distribution & Portability
 
+
+### F027: Upgrade codebase-map.md to domain-aware format with Start Here, Domain Map, Impact Map, and Test Map sections. Inject map into strategist, coder-worktree, and tech-lead prompts.
+**Priority:** P2
+**Dependencies:** None
+**Status:** [~] In Progress
+**User Story:** As a user, I can upgrade codebase-map.md to domain-aware format with start here, domain map, impact map, and test map sections. inject map into strategist, coder-worktree, and tech-lead prompts.
+
 ### F011: Installer Script
 **Priority:** P2
 **Dependencies:** None
@@ -169,3 +176,10 @@
 **Dependencies:** F017
 **Status:** [x] Done
 **User Story:** As a platform team, Dokima manages features across a monorepo with cross-cutting specs, shared ADRs, and parallel pipelines per sub-project.
+
+### F028: Strategist enriches codebase-map.md during normal feature planning — appends architecture decisions and agent guidance discovered during exploration. Map accumulates real-world rationale across features with zero extra LLM calls.
+**Priority:** P3
+**Dependencies:** F027
+**Status:** [ ] Pending
+**User Story:** As a user, I can strategist enriches codebase-map.md during normal feature planning — appends architecture decisions and agent guidance discovered during exploration. map accumulates real-world rationale across features with zero extra llm calls.
+
